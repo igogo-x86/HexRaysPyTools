@@ -24,6 +24,14 @@ def parse_vtable_name(name):
 
 
 def get_padding_member(offset, size):
+    udt_member = idaapi.udt_member_t()
+    if size == 1:
+        udt_member.name = "gap_{0:X}".format(offset)
+        udt_member.type = BYTE_TINFO
+        udt_member.size = BYTE_TINFO.get_size()
+        udt_member.offset = offset
+        return udt_member
+
     array_data = idaapi.array_type_data_t()
     array_data.base = 0
     array_data.elem_type = BYTE_TINFO
@@ -31,7 +39,6 @@ def get_padding_member(offset, size):
     tmp_tinfo = idaapi.tinfo_t()
     tmp_tinfo.create_array(array_data)
 
-    udt_member = idaapi.udt_member_t()
     udt_member.name = "gap_{0:X}".format(offset)
     udt_member.type = tmp_tinfo
     udt_member.size = size
@@ -68,7 +75,7 @@ class VirtualTable:
                 break
 
     def create_tinfo(self):
-        print "[Virtual table] at address: {0:#010X} name: {1}".format(self.address, self.name)
+        print "(Virtual table) at address: {0:#010X} name: {1}".format(self.address, self.name)
         offset = 0
         udt_data = idaapi.udt_type_data_t()
         for address in self.virtual_functions_ea:
@@ -76,15 +83,12 @@ class VirtualTable:
             if decompiled_function:
                 guessed_type = idaapi.tinfo_t()
                 get_type = idaapi.tinfo_t()
-                # if idaapi.guess_tinfo2(address, guessed_type) == idaapi.GUESS_FUNC_OK | idaapi.GUESS_FUNC_OK:
                 idaapi.guess_tinfo2(address, guessed_type)
                 idaapi.get_tinfo2(address, get_type)
-                print "[Virtual function] at address: {0:#010X} name: {1} type: {2} guessed type: {3} get type: {4}".format(
+                print "\t(Virtual function) at address: {0:#010X} name: {1} type:".format(
                     address,
                     idaapi.get_short_name(address),
-                    decompiled_function.type.dstr(),
-                    guessed_type.dstr(),
-                    get_type.dstr()
+                    decompiled_function.type.dstr()
                 )
 
                 # continue
@@ -98,24 +102,16 @@ class VirtualTable:
                 udt_member.name = idaapi.get_short_name(address)
                 udt_member.size = EA_SIZE
 
-                print "[Member] name: {0} type: {1} offset: {2} size: {3}".format(
-                    udt_member.name,
-                    udt_member.type.dstr(),
-                    udt_member.offset,
-                    udt_member.size
-                )
-
                 udt_data.push_back(udt_member)
 
             offset += EA_SIZE
 
         final_tinfo = idaapi.tinfo_t()
-        print "udt size = " + str(udt_data.size())
-        print final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-        # print final_tinfo.create_typedef(idaapi.cvar.idati, idaapi.get_short_name(self.address))
-        print final_tinfo.get_size()
-        print "[Final structure]\n" + idaapi.print_tinfo(None, 4, 5, 0x2F, final_tinfo, 'igogo_vtable', None)
-        return final_tinfo
+        if final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT):
+            print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, 0x2F, final_tinfo, self.name, None)
+            return final_tinfo
+        else:
+            print "[ERROR] Virtual table creation failed"
 
     def import_to_structures(self):
         """
@@ -146,7 +142,7 @@ class Field:
             self.name = "vtable"
         else:
             self.type = tinfo
-            self.name = "field_{0:x}".format(self.offset)
+            self.name = "field_{0:X}".format(self.offset)
         self.virtual_table = virtual_table
         self.enabled = True
 
@@ -247,11 +243,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         right_neighbour = row + 1
         while left_neighbour >= 0 and not self.items[left_neighbour].enabled:
             left_neighbour -= 1
-        while right_neighbour < self.rowCount() and not self.items[right_neighbour].enabled:
-            right_neighbour += 1
         if left_neighbour >= 0:
             if self.items[row].offset < self.items[left_neighbour].offset + self.items[left_neighbour].type.get_size():
                 return True
+        while right_neighbour < self.rowCount() and not self.items[right_neighbour].enabled:
+            right_neighbour += 1
         if right_neighbour != self.rowCount():
             if self.items[row].offset + self.items[row].type.get_size() > self.items[right_neighbour].offset:
                 return True
@@ -278,7 +274,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
         cdecl = idaapi.print_tinfo(None, 4, 5, 0x2F, final_tinfo, self.structure_name, None)
-        cdecl = idaapi.asktext(idaapi.MAXSTR, cdecl, "The following new type will be created")
+        cdecl = idaapi.asktext(0x10000, cdecl, "The following new type will be created")
 
         if cdecl:
             structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]

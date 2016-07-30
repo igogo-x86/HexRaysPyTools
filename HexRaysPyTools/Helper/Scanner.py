@@ -2,13 +2,6 @@ import idaapi
 
 from HexRaysPyTools.Helper.Structures import *
 
-#
-# def make_ptr(tinfo):
-#     if not tinfo.is_ptr():
-#         tinfo.create_ptr(tinfo)
-#         print tinfo.dstr()
-#         return tinfo
-
 
 def check_virtual_table(address):
     functions_count = 0
@@ -41,8 +34,6 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
         self.candidates = []
 
-        print "Local variables:", self.variables
-
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
@@ -61,7 +52,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         :return: Structures.Field
         """
         parents_queue = reversed(self.parents)
-        parent_generator = lambda: parents_queue.__iter__().next().cexpr
+        parent_generator = lambda: parents_queue.next().cexpr
         parent = parent_generator()
 
         cast_type = None
@@ -71,9 +62,6 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         if expression.dstr() == "int":
             if parent.op == idaapi.cot_add and parent.y.op == idaapi.cot_num:
                 offset = parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))            # x64
-                # print "Number =", parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
-                # print "cot_var:", expression.opname, self.function.get_lvars()[expression.v.idx].name, \
-                #     " ".join(map(lambda x: self.convert_citem(x).opname, filter(lambda x: x, list(self.parents))))
                 parent = parent_generator()
 
             if parent.op == idaapi.cot_cast:
@@ -95,19 +83,25 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                     if right_son.op == idaapi.cot_ref:
                         right_son = right_son.x
                     if right_son.op == idaapi.cot_var:
-                        member_type = self.function.get_lvars()[right_son.v.idx].type
+                        member_type = self.function.get_lvars()[right_son.v.idx].tif
+                        print "(Variable) offset: {0:#010X} index: {1}".format(offset, right_son.v.idx)
                     elif right_son.op == idaapi.cot_num:
+                        print "(Number) offset: {0:#010X}, value: {1}".format(offset, right_son.n._value)
+                        member_type = cast_type
+                    elif right_son.op == idaapi.cot_fnum:
+                        print "(Float Number) offset: {0:#010X}, value: {1}".format(offset, right_son.fpc.fnum)
                         member_type = cast_type
                     elif right_son.op == idaapi.cot_obj:
                         member_type = right_son.type
-                        print "[Object] offset: {0:#010X} size: {1}, address: {2:#010X}".format(
+                        if check_virtual_table(right_son.obj_ea):
+                            virtual_table = VirtualTable(right_son.obj_ea)
+                            return Field(offset, virtual_table=virtual_table)
+
+                        print "(Object) offset: {0:#010X} size: {1}, address: {2:#010X}".format(
                             offset,
                             member_type.get_size(),
                             right_son.obj_ea
                         )
-                        if check_virtual_table(right_son.obj_ea):
-                            virtual_table = VirtualTable(right_son.obj_ea)
-                            return Field(offset, virtual_table=virtual_table)
                         member_type.create_ptr(member_type)
                     else:
                         return None
@@ -124,7 +118,7 @@ class ActionScanVariable(idaapi.action_handler_t):
     def activate(self, ctx):
         vu = idaapi.get_tform_vdui(ctx.form)
         variable = vu.item.get_lvar()  # lvar_t
-        print "Local variable type: %s" %variable.tif.dstr()
+        print "Local variable type: %s" % variable.tif.dstr()
         if variable.tif.dstr() in LEGAL_TYPES:
             scanner = CtreeVisitor(vu.cfunc, variable)
             scanner.apply_to(vu.cfunc.body, None)
