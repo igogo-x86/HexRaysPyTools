@@ -8,6 +8,53 @@ from HexRaysPyTools.Helper.Scanner import *
 temporary_structure = TemporaryStructureModel()
 
 
+def is_scan_variable(cfunc, item):
+    """
+    Checks if variable belongs to cfunc and have a type that is supportable for scanning
+
+    :param cfunc: idaapi.cfunct_t
+    :param item: idaapi.ctree_item_t
+    :return: bool
+    """
+    if item.citype == idaapi.VDI_EXPR:
+        if item.e.op == idaapi.cot_var:
+            local_variable = cfunc.get_lvars()[item.e.v.idx]
+            if local_variable.type().dstr() in LEGAL_TYPES:
+                return True
+    elif item.citype == idaapi.VDI_LVAR:
+        local_variable = item.get_lvar()
+        if local_variable.type().dstr() in LEGAL_TYPES:
+            return True
+    else:
+        return False
+
+
+def hexrays_events_callback(*args):
+    hexrays_event = args[0]
+    if hexrays_event == idaapi.hxe_keyboard:
+        hx_view, key, shift = args[1:]
+        if key == ord('F'):
+            if is_scan_variable(hx_view.cfunc, hx_view.item):
+                idaapi.process_ui_action("my:ScanVariable")
+    elif hexrays_event == idaapi.hxe_populating_popup:
+        form, popup, hx_view = args[1:]
+        item = hx_view.item  # current ctree_item_t
+
+        if is_scan_variable(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, "my:ScanVariable", None)
+
+        elif item.citype == idaapi.VDI_FUNC:
+            # If we clicked on function
+            if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
+                idaapi.attach_action_to_popup(form, popup, "my:RemoveReturn", None)
+        elif item.citype == idaapi.VDI_LVAR:
+            # If we clicked on argument
+            local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
+            if local_variable.is_arg_var:
+                idaapi.attach_action_to_popup(form, popup, "my:RemoveArgument", None)
+    return 0
+
+
 class ActionRemoveArgument(idaapi.action_handler_t):
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -52,28 +99,6 @@ class ActionRemoveReturn(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-class Hooks(idaapi.UI_Hooks):
-    def finish_populating_tform_popup(self, form, popup):
-        if "Pseudocode" in idaapi.get_tform_title(form):
-            hexrays_view = idaapi.get_tform_vdui(form)  # vdui_t structure type
-            item = hexrays_view.item  # current ctree_item_t
-            print item.citype
-
-            if item.citype == idaapi.VDI_EXPR:
-                pass
-
-            elif item.citype == idaapi.VDI_FUNC:
-                if not hexrays_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                    idaapi.attach_action_to_popup(form, popup, "my:RemoveReturn", None)
-
-            elif item.citype == idaapi.VDI_LVAR:
-                lvar = hexrays_view.item.get_lvar()
-                if lvar.is_arg_var:
-                    idaapi.attach_action_to_popup(form, popup, "my:RemoveArgument", None)
-                else:
-                    idaapi.attach_action_to_popup(form, popup, "my:ScanVariable", None)
-
-
 class MyPlugin(idaapi.plugin_t):
     # flags = idaapi.PLUGIN_HIDE
     flags = 0
@@ -82,7 +107,6 @@ class MyPlugin(idaapi.plugin_t):
     help = "This is help"
     wanted_name = "My Python plugin"
     wanted_hotkey = "Alt-F8"
-    hooks = Hooks()
     structure_builder = None
 
     def init(self):
@@ -93,17 +117,19 @@ class MyPlugin(idaapi.plugin_t):
         idaapi.register_action(idaapi.action_desc_t("my:RemoveReturn", "Remove Return", ActionRemoveReturn()))
         idaapi.register_action(idaapi.action_desc_t("my:RemoveArgument", "Remove Argument", ActionRemoveArgument()))
         idaapi.register_action(idaapi.action_desc_t("my:ScanVariable", "Scan Variable", ActionScanVariable(temporary_structure)))
-        self.hooks.hook()
+        idaapi.install_hexrays_callback(hexrays_events_callback)
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
         idaapi.msg("run() called!\n")
-        self.structure_builder = self.structure_builder or StructureBuilder(temporary_structure)
-        self.structure_builder.Show()
+
+        if not MyPlugin.structure_builder:
+            MyPlugin.structure_builder = StructureBuilder(temporary_structure)
+        MyPlugin.structure_builder.Show()
 
     def term(self):
         idaapi.msg("term() called!\n")
-        self.hooks.unhook()
+        idaapi.remove_hexrays_callback(hexrays_events_callback)
         idaapi.unregister_action("my:RemoveReturn")
         idaapi.unregister_action("my:RemoveArgument")
         idaapi.unregister_action("my:ScanVariable")

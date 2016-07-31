@@ -89,7 +89,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                         print "(Number) offset: {0:#010X}, value: {1}".format(offset, right_son.n._value)
                         member_type = cast_type
                     elif right_son.op == idaapi.cot_fnum:
-                        print "(Float Number) offset: {0:#010X}, value: {1}".format(offset, right_son.fpc.fnum)
+                        print "(Float Number) offset: {0:#010X}, value: {1}".format(offset, right_son.fpc._print())
                         member_type = cast_type
                     elif right_son.op == idaapi.cot_obj:
                         member_type = right_son.type

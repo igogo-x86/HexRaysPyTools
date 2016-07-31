@@ -24,14 +24,22 @@ class StructureBuilder(idaapi.PluginForm):
         self.parent.resize(400, 600)
         self.parent.setWindowTitle('Structure Builder')
 
-        btn_finalize = QtGui.QPushButton("Finalize")
-        btn_disable = QtGui.QPushButton("Disable")
-        btn_enable = QtGui.QPushButton("Enable")
-        btn_origin = QtGui.QPushButton("Origin")
-        btn_array = QtGui.QPushButton("Array")
-        btn_pack = QtGui.QPushButton("Pack")
-        btn_remove = QtGui.QPushButton("Remove")
-        btn_clear = QtGui.QPushButton("Clear")
+        btn_finalize = QtGui.QPushButton("&Finalize")
+        btn_disable = QtGui.QPushButton("&Disable")
+        btn_enable = QtGui.QPushButton("&Enable")
+        btn_origin = QtGui.QPushButton("&Origin")
+        btn_array = QtGui.QPushButton("&Array")
+        btn_pack = QtGui.QPushButton("&Pack")
+        btn_remove = QtGui.QPushButton("&Remove")
+        btn_clear = QtGui.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
+
+        btn_finalize.setShortcut("f")
+        btn_disable.setShortcut("d")
+        btn_enable.setShortcut("e")
+        btn_origin.setShortcut("o")
+        btn_array.setShortcut("a")
+        btn_pack.setShortcut("p")
+        btn_remove.setShortcut("r")
 
         struct_view = QtGui.QTableView()
         struct_view.setModel(self.structure_model)
@@ -72,5 +80,5 @@ class StructureBuilder(idaapi.PluginForm):
     def OnClose(self, form):
         pass
 
-    def Show(self):
-        return idaapi.PluginForm.Show(self, "What is this?", options=0) # options=idaapi.PluginForm.FORM_TAB)
+    def Show(self, caption=None, options=0):
+        return idaapi.PluginForm.Show(self, caption, options=0)
