@@ -122,8 +122,10 @@ class ActionScanVariable(idaapi.action_handler_t):
         if variable.tif.dstr() in LEGAL_TYPES:
             scanner = CtreeVisitor(vu.cfunc, variable)
             scanner.apply_to(vu.cfunc.body, None)
-            for field in scanner.candidates:
-                self.temporary_structure.add_row(field)
+            if scanner.candidates:
+                self.temporary_structure.add_scanned_variable(ScannedVariable(vu.cfunc, variable))
+                for field in scanner.candidates:
+                    self.temporary_structure.add_row(field)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

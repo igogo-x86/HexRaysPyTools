@@ -1,5 +1,6 @@
 import sys
 import bisect
+import time
 import idaapi
 import re
 import PySide.QtGui as QtGui
@@ -178,6 +179,38 @@ class Field:
     __ge__ = lambda self, other: self.offset >= other.offset
 
 
+class ScannedVariable:
+    def __init__(self, function, variable):
+        """
+        Class for storing variable and it's function that have been scanned previously.
+        Need to think whether it's better to store address and index, or cfunc_t and lvar_t
+
+        :param function: idaapi.cfunc_t
+        :param lvar: idaapi.vdui_t
+        """
+        self.function = function
+        self.lvar = variable
+
+    def apply_type(self, tinfo):
+        """
+        Finally apply Class'es tinfo to this variable
+
+        :param tinfo: idaapi.tinfo_t
+        """
+        hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
+        if hx_view:
+            print "[Info] Applying tinfo to variable {0} in function {1}".format(
+                self.lvar.name,
+                idaapi.get_short_name(self.function.entry_ea)
+            )
+            # Finding lvar of new window that have the same name that saved one and applying tinfo_t
+            lvar = filter(lambda x: x.name == self.lvar.name, hx_view.cfunc.get_lvars())[0]
+            hx_view.set_lvar_type(lvar, tinfo)
+            # idaapi.close_pseudocode(hx_view.form)
+        else:
+            print "[Warning] Failed to apply type"
+
+
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def __init__(self, *args):
         """
@@ -190,9 +223,10 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.main_offset = 0
         self.headers = ["Offset", "Type", "Name"]
         self.items = []
+        self.scanned_variables = []
         self.structure_name = "CHANGE_MY_NAME"
 
-        # OVERLOADED METHODS #
+    # OVERLOADED METHODS #
 
     def rowCount(self, *args):
         return len(self.items)
@@ -222,7 +256,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
             return self.headers[section]
 
-        # HELPER METHODS #
+    # HELPER METHODS #
 
     def have_member(self, member):
         if self.items:
@@ -253,7 +287,15 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return True
         return False
 
-        # SLOTS #
+    def add_scanned_variable(self, scanned_variable):
+        """
+        This variable's type will be changed after finalizing structure
+
+        :param scanned_variable: ScannedVariable
+        """
+        self.scanned_variables.append(scanned_variable)
+
+    # SLOTS #
 
     def finalize(self):
         for row in xrange(self.rowCount()):
@@ -282,6 +324,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             if ordinal:
                 print "[Info] New type {0} was added to Local Types".format(structure_name)
                 tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
+                if tid:
+                    tinfo = idaapi.create_typedef(structure_name)
+                    tinfo.create_ptr(tinfo)
+                    for scanned_var in self.scanned_variables:
+                        scanned_var.apply_type(tinfo)
                 self.clear()
             else:
                 print "[ERROR] Structure {0} probably already exist".format(structure_name)
@@ -317,5 +364,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def clear(self):
         self.items = []
+        self.scanned_variables = []
         self.main_offset = 0
         self.modelReset.emit()
