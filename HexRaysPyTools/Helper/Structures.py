@@ -1,15 +1,15 @@
 import sys
 import bisect
-import time
+import idc
 import idaapi
 import re
 import PySide.QtGui as QtGui
 import PySide.QtCore as QtCore
 
 
-EA64 = idaapi.cvar.inf.is_64bit()   # get_inf ...
+EA64 = idc.__EA64__
 EA_SIZE = 8 if EA64 else 4
-LEGAL_TYPES = ("_DWORD *", "int", "void *")
+LEGAL_TYPES = ("_DWORD *", "int", "__int64", "signed __int64", "void *")
 BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
 

@@ -30,6 +30,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         """
         super(CtreeVisitor, self).__init__()
         self.function = function
+        # Dictionary {varuable name => type} of variables that are being scanned
         self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.tif}
         self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
         self.candidates = []
@@ -59,7 +60,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         offset = 0
         member_type = None
 
-        if expression.dstr() == "int":
+        if expression.dstr() in ("int", "__int64", "signed __int64"):
             if parent.op == idaapi.cot_add and parent.y.op == idaapi.cot_num:
                 offset = parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))            # x64
                 parent = parent_generator()
