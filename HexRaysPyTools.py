@@ -36,6 +36,7 @@ def hexrays_events_callback(*args):
         if key == ord('F'):
             if is_scan_variable(hx_view.cfunc, hx_view.item):
                 idaapi.process_ui_action("my:ScanVariable")
+
     elif hexrays_event == idaapi.hxe_populating_popup:
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
@@ -47,11 +48,34 @@ def hexrays_events_callback(*args):
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
                 idaapi.attach_action_to_popup(form, popup, "my:RemoveReturn", None)
+
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
             local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
             if local_variable.is_arg_var:
                 idaapi.attach_action_to_popup(form, popup, "my:RemoveArgument", None)
+
+    elif hexrays_event == idaapi.hxe_double_click:
+        hx_view = args[1]
+        item = hx_view.item
+        if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
+            # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
+            # After that remove pointer and get member name with the same offset
+            structure_tinfo = item.e.x.type
+            member_offset = item.e.m
+            if structure_tinfo.is_ptr():
+                structure_tinfo.remove_ptr_or_array()
+                if structure_tinfo.is_udt():
+                    udt_data = idaapi.udt_type_data_t()
+                    structure_tinfo.get_udt_details(udt_data)
+                    member_name = filter(lambda x: x.offset == member_offset * 8, udt_data)[0].name
+
+                    # And finally look through all functions and find the same name. Sigh...
+                    for idx in xrange(idaapi.get_func_qty()):
+                        function = idaapi.getn_func(idx)
+                        if idaapi.get_func_name2(function.startEA) == member_name:
+                            idaapi.open_pseudocode(function.startEA, 0)
+                            return 1
     return 0
 
 

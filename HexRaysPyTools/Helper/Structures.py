@@ -238,7 +238,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         row, col = index.row(), index.column()
         if role == QtCore.Qt.DisplayRole:
             if index.column() == 0:
-                return "{0:#010x}".format(self.items[row].offset)
+                return "{0:#010X}".format(self.items[row].offset)
             elif index.column() == 1:
                 return self.items[row].type_name
             elif index.column() == 2:
