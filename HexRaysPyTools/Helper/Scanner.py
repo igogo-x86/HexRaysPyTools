@@ -95,8 +95,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                     elif right_son.op == idaapi.cot_obj:
                         member_type = right_son.type
                         if check_virtual_table(right_son.obj_ea):
-                            virtual_table = VirtualTable(right_son.obj_ea)
-                            return Field(offset, virtual_table=virtual_table)
+                            return VirtualTable(offset, right_son.obj_ea)
 
                         print "(Object) offset: {0:#010X} size: {1}, address: {2:#010X}".format(
                             offset,

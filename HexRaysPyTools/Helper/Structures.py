@@ -16,12 +16,12 @@ BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 def parse_vtable_name(name):
     if name[0:3] == 'off':
         # off_XXXXXXXX case
-        return "Vtable" + name[3:]
+        return "Vtable" + name[3:], False
     m = re.search(' (\w+)::', name)
     if m:
         # const class_name:`vftable' case
-        return "Vtable_" + m.group(1)
-    return name
+        return "Vtable_" + m.group(1), True
+    return name, True
 
 
 def get_padding_member(offset, size):
@@ -47,17 +47,36 @@ def get_padding_member(offset, size):
     return udt_member
 
 
+class AbstractField:
+    def __init__(self, offset):
+        self.offset = offset
+        self.enabled = True
+
+    @property
+    def type_name(self):
+        pass
+
+    __eq__ = lambda self, other: self.offset == other.offset and self.type_name == other.type_name
+    __ne__ = lambda self, other: self.offset != other.offset or self.type_name != other.type_name
+    __lt__ = lambda self, other: self.offset < other.offset or (self.offset == other.offset and self.type_name < other.type_name)
+    __le__ = lambda self, other: self.offset <= other.offset
+    __gt__ = lambda self, other: self.offset > other.offset or (self.offset == other.offset and self.type_name > other.type_name)
+    __ge__ = lambda self, other: self.offset >= other.offset
+
+
 class VirtualFunction:
     def __init__(self, address, type):
         self.address = address
         self.type = type
 
 
-class VirtualTable:
-    def __init__(self, address):
+class VirtualTable(AbstractField):
+    def __init__(self, offset, address):
+        AbstractField.__init__(self, offset)
         self.address = address
         self.virtual_functions_ea = []
-        self.name = parse_vtable_name(idaapi.get_short_name(address))
+        self.name = "vtable"
+        self.vtable_name, self.have_nice_name = parse_vtable_name(idaapi.get_short_name(address))
         self.populate()
         self.tinfo = self.create_tinfo()
 
@@ -125,27 +144,43 @@ class VirtualTable:
         ordinal = idaapi.idc_set_local_type(-1, cdecl_typedef, idaapi.PT_TYP)
         if ordinal:
             print "[Info] Virtual table " + self.name + " added to Local Types"
-            tid = idaapi.import_type(idaapi.cvar.idati, -1, self.name)
+            return idaapi.import_type(idaapi.cvar.idati, -1, self.name)
         else:
             print "[Warning] Virtual table " + self.name + " probably already exist"
+
+    def get_udt_member(self):
+        udt_member = idaapi.udt_member_t()
+        tid = self.import_to_structures()
+        if tid != idaapi.BADADDR:
+            udt_member.name = self.name
+            tmp_tinfo = idaapi.create_typedef(self.name)
+            tmp_tinfo.create_ptr(tmp_tinfo)
+            udt_member.type = tmp_tinfo
+            udt_member.offset = self.offset
+            udt_member.size = EA_SIZE
+        return udt_member
+
+    @staticmethod
+    def is_vtable(): return True
+
+    @property
+    def type_name(self):
+        return self.vtable_name + " *"
+
+    @property
+    def size(self):
+        return EA_SIZE
 
     def __str__(self):
         pass
 
 
-class Field:
+class Field(AbstractField):
     def __init__(self, offset, tinfo=None, virtual_table=None):
-        self.offset = offset
-        if virtual_table:
-            tmp_tinfo = idaapi.tinfo_t()
-            tmp_tinfo.create_ptr(virtual_table.tinfo)
-            self.type = tmp_tinfo
-            self.name = "vtable"
-        else:
-            self.type = tinfo
-            self.name = "field_{0:X}".format(self.offset)
+        AbstractField.__init__(self, offset)
+        self.tinfo = tinfo
+        self.name = "field_{0:X}".format(self.offset)
         self.virtual_table = virtual_table
-        self.enabled = True
 
     def get_udt_member(self):
         udt_member = idaapi.udt_member_t()
@@ -160,23 +195,21 @@ class Field:
                 udt_member.size = EA_SIZE
         else:
             udt_member.name = self.name
-            udt_member.type = self.type
+            udt_member.type = self.tinfo
             udt_member.offset = self.offset
-            udt_member.size = self.type.get_size()
+            udt_member.size = self.size
         return udt_member
+
+    @staticmethod
+    def is_vtable(): return False
 
     @property
     def type_name(self):
-        if self.virtual_table:
-            return self.virtual_table.name + ' *'
-        return self.type.dstr()
+        return self.tinfo.dstr()
 
-    __eq__ = lambda self, other: self.offset == other.offset and self.type_name == other.type_name
-    __ne__ = lambda self, other: self.offset != other.offset or self.type_name != other.type_name
-    __lt__ = lambda self, other: self.offset < other.offset or (self.offset == other.offset and self.type_name < other.type_name)
-    __le__ = lambda self, other: self.offset <= other.offset
-    __gt__ = lambda self, other: self.offset > other.offset or (self.offset == other.offset and self.type_name > other.type_name)
-    __ge__ = lambda self, other: self.offset >= other.offset
+    @property
+    def size(self):
+        return self.tinfo.get_size()
 
 
 class ScannedVariable:
@@ -237,12 +270,15 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def data(self, index, role):
         row, col = index.row(), index.column()
         if role == QtCore.Qt.DisplayRole:
-            if index.column() == 0:
+            if col == 0:
                 return "{0:#010X}".format(self.items[row].offset)
-            elif index.column() == 1:
+            elif col == 1:
                 return self.items[row].type_name
-            elif index.column() == 2:
+            elif col == 2:
                 return self.items[row].name
+        elif role == QtCore.Qt.FontRole:
+            if col == 1 and self.items[row].is_vtable():
+                return QtGui.QFont("Consolas", 10, QtGui.QFont.Bold)
         elif role == QtCore.Qt.BackgroundColorRole:
             if not self.items[row].enabled:
                 return QtGui.QColor(QtCore.Qt.gray)
@@ -278,12 +314,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         while left_neighbour >= 0 and not self.items[left_neighbour].enabled:
             left_neighbour -= 1
         if left_neighbour >= 0:
-            if self.items[row].offset < self.items[left_neighbour].offset + self.items[left_neighbour].type.get_size():
+            if self.items[row].offset < self.items[left_neighbour].offset + self.items[left_neighbour].size:
                 return True
         while right_neighbour < self.rowCount() and not self.items[right_neighbour].enabled:
             right_neighbour += 1
         if right_neighbour != self.rowCount():
-            if self.items[row].offset + self.items[row].type.get_size() > self.items[right_neighbour].offset:
+            if self.items[row].offset + self.items[row].size > self.items[right_neighbour].offset:
                 return True
         return False
 
@@ -312,7 +348,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             if gap_size:
                 udt_data.push_back(get_padding_member(offset, gap_size))
             udt_data.push_back(item.get_udt_member())
-            offset = item.offset + item.type.get_size()
+            offset = item.offset + item.size
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
         cdecl = idaapi.print_tinfo(None, 4, 5, 0x2F, final_tinfo, self.structure_name, None)
