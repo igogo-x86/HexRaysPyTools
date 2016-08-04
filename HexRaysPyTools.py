@@ -137,7 +137,6 @@ class ActionCreateVtable(idaapi.action_handler_t):
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
-
     @staticmethod
     def generate():
         return idaapi.action_desc_t(
@@ -149,13 +148,12 @@ class ActionCreateVtable(idaapi.action_handler_t):
 
     def activate(self, ctx):
         ea = ctx.cur_ea
-        if check_virtual_table(ea):
+        if ea != idaapi.BADADDR and check_virtual_table(ea):
             vtable = VirtualTable(0, ea)
-            vtable.import_to_structures()
+            vtable.import_to_structures(True)
 
     def update(self, ctx):
         if ctx.form_type == idaapi.BWN_DISASM:
-            print "IDA-VIEW"
             idaapi.attach_action_to_popup(ctx.form, None, self.name)
             return idaapi.AST_ENABLE_FOR_FORM
         else:

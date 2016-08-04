@@ -133,20 +133,23 @@ class VirtualTable(AbstractField):
         else:
             print "[ERROR] Virtual table creation failed"
 
-    def import_to_structures(self):
+    def import_to_structures(self, ask=False):
         """
         Imports virtual tables and returns tid_t of new structure
 
         :return: idaapi.tid_t
         """
-        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2F, self.tinfo, self.name, None)
-        # if idaapi.parse_decl2(idaapi.cvar.idati, cdecl_typedef, self.name)
+        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2F, self.tinfo, self.vtable_name, None)
+        if ask:
+            cdecl_typedef = idaapi.asktext(0x10000, cdecl_typedef, "The following new type will be created")
+            if not cdecl_typedef:
+                return
         ordinal = idaapi.idc_set_local_type(-1, cdecl_typedef, idaapi.PT_TYP)
         if ordinal:
-            print "[Info] Virtual table " + self.name + " added to Local Types"
-            return idaapi.import_type(idaapi.cvar.idati, -1, self.name)
+            print "[Info] Virtual table " + self.vtable_name + " added to Local Types"
+            return idaapi.import_type(idaapi.cvar.idati, -1, self.vtable_name)
         else:
-            print "[Warning] Virtual table " + self.name + " probably already exist"
+            print "[Warning] Virtual table " + self.vtable_name + " probably already exist"
 
     def get_udt_member(self):
         udt_member = idaapi.udt_member_t()
