@@ -1,6 +1,7 @@
 import sys
 import idaapi
 from HexRaysPyTools.Forms.StructureBuilder import *
+from HexRaysPyTools.Forms.StructureGraphForm import *
 from HexRaysPyTools.Helper.Scanner import *
 
 # import Helper.QtShim as QtShim
@@ -138,22 +139,25 @@ class MyPlugin(idaapi.plugin_t):
         if not idaapi.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
 
+        idaapi.register_action(ActionShowGraph.generate())
         idaapi.register_action(idaapi.action_desc_t("my:RemoveReturn", "Remove Return", ActionRemoveReturn()))
         idaapi.register_action(idaapi.action_desc_t("my:RemoveArgument", "Remove Argument", ActionRemoveArgument()))
         idaapi.register_action(idaapi.action_desc_t("my:ScanVariable", "Scan Variable", ActionScanVariable(temporary_structure)))
         idaapi.install_hexrays_callback(hexrays_events_callback)
+
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
         idaapi.msg("run() called!\n")
 
         if not MyPlugin.structure_builder:
-            MyPlugin.structure_builder = StructureBuilder(temporary_structure)
+           MyPlugin.structure_builder = StructureBuilder(temporary_structure)
         MyPlugin.structure_builder.Show()
 
     def term(self):
         idaapi.msg("term() called!\n")
         idaapi.remove_hexrays_callback(hexrays_events_callback)
+        idaapi.unregister_action(ActionShowGraph.name)
         idaapi.unregister_action("my:RemoveReturn")
         idaapi.unregister_action("my:RemoveArgument")
         idaapi.unregister_action("my:ScanVariable")

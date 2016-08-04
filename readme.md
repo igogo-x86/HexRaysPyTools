@@ -2,7 +2,24 @@
 
 Plugin assist in creation classes/structures and detection virtual tables. Best to use with [Class Informer](0) plugin, because it helps to automatically get original classes names
 
-## Currently recognized access to fields
+# Features
+
+### Structure Graph
+
+Shows relationship between structures.
+![img][structure_graph]
+
+Usage:
+
+1. Open Local Types
+2. Select interesting structures and right click -> "Show Graph" 
+3. Plugin creates a graph of all structures that have relationship with selected items.
+4. Double clicking on node recalculates graph for it
+5. Every node have a hint message that shows C-like typedef
+
+### Structure Builder
+
+### Currently recognized access to fields
 
 * var - variable
 * obj - any object, including Virtual Table, that will be handled specially
@@ -30,3 +47,4 @@ Plugin assist in creation classes/structures and detection virtual tables. Best 
 | | `*(_QWORD *)(v + x) = obj` | `typeof(obj)` | x |
 
 [0]: https://sourceforge.net/projects/classinformer/
+[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/tree/master/Img/structure_builder.jpg
