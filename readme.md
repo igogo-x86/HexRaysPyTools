@@ -47,4 +47,4 @@ Usage:
 | | `*(_QWORD *)(v + x) = obj` | `typeof(obj)` | x |
 
 [0]: https://sourceforge.net/projects/classinformer/
-[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/tree/master/Img/structure_builder.jpg
+[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/blob/master/Img/structure_builder.JPG

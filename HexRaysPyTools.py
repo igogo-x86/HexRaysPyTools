@@ -77,6 +77,11 @@ def hexrays_events_callback(*args):
                         if idaapi.get_func_name2(function.startEA) == member_name:
                             idaapi.open_pseudocode(function.startEA, 0)
                             return 1
+    elif hexrays_event == idaapi.hxe_right_click:
+        hx_view = args[1]
+        item = hx_view.item
+        if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_num:
+            pass
     return 0
 
 
@@ -124,6 +129,39 @@ class ActionRemoveReturn(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
+class ActionCreateVtable(idaapi.action_handler_t):
+    name = "my:CreateVtable"
+    description = "Create Virtual Table"
+    hotkey = "V"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+
+    @staticmethod
+    def generate():
+        return idaapi.action_desc_t(
+            ActionCreateVtable.name,
+            ActionCreateVtable.description,
+            ActionCreateVtable(),
+            ActionCreateVtable.hotkey
+        )
+
+    def activate(self, ctx):
+        ea = ctx.cur_ea
+        if check_virtual_table(ea):
+            vtable = VirtualTable(0, ea)
+            vtable.import_to_structures()
+
+    def update(self, ctx):
+        if ctx.form_type == idaapi.BWN_DISASM:
+            print "IDA-VIEW"
+            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+            return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            return idaapi.AST_DISABLE_FOR_FORM
+
+
 class MyPlugin(idaapi.plugin_t):
     # flags = idaapi.PLUGIN_HIDE
     flags = 0
@@ -139,6 +177,7 @@ class MyPlugin(idaapi.plugin_t):
         if not idaapi.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
 
+        idaapi.register_action(ActionCreateVtable.generate())
         idaapi.register_action(ActionShowGraph.generate())
         idaapi.register_action(idaapi.action_desc_t("my:RemoveReturn", "Remove Return", ActionRemoveReturn()))
         idaapi.register_action(idaapi.action_desc_t("my:RemoveArgument", "Remove Argument", ActionRemoveArgument()))
