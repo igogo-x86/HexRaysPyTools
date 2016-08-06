@@ -10,7 +10,6 @@ import PySide.QtCore as QtCore
 EA64 = idc.__EA64__
 EA_SIZE = 8 if EA64 else 4
 LEGAL_TYPES = ("_DWORD *", "int", "__int64", "signed __int64", "void *")
-BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
 
 def parse_vtable_name(name):
@@ -22,29 +21,6 @@ def parse_vtable_name(name):
         # const class_name:`vftable' case
         return "Vtable_" + m.group(1), True
     return name, True
-
-
-def get_padding_member(offset, size):
-    udt_member = idaapi.udt_member_t()
-    if size == 1:
-        udt_member.name = "gap_{0:X}".format(offset)
-        udt_member.type = BYTE_TINFO
-        udt_member.size = BYTE_TINFO.get_size()
-        udt_member.offset = offset
-        return udt_member
-
-    array_data = idaapi.array_type_data_t()
-    array_data.base = 0
-    array_data.elem_type = BYTE_TINFO
-    array_data.nelems = size
-    tmp_tinfo = idaapi.tinfo_t()
-    tmp_tinfo.create_array(array_data)
-
-    udt_member.name = "gap_{0:X}".format(offset)
-    udt_member.type = tmp_tinfo
-    udt_member.size = size
-    udt_member.offset = offset
-    return udt_member
 
 
 class AbstractField:
@@ -144,7 +120,13 @@ class VirtualTable(AbstractField):
             cdecl_typedef = idaapi.asktext(0x10000, cdecl_typedef, "The following new type will be created")
             if not cdecl_typedef:
                 return
-        ordinal = idaapi.idc_set_local_type(-1, cdecl_typedef, idaapi.PT_TYP)
+        previous_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, self.vtable_name)
+        if previous_ordinal:
+            idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
+            ordinal = idaapi.idc_set_local_type(previous_ordinal, cdecl_typedef, idaapi.PT_TYP)
+        else:
+            ordinal = idaapi.idc_set_local_type(-1, cdecl_typedef, idaapi.PT_TYP)
+
         if ordinal:
             print "[Info] Virtual table " + self.vtable_name + " added to Local Types"
             return idaapi.import_type(idaapi.cvar.idati, -1, self.vtable_name)
@@ -156,7 +138,7 @@ class VirtualTable(AbstractField):
         tid = self.import_to_structures()
         if tid != idaapi.BADADDR:
             udt_member.name = self.name
-            tmp_tinfo = idaapi.create_typedef(self.name)
+            tmp_tinfo = idaapi.create_typedef(self.vtable_name)
             tmp_tinfo.create_ptr(tmp_tinfo)
             udt_member.type = tmp_tinfo
             udt_member.offset = self.offset
@@ -248,6 +230,8 @@ class ScannedVariable:
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
+    BYTE_TINFO = None
+
     def __init__(self, *args):
         """
         Keeps information about currently found fields in possible structure
@@ -261,6 +245,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.items = []
         self.scanned_variables = []
         self.structure_name = "CHANGE_MY_NAME"
+        TemporaryStructureModel.BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
     # OVERLOADED METHODS #
 
@@ -334,6 +319,29 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         """
         self.scanned_variables.append(scanned_variable)
 
+    @staticmethod
+    def get_padding_member(offset, size):
+        udt_member = idaapi.udt_member_t()
+        if size == 1:
+            udt_member.name = "gap_{0:X}".format(offset)
+            udt_member.type = TemporaryStructureModel.BYTE_TINFO
+            udt_member.size = TemporaryStructureModel.BYTE_TINFO.get_size()
+            udt_member.offset = offset
+            return udt_member
+
+        array_data = idaapi.array_type_data_t()
+        array_data.base = 0
+        array_data.elem_type = TemporaryStructureModel.BYTE_TINFO
+        array_data.nelems = size
+        tmp_tinfo = idaapi.tinfo_t()
+        tmp_tinfo.create_array(array_data)
+
+        udt_member.name = "gap_{0:X}".format(offset)
+        udt_member.type = tmp_tinfo
+        udt_member.size = size
+        udt_member.offset = offset
+        return udt_member
+
     # SLOTS #
 
     def finalize(self):
@@ -349,7 +357,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for item in filter(lambda x: x.enabled, self.items):    # Filter disabled members
             gap_size = item.offset - offset
             if gap_size:
-                udt_data.push_back(get_padding_member(offset, gap_size))
+                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset, gap_size))
             udt_data.push_back(item.get_udt_member())
             offset = item.offset + item.size
 
