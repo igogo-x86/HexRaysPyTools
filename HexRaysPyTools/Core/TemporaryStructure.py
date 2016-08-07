@@ -1,11 +1,9 @@
-import sys
 import bisect
 import idc
 import idaapi
 import re
-import PySide.QtGui as QtGui
 import PySide.QtCore as QtCore
-
+import PySide.QtGui as QtGui
 
 EA64 = idc.__EA64__
 EA_SIZE = 8 if EA64 else 4
@@ -40,12 +38,6 @@ class AbstractField:
     __ge__ = lambda self, other: self.offset >= other.offset
 
 
-class VirtualFunction:
-    def __init__(self, address, type):
-        self.address = address
-        self.type = type
-
-
 class VirtualTable(AbstractField):
     def __init__(self, offset, address):
         AbstractField.__init__(self, offset)
@@ -57,6 +49,7 @@ class VirtualTable(AbstractField):
         self.tinfo = self.create_tinfo()
 
     def populate(self):
+        # TODO: Check if address of virtual function is in code section and then try to make function
         address = self.address
         while True:
             if EA64:
@@ -76,6 +69,7 @@ class VirtualTable(AbstractField):
         udt_data = idaapi.udt_type_data_t()
         for address in self.virtual_functions_ea:
             decompiled_function = idaapi.decompile(address)
+            print decompiled_function
             if decompiled_function:
                 guessed_type = idaapi.tinfo_t()
                 get_type = idaapi.tinfo_t()
@@ -146,6 +140,23 @@ class VirtualTable(AbstractField):
         return udt_member
 
     @staticmethod
+    def check_address(address):
+        # Checks if given address contains virtual table. Returns True if more than 2 function pointers found
+        functions_count = 0
+        while True:
+            if EA64:
+                func_address = idaapi.get_64bit(address)
+            else:
+                func_address = idaapi.get_32bit(address)
+            flags = idaapi.getFlags(func_address)  # flags_t
+            if idaapi.isCode(flags):
+                functions_count += 1
+                address += EA_SIZE
+            else:
+                break
+        return functions_count >= 2
+
+    @staticmethod
     def is_vtable(): return True
 
     @property
@@ -155,9 +166,6 @@ class VirtualTable(AbstractField):
     @property
     def size(self):
         return EA_SIZE
-
-    def __str__(self):
-        pass
 
 
 class Field(AbstractField):
@@ -204,7 +212,7 @@ class ScannedVariable:
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
 
         :param function: idaapi.cfunc_t
-        :param lvar: idaapi.vdui_t
+        :param variable: idaapi.vdui_t
         """
         self.function = function
         self.lvar = variable

@@ -1,22 +1,4 @@
-import idaapi
-
-from HexRaysPyTools.Helper.Structures import *
-
-
-def check_virtual_table(address):
-    functions_count = 0
-    while True:
-        if EA64:
-            func_address = idaapi.get_64bit(address)
-        else:
-            func_address = idaapi.get_32bit(address)
-        flags = idaapi.getFlags(func_address)           # flags_t
-        if idaapi.isCode(flags):
-            functions_count += 1
-            address += EA_SIZE
-        else:
-            break
-    return functions_count >= 2
+from HexRaysPyTools.Core.TemporaryStructure import *
 
 
 class CtreeVisitor(idaapi.ctree_parentee_t):
@@ -94,7 +76,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                         member_type = cast_type
                     elif right_son.op == idaapi.cot_obj:
                         member_type = right_son.type
-                        if check_virtual_table(right_son.obj_ea):
+                        if VirtualTable.check_address(right_son.obj_ea):
                             return VirtualTable(offset, right_son.obj_ea)
 
                         print "(Object) offset: {0:#010X} size: {1}, address: {2:#010X}".format(
@@ -110,22 +92,3 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         return None
 
 
-class ActionScanVariable(idaapi.action_handler_t):
-    def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
-        idaapi.action_handler_t.__init__(self)
-
-    def activate(self, ctx):
-        vu = idaapi.get_tform_vdui(ctx.form)
-        variable = vu.item.get_lvar()  # lvar_t
-        print "Local variable type: %s" % variable.tif.dstr()
-        if variable.tif.dstr() in LEGAL_TYPES:
-            scanner = CtreeVisitor(vu.cfunc, variable)
-            scanner.apply_to(vu.cfunc.body, None)
-            if scanner.candidates:
-                self.temporary_structure.add_scanned_variable(ScannedVariable(vu.cfunc, variable))
-                for field in scanner.candidates:
-                    self.temporary_structure.add_row(field)
-
-    def update(self, ctx):
-        return idaapi.AST_ENABLE_ALWAYS

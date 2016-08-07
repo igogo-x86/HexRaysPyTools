@@ -2,35 +2,6 @@ import idaapi
 import idc
 
 
-class StructureGraphViewer(idaapi.GraphViewer):
-    def __init__(self, title, graph):
-        idaapi.GraphViewer.__init__(self, title)
-        self.graph = graph
-
-    def OnRefresh(self):
-        self.Clear()
-        nodes_id = {}
-        for node in self.graph.get_nodes():
-            nodes_id[node] = self.AddNode(node)
-        for first, second in self.graph.get_edges():
-            self.AddEdge(nodes_id[first], nodes_id[second])
-        return True
-
-    def OnGetText(self, node_id):
-        return self.graph.local_types[self[node_id]].name_and_color
-
-    def OnHint(self, node_id):
-        try:
-            ordinal = self[node_id]
-            return self.graph.local_types[ordinal].hint
-        except KeyError:
-            return
-
-    def OnDblClick(self, node_id):
-        self.graph.change_selected([self[node_id]])
-        self.Refresh()
-
-
 class LocalType:
     def __init__(self, name, members_ordinals, hint, selected=False, is_typedef=False):
         self.name = name
@@ -54,6 +25,7 @@ class LocalType:
 
 
 class StructureGraph:
+    # TODO:Enum types display
     def __init__(self, ordinal_list=None):
         self.ordinal_list = ordinal_list if ordinal_list else xrange(1, idc.GetMaxLocalType())
         self.local_types = {}
@@ -107,9 +79,9 @@ class StructureGraph:
     def get_tinfo_by_ordinal(ordinal):
         local_typestring = idc.GetLocalTinfo(ordinal)
         if local_typestring:
-            type, fields = local_typestring
+            p_type, fields = local_typestring
             local_tinfo = idaapi.tinfo_t()
-            local_tinfo.deserialize(idaapi.cvar.idati, type, fields)
+            local_tinfo.deserialize(idaapi.cvar.idati, p_type, fields)
             return local_tinfo
         return None
 
@@ -140,7 +112,12 @@ class StructureGraph:
                     typeref_ordinal = StructureGraph.get_ordinal(local_tinfo)
                     if typeref_ordinal:
                         cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
-                        self.local_types[ordinal] = LocalType(name, [typeref_ordinal], cdecl_typedef + ' *', is_typedef=True)
+                        self.local_types[ordinal] = LocalType(
+                            name,
+                            [typeref_ordinal],
+                            cdecl_typedef + ' *',
+                            is_typedef=True
+                        )
 
         self.ordinal_list = set(self.ordinal_list).intersection(self.local_types)
         for ordinal in self.ordinal_list:
@@ -187,44 +164,3 @@ class StructureGraph:
 
     def get_edges(self):
         return self.final_edges
-
-
-class ActionShowGraph(idaapi.action_handler_t):
-    name = "my:ShowGraph"
-    description = "Show graph"
-    hotkey = "G"
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-        self.graph = None
-        self.graph_view = None
-
-    @staticmethod
-    def generate():
-        return idaapi.action_desc_t(
-            ActionShowGraph.name,
-            ActionShowGraph.description,
-            ActionShowGraph(),
-            ActionShowGraph.hotkey
-        )
-
-    def activate(self, ctx):
-        """
-        :param ctx: idaapi.action_activation_ctx_t
-        :return:    None
-        """
-        form = self.graph_view.GetTForm() if self.graph_view else None
-        if form:
-            self.graph.change_selected(list(ctx.chooser_selection))
-            self.graph_view.Refresh()
-        else:
-            self.graph = StructureGraph(list(ctx.chooser_selection))
-            self.graph_view = StructureGraphViewer("Structure Graph", self.graph)
-            self.graph_view.Show()
-
-    def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_LOCTYPS:
-            idaapi.attach_action_to_popup(ctx.form, None, self.name)
-            return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM

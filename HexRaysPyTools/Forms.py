@@ -1,7 +1,20 @@
-import PySide.QtGui as QtGui
 import idaapi
+import PySide.QtGui as QtGui
 
-from HexRaysPyTools.Helper.Structures import *
+
+class MyChoose(idaapi.Choose2):
+    def __init__(self, items, title, cols):
+        idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL)
+        self.items = items
+
+    def OnClose(self):
+        pass
+
+    def OnGetLine(self, n):
+        return self.items[n]
+
+    def OnGetSize(self):
+        return len(self.items)
 
 
 class StructureBuilder(idaapi.PluginForm):
@@ -82,3 +95,32 @@ class StructureBuilder(idaapi.PluginForm):
 
     def Show(self, caption=None, options=0):
         return idaapi.PluginForm.Show(self, caption, options=0)
+
+
+class StructureGraphViewer(idaapi.GraphViewer):
+    def __init__(self, title, graph):
+        idaapi.GraphViewer.__init__(self, title)
+        self.graph = graph
+
+    def OnRefresh(self):
+        self.Clear()
+        nodes_id = {}
+        for node in self.graph.get_nodes():
+            nodes_id[node] = self.AddNode(node)
+        for first, second in self.graph.get_edges():
+            self.AddEdge(nodes_id[first], nodes_id[second])
+        return True
+
+    def OnGetText(self, node_id):
+        return self.graph.local_types[self[node_id]].name_and_color
+
+    def OnHint(self, node_id):
+        try:
+            ordinal = self[node_id]
+            return self.graph.local_types[ordinal].hint
+        except KeyError:
+            return
+
+    def OnDblClick(self, node_id):
+        self.graph.change_selected([self[node_id]])
+        self.Refresh()
