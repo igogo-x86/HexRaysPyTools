@@ -82,6 +82,12 @@ class StructureGraph:
             tinfo.remove_ptr_or_array()
         if tinfo.is_udt():
             return tinfo.get_ordinal()
+        elif tinfo.is_typeref():
+            typeref_ordinal = tinfo.get_ordinal()
+            if typeref_ordinal:
+                typeref_tinfo = StructureGraph.get_tinfo_by_ordinal(typeref_ordinal)
+                if typeref_tinfo.is_typeref() or typeref_tinfo.is_udt() or typeref_tinfo.is_ptr():
+                    return typeref_ordinal
         else:
             return 0
 
@@ -97,19 +103,33 @@ class StructureGraph:
                     ordinals.append(ordinal)
         return ordinals
 
+    @staticmethod
+    def get_tinfo_by_ordinal(ordinal):
+        local_typestring = idc.GetLocalTinfo(ordinal)
+        if local_typestring:
+            type, fields = local_typestring
+            local_tinfo = idaapi.tinfo_t()
+            local_tinfo.deserialize(idaapi.cvar.idati, type, fields)
+            return local_tinfo
+        return None
+
     def initialize_nodes(self):
         for ordinal in xrange(1, idc.GetMaxLocalType()):
-            local_typestring = idc.GetLocalTinfo(ordinal)
-            if local_typestring:
-                type, fields = local_typestring
+                local_tinfo = StructureGraph.get_tinfo_by_ordinal(ordinal)
+                if not local_tinfo:
+                    return
                 name = idc.GetLocalTypeName(ordinal)
-                local_tinfo = idaapi.tinfo_t()
-                local_tinfo.deserialize(idaapi.cvar.idati, type, fields)
+
                 if local_tinfo.is_typeref():
                     typeref_ordinal = local_tinfo.get_ordinal()
                     if typeref_ordinal:
+                        typeref_tinfo = StructureGraph.get_tinfo_by_ordinal(typeref_ordinal)
+                        if typeref_tinfo.is_typeref() or typeref_tinfo.is_udt() or typeref_tinfo.is_ptr():
+                            members_ordinals = [typeref_ordinal]
+                        else:
+                            members_ordinals = []
                         cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x3, local_tinfo, None, None)
-                        self.local_types[ordinal] = LocalType(name, [typeref_ordinal], cdecl_typedef, is_typedef=True)
+                        self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef, is_typedef=True)
                 elif local_tinfo.is_udt():
                     udt_data = idaapi.udt_type_data_t()
                     local_tinfo.get_udt_details(udt_data)
@@ -120,7 +140,6 @@ class StructureGraph:
                     typeref_ordinal = StructureGraph.get_ordinal(local_tinfo)
                     if typeref_ordinal:
                         cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
-                        print cdecl_typedef, local_tinfo.dstr()
                         self.local_types[ordinal] = LocalType(name, [typeref_ordinal], cdecl_typedef + ' *', is_typedef=True)
 
         self.ordinal_list = set(self.ordinal_list).intersection(self.local_types)

@@ -244,10 +244,8 @@ class ActionGetStructureBySize(idaapi.action_handler_t):
                 tinfo.create_typedef(selected_library, ordinal)
                 if tinfo.get_size() == size:
                     name = tinfo.dstr()
-                    udt_data = idaapi.udt_type_data_t()
-                    tinfo.get_udt_details(udt_data)
-                    tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-                    matched_types.append([str(ordinal), name, tinfo.dstr()])
+                    description = idaapi.print_tinfo(None, 0, 0, idaapi.PRTYPE_DEF, tinfo, None, None)
+                    matched_types.append([str(ordinal), name, description])
 
             type_chooser = MyChoose(
                 matched_types,
@@ -284,16 +282,13 @@ class ActionGetStructureBySize(idaapi.action_handler_t):
             number_format_new.type_name = idaapi.create_numbered_type_name(ordinal)
 
             c_function = hx_view.cfunc
-            number_formats = idaapi.restore_user_numforms(c_function.entry_ea)
-            if not number_formats:
-                number_formats = c_function.numforms    # idaapi.user_numforms_t
-
+            number_formats = c_function.numforms    # idaapi.user_numforms_t
             operand_locator = idaapi.operand_locator_t(ea, ord(operand_number) if operand_number else 0)
+            if operand_locator in number_formats:
+                del number_formats[operand_locator]
+
             number_formats[operand_locator] = number_format_new
-
-            idaapi.save_user_numforms(c_function.entry_ea, number_formats)
-            # idaapi.user_numforms_free(number_formats)
-
+            c_function.save_user_numforms()
             hx_view.refresh_view(True)
 
     def update(self, ctx):
