@@ -40,9 +40,14 @@ Usage:
 | `int` | `*(_DWORD *) v = var` | `typeof(var)` | 0 |
 | | `*(_DWORD *) v = obj` | `typeof(obj)` | 0 |
 | | `*(_DWORD *) v = &obj` | `typeof(obj)` | 0 |
+| | `*(_DWORD *) (v + x) = sub(...)` | `return type` | 0 |
 | | `*(TYPE *)(v + x) = num` | `TYPE` | x |
 | | `*(_DWORD *)(v + x) = var` | `typeof(var)` | x |
 | | `*(_DWORD *)(v + x) = obj` | `typeof(obj)` | x |
+| | `sub(..., v + x, ...)` | `DWORD` or `int` | x |
+| | `sub(..., *(TYPE *) (v + x), ...)` | `TYPE` (passed by value)| x |
+| | `sub(..., (TYPE *) (v + x), ...)` | `TYPE` (passed by reference) | x |
+
 
 #### x64
 | Variable type | Situation | Type | Offset |

@@ -60,7 +60,10 @@ def hexrays_events_callback(*args):
                     # And finally look through all functions and find the same name. Sigh...
                     for idx in xrange(idaapi.get_func_qty()):
                         function = idaapi.getn_func(idx)
-                        if idaapi.get_func_name2(function.startEA) == member_name:
+                        name = idaapi.get_short_name(function.startEA)
+                        name = name.split('(')[0]
+                        name = name.replace("`", '').replace("_", '').replace("'", '')
+                        if name == member_name:
                             idaapi.open_pseudocode(function.startEA, 0)
                             return 1
     return 0

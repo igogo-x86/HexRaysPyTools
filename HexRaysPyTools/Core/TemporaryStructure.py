@@ -51,7 +51,7 @@ class AbstractField:
 
 
 class VirtualTable(AbstractField):
-    def __init__(self, offset, address, scanned_variable, origin=0):
+    def __init__(self, offset, address, scanned_variable=None, origin=0):
         AbstractField.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
         self.virtual_functions_ea = []
@@ -81,13 +81,12 @@ class VirtualTable(AbstractField):
         udt_data = idaapi.udt_type_data_t()
         for address in self.virtual_functions_ea:
             decompiled_function = idaapi.decompile(address)
-            print decompiled_function
             if decompiled_function:
                 guessed_type = idaapi.tinfo_t()
                 get_type = idaapi.tinfo_t()
                 idaapi.guess_tinfo2(address, guessed_type)
                 idaapi.get_tinfo2(address, get_type)
-                print "\t(Virtual function) at address: {0:#010X} name: {1} type:".format(
+                print "\t(Virtual function) at address: {0:#010X} name: {1} type: {2}".format(
                     address,
                     idaapi.get_short_name(address),
                     decompiled_function.type.dstr()
@@ -101,7 +100,10 @@ class VirtualTable(AbstractField):
                 tmp_tinfo.create_ptr(tmp_tinfo)
                 udt_member.type = tmp_tinfo
                 udt_member.offset = offset
-                udt_member.name = idaapi.get_short_name(address)
+                name = idaapi.get_short_name(address)
+                name = name.split('(')[0]
+                name = name.replace("`", '').replace(" ", '_').replace("'", '')
+                udt_member.name = name
                 udt_member.size = EA_SIZE
 
                 udt_data.push_back(udt_member)
@@ -110,7 +112,8 @@ class VirtualTable(AbstractField):
 
         final_tinfo = idaapi.tinfo_t()
         if final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT):
-            print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, 0x2F, final_tinfo, self.name, None)
+            print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE |
+                                                                 idaapi.PRTYPE_SEMI, final_tinfo, self.name, None)
             return final_tinfo
         else:
             print "[ERROR] Virtual table creation failed"
@@ -121,7 +124,8 @@ class VirtualTable(AbstractField):
 
         :return: idaapi.tid_t
         """
-        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2F, self.tinfo, self.vtable_name, None)
+        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
+                                           self.tinfo, self.vtable_name, None)
         if ask:
             cdecl_typedef = idaapi.asktext(0x10000, cdecl_typedef, "The following new type will be created")
             if not cdecl_typedef:
@@ -371,7 +375,8 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             offset = item.offset + item.size
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-        cdecl = idaapi.print_tinfo(None, 4, 5, 0x2F, final_tinfo, self.structure_name, None)
+        cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
+                                   final_tinfo, self.structure_name, None)
         cdecl = idaapi.asktext(0x10000, cdecl, "The following new type will be created")
 
         if cdecl:

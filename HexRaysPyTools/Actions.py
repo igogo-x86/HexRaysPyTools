@@ -92,12 +92,13 @@ class GetStructureBySize(idaapi.action_handler_t):
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
-        GetStructureBySize.til_t._fields_ = [
-            ("name", ctypes.c_char_p),
-            ("desc", ctypes.c_char_p),
-            ("nbases", ctypes.c_int),
-            ("base", ctypes.POINTER(ctypes.POINTER(GetStructureBySize.til_t)))
-        ]
+        if '_fields_' not in dir(GetStructureBySize.til_t):
+            GetStructureBySize.til_t._fields_ = [
+                ("name", ctypes.c_char_p),
+                ("desc", ctypes.c_char_p),
+                ("nbases", ctypes.c_int),
+                ("base", ctypes.POINTER(ctypes.POINTER(GetStructureBySize.til_t)))
+            ]
 
     @staticmethod
     def enable_library_ordinals(library_num):
