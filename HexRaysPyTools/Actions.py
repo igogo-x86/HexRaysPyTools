@@ -233,12 +233,10 @@ class ScanVariable(idaapi.action_handler_t):
         variable = vu.item.get_lvar()  # lvar_t
         print "Local variable type: %s" % variable.tif.dstr()
         if variable.tif.dstr() in LEGAL_TYPES:
-            scanner = CtreeVisitor(vu.cfunc, variable)
+            scanner = CtreeVisitor(vu.cfunc, variable, self.temporary_structure.main_offset)
             scanner.apply_to(vu.cfunc.body, None)
-            if scanner.candidates:
-                self.temporary_structure.add_scanned_variable(ScannedVariable(vu.cfunc, variable))
-                for field in scanner.candidates:
-                    self.temporary_structure.add_row(field)
+            for field in scanner.candidates:
+                self.temporary_structure.add_row(field)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":

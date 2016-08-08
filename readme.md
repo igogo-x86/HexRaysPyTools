@@ -4,7 +4,7 @@ Plugin assist in creation classes/structures and detection virtual tables. Best 
 
 # Features
 
-### Structure Graph
+### 1) Structure Graph
 
 Shows relationship between structures.
 ![img][structure_graph]
@@ -12,12 +12,20 @@ Shows relationship between structures.
 Usage:
 
 1. Open Local Types
-2. Select interesting structures and right click -> "Show Graph" 
+2. Select interesting structures and right click -> "Show Graph" (Hotkey G)
 3. Plugin creates a graph of all structures that have relationship with selected items.
 4. Double clicking on node recalculates graph for it
 5. Every node have a hint message that shows C-like typedef
 
-### Structure Builder
+### 2) Structures with given size
+
+Usage:
+
+1. In Pseudocode viewer ight click on number -> "Structures with this size". (hotkey W)
+2. Select library in which find structures
+3. Select structure. Number will become `sizeof(Structure Name)` and type will be imported to Local Types
+
+### 3) Structure Builder
 
 ### Currently recognized access to fields
 

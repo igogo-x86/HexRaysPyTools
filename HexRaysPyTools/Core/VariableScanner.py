@@ -2,36 +2,40 @@ from HexRaysPyTools.Core.TemporaryStructure import *
 
 
 class CtreeVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, function, variable):
+    def __init__(self, function, variable, origin):
         """
-        This Class is idaapi.ctree_visitor_t and used for for finding candidates on class membmers.
+        This Class is idaapi.ctree_visitor_t and used for for finding candidates on class members.
         Usage: CtreeVisitor.apply_to() and then CtreeVisitor.candidates
 
         :param function: idaapi.cfunc_t
-        :param variable: idaapi.lvart_t
+        :param variable: idaapi.lvar_t
+        :param origin: offset in main structure from which scanning is propagating
         """
         super(CtreeVisitor, self).__init__()
         self.function = function
-        # Dictionary {varuable name => type} of variables that are being scanned
+        # Dictionary {variable name => tinfo_t} of variables that are being scanned
         self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.tif}
-        self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
+        self.origin = origin
         self.candidates = []
+
+        self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
 
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
             if index in self.variables.keys():
                 if len(self.parents) > 3:               # ????
-                    result = self.check_member_assignment(self.variables[index])
+                    result = self.check_member_assignment(index)
                     if result:
                         self.candidates.append(result)
         return 0
 
-    def check_member_assignment(self, expression):
+    def check_member_assignment(self, index):
         """
-        Checks if expression is part of member assignment statement. Returns None if not.
+        We are now in cexpr_t == idaapi.cot_var This function checks if expression is part of member assignment
+        statement. Returns None if not.
 
-        :param expression: idaapi.cexpr_t
+        :param index: int
         :return: Structures.Field
         """
         parents_queue = reversed(self.parents)
@@ -42,7 +46,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         offset = 0
         member_type = None
 
-        if expression.dstr() in ("int", "__int64", "signed __int64"):
+        if self.variables[index].dstr() in ("int", "__int64", "signed __int64"):
             if parent.op == idaapi.cot_add and parent.y.op == idaapi.cot_num:
                 offset = parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))            # x64
                 parent = parent_generator()
@@ -77,7 +81,12 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                     elif right_son.op == idaapi.cot_obj:
                         member_type = right_son.type
                         if VirtualTable.check_address(right_son.obj_ea):
-                            return VirtualTable(offset, right_son.obj_ea)
+                            return VirtualTable(
+                                offset,
+                                right_son.obj_ea,
+                                ScannedVariable(self.function, self.function.get_lvars()[index]),
+                                self.origin
+                            )
 
                         print "(Object) offset: {0:#010X} size: {1}, address: {2:#010X}".format(
                             offset,
@@ -87,7 +96,12 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                         member_type.create_ptr(member_type)
                     else:
                         return None
-                    return Field(offset, tinfo=member_type)
+                    return Field(
+                        offset,
+                        member_type,
+                        ScannedVariable(self.function, self.function.get_lvars()[index]),
+                        self.origin
+                    )
 
         return None
 

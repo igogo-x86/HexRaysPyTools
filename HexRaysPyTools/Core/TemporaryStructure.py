@@ -22,9 +22,21 @@ def parse_vtable_name(name):
 
 
 class AbstractField:
-    def __init__(self, offset):
+    def __init__(self, offset, scanned_variable, origin):
+        """
+        Offset is the very very base of the structure
+        Origin is from which offset of the base structure the variable have been scanned
+        scanned_variable - information about context in which this variable was scanned. This is necessary for final
+        applying type after packing or finalizing structure.
+
+        :param offset: int
+        :param scanned_variable: ScannedVariable
+        :param origin: int
+        """
         self.offset = offset
+        self.origin = origin
         self.enabled = True
+        self.scanned_variable = scanned_variable
 
     @property
     def type_name(self):
@@ -39,8 +51,8 @@ class AbstractField:
 
 
 class VirtualTable(AbstractField):
-    def __init__(self, offset, address):
-        AbstractField.__init__(self, offset)
+    def __init__(self, offset, address, scanned_variable, origin=0):
+        AbstractField.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
         self.virtual_functions_ea = []
         self.name = "vtable"
@@ -169,28 +181,17 @@ class VirtualTable(AbstractField):
 
 
 class Field(AbstractField):
-    def __init__(self, offset, tinfo=None, virtual_table=None):
-        AbstractField.__init__(self, offset)
+    def __init__(self, offset, tinfo, scanned_variable, origin=0):
+        AbstractField.__init__(self, offset + origin, scanned_variable, origin)
         self.tinfo = tinfo
         self.name = "field_{0:X}".format(self.offset)
-        self.virtual_table = virtual_table
 
     def get_udt_member(self):
         udt_member = idaapi.udt_member_t()
-        if self.virtual_table:
-            tid = self.virtual_table.import_to_structures()
-            if tid != idaapi.BADADDR:
-                udt_member.name = self.name
-                tmp_tinfo = idaapi.create_typedef(self.virtual_table.name)
-                tmp_tinfo.create_ptr(tmp_tinfo)
-                udt_member.type = tmp_tinfo
-                udt_member.offset = self.offset
-                udt_member.size = EA_SIZE
-        else:
-            udt_member.name = self.name
-            udt_member.type = self.tinfo
-            udt_member.offset = self.offset
-            udt_member.size = self.size
+        udt_member.name = self.name
+        udt_member.type = self.tinfo
+        udt_member.offset = self.offset
+        udt_member.size = self.size
         return udt_member
 
     @staticmethod
@@ -236,6 +237,12 @@ class ScannedVariable:
         else:
             print "[Warning] Failed to apply type"
 
+    def __eq__(self, other):
+        return self.function.entry_ea == other.function.entry_ea and self.lvar.name == other.lvar.name
+
+    def __hash__(self):
+        return hash((self.function.entry_ea, self.lvar.name))
+
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
     BYTE_TINFO = None
@@ -251,7 +258,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.main_offset = 0
         self.headers = ["Offset", "Type", "Name"]
         self.items = []
-        self.scanned_variables = []
         self.structure_name = "CHANGE_MY_NAME"
         TemporaryStructureModel.BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
@@ -297,11 +303,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return self.items[bisect.bisect_left(self.items, member)] == member
         return False
 
-    def add_row(self, member):
-        if not self.have_member(member):
-            bisect.insort(self.items, member)
-            self.modelReset.emit()
-
     def have_collision(self, row):
         if not self.items[row].enabled:
             return False
@@ -319,13 +320,13 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return True
         return False
 
-    def add_scanned_variable(self, scanned_variable):
-        """
-        This variable's type will be changed after finalizing structure
+    def add_row(self, member):
+        if not self.have_member(member):
+            bisect.insort(self.items, member)
+            self.modelReset.emit()
 
-        :param scanned_variable: ScannedVariable
-        """
-        self.scanned_variables.append(scanned_variable)
+    def get_scanned_variables(self, ordinal=0):
+        return set(map(lambda x: x.scanned_variable, self.items))
 
     @staticmethod
     def get_padding_member(offset, size):
@@ -382,7 +383,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 if tid:
                     tinfo = idaapi.create_typedef(structure_name)
                     tinfo.create_ptr(tinfo)
-                    for scanned_var in self.scanned_variables:
+                    for scanned_var in self.get_scanned_variables():
                         scanned_var.apply_type(tinfo)
                 self.clear()
             else:
@@ -419,6 +420,5 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def clear(self):
         self.items = []
-        self.scanned_variables = []
         self.main_offset = 0
         self.modelReset.emit()
