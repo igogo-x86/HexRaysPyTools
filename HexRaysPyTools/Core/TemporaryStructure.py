@@ -311,6 +311,51 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     # HELPER METHODS #
 
+    def pack(self, start=0, stop=None):
+        if self.collisions[start:stop].count(True):
+            print "[Warning] Collisions detected"
+            return
+
+        final_tinfo = idaapi.tinfo_t()
+        udt_data = idaapi.udt_type_data_t()
+        origin = self.items[start].offset
+        offset = origin
+
+        for item in filter(lambda x: x.enabled, self.items[start:stop]):    # Filter disabled members
+            gap_size = item.offset - offset
+            if gap_size:
+                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset, gap_size))
+            if item.is_array:
+                array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
+                if array_size:
+                    udt_data.push_back(item.get_udt_member(array_size))
+                    offset = item.offset + item.size * array_size
+                    continue
+            udt_data.push_back(item.get_udt_member())
+            offset = item.offset + item.size
+
+        final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+        cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
+                                   final_tinfo, self.structure_name, None)
+        cdecl = idaapi.asktext(0x10000, cdecl, "The following new type will be created")
+
+        if cdecl:
+            structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
+            ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
+            if ordinal:
+                print "[Info] New type {0} was added to Local Types".format(structure_name)
+                tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
+                if tid:
+                    tinfo = idaapi.create_typedef(structure_name)
+                    ptr_tinfo = idaapi.tinfo_t()
+                    ptr_tinfo.create_ptr(tinfo)
+                    for scanned_var in self.get_scanned_variables(origin):
+                        scanned_var.apply_type(ptr_tinfo)
+                    return tinfo
+            else:
+                print "[ERROR] Structure {0} probably already exist".format(structure_name)
+        return None
+
     def have_member(self, member):
         if self.items:
             idx = bisect.bisect_left(self.items, member)
@@ -347,8 +392,10 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.refresh_collisions()
             self.modelReset.emit()
 
-    def get_scanned_variables(self, ordinal=0):
-        return set(map(lambda x: x.scanned_variable, self.items))
+    def get_scanned_variables(self, origin=0):
+        return set(
+            map(lambda x: x.scanned_variable, filter(lambda x: x.scanned_variable and x.origin == origin, self.items))
+        )
 
     def get_next_enabled(self, row):
         row += 1
@@ -390,46 +437,8 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     # SLOTS #
 
     def finalize(self):
-        if self.collisions.count(True):
-            print "[Warning] Collisions detected"
-            return
-
-        final_tinfo = idaapi.tinfo_t()
-        udt_data = idaapi.udt_type_data_t()
-        offset = 0
-
-        for item in filter(lambda x: x.enabled, self.items):    # Filter disabled members
-            gap_size = item.offset - offset
-            if gap_size:
-                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset, gap_size))
-            if item.is_array:
-                array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
-                if array_size:
-                    udt_data.push_back(item.get_udt_member(array_size))
-                    offset = item.offset + item.size * array_size
-                    continue
-            udt_data.push_back(item.get_udt_member())
-            offset = item.offset + item.size
-
-        final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-        cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
-                                   final_tinfo, self.structure_name, None)
-        cdecl = idaapi.asktext(0x10000, cdecl, "The following new type will be created")
-
-        if cdecl:
-            structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
-            ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
-            if ordinal:
-                print "[Info] New type {0} was added to Local Types".format(structure_name)
-                tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
-                if tid:
-                    tinfo = idaapi.create_typedef(structure_name)
-                    tinfo.create_ptr(tinfo)
-                    for scanned_var in self.get_scanned_variables():
-                        scanned_var.apply_type(tinfo)
-                self.clear()
-            else:
-                print "[ERROR] Structure {0} probably already exist".format(structure_name)
+        if self.pack():
+            self.clear()
 
     def disable_rows(self, indices):
         for idx in indices:
@@ -455,11 +464,19 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         if indices:
             item = self.items[indices[0].row()]
             if not item.is_vtable:
-                item.is_array = item.is_array ^ True
+                item.is_array ^= True
                 self.modelReset.emit()
 
     def pack_substruct(self, indices):
-        pass
+        if indices:
+            indices = list(map(lambda x: x.row(), indices))
+            indices.sort()
+            start, stop = indices[0], indices[-1] + 1
+            tinfo = self.pack(start, stop)
+            if tinfo:
+                offset = self.items[start].offset
+                self.items = self.items[0:start] + self.items[stop:]
+                self.add_row(Field(offset, tinfo, None))
 
     def remove_item(self, indices):
         rows = map(lambda x: x.row(), indices)
