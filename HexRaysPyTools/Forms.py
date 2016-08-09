@@ -85,8 +85,8 @@ class StructureBuilder(idaapi.PluginForm):
         btn_disable.clicked.connect(lambda: self.structure_model.disable_rows(struct_view.selectedIndexes()))
         btn_enable.clicked.connect(lambda: self.structure_model.enable_rows(struct_view.selectedIndexes()))
         btn_origin.clicked.connect(lambda: self.structure_model.set_origin(struct_view.selectedIndexes()))
-        btn_origin.clicked.connect(lambda: self.structure_model.make_array(struct_view.selectedIndexes()))
-        btn_origin.clicked.connect(lambda: self.structure_model.pack_substruct(struct_view.selectedIndexes()))
+        btn_array.clicked.connect(lambda: self.structure_model.make_array(struct_view.selectedIndexes()))
+        btn_pack.clicked.connect(lambda: self.structure_model.pack_substruct(struct_view.selectedIndexes()))
         btn_remove.clicked.connect(lambda: self.structure_model.remove_item(struct_view.selectedIndexes()))
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
 

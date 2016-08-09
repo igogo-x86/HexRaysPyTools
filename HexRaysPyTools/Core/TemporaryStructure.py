@@ -36,6 +36,7 @@ class AbstractField:
         self.offset = offset
         self.origin = origin
         self.enabled = True
+        self.is_array = False
         self.scanned_variable = scanned_variable
 
     @property
@@ -172,8 +173,8 @@ class VirtualTable(AbstractField):
                 break
         return functions_count >= 2
 
-    @staticmethod
-    def is_vtable(): return True
+    @property
+    def is_vtable(self): return True
 
     @property
     def type_name(self):
@@ -190,16 +191,20 @@ class Field(AbstractField):
         self.tinfo = tinfo
         self.name = "field_{0:X}".format(self.offset)
 
-    def get_udt_member(self):
+    def get_udt_member(self, array_size=0):
         udt_member = idaapi.udt_member_t()
         udt_member.name = self.name
         udt_member.type = self.tinfo
+        if array_size:
+            tmp = idaapi.tinfo_t(self.tinfo)
+            tmp.create_array(self.tinfo, array_size)
+            udt_member.type = tmp
         udt_member.offset = self.offset
         udt_member.size = self.size
         return udt_member
 
-    @staticmethod
-    def is_vtable(): return False
+    @property
+    def is_vtable(self): return False
 
     @property
     def type_name(self):
@@ -262,6 +267,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.main_offset = 0
         self.headers = ["Offset", "Type", "Name"]
         self.items = []
+        self.collisions = []
         self.structure_name = "CHANGE_MY_NAME"
         TemporaryStructureModel.BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
@@ -275,20 +281,25 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def data(self, index, role):
         row, col = index.row(), index.column()
+        item = self.items[row]
         if role == QtCore.Qt.DisplayRole:
             if col == 0:
-                return "{0:#010X}".format(self.items[row].offset)
+                return "{0:#010X}".format(item.offset)
             elif col == 1:
-                return self.items[row].type_name
+                if not item.is_vtable and item.is_array and item.size > 0:
+                    array_size = self.calculate_array_size(row)
+                    if array_size:
+                        return item.type_name + "[{}]".format(array_size)
+                return item.type_name
             elif col == 2:
-                return self.items[row].name
+                return item.name
         elif role == QtCore.Qt.FontRole:
-            if col == 1 and self.items[row].is_vtable():
+            if col == 1 and item.is_vtable:
                 return QtGui.QFont("Consolas", 10, QtGui.QFont.Bold)
         elif role == QtCore.Qt.BackgroundColorRole:
-            if not self.items[row].enabled:
+            if not item.enabled:
                 return QtGui.QColor(QtCore.Qt.gray)
-            if self.items[row].offset == self.main_offset:
+            if item.offset == self.main_offset:
                 if col == 0:
                     return QtGui.QBrush(QtGui.QColor("#ff8080"))
             if self.have_collision(row):
@@ -308,29 +319,50 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         return False
 
     def have_collision(self, row):
-        if not self.items[row].enabled:
-            return False
-        left_neighbour = row - 1
-        right_neighbour = row + 1
-        while left_neighbour >= 0 and not self.items[left_neighbour].enabled:
-            left_neighbour -= 1
-        if left_neighbour >= 0:
-            if self.items[row].offset < self.items[left_neighbour].offset + self.items[left_neighbour].size:
-                return True
-        while right_neighbour < self.rowCount() and not self.items[right_neighbour].enabled:
-            right_neighbour += 1
-        if right_neighbour != self.rowCount():
-            if self.items[row].offset + self.items[row].size > self.items[right_neighbour].offset:
-                return True
-        return False
+        return self.collisions[row]
+
+    def refresh_collisions(self):
+        self.collisions = [False for _ in xrange(len(self.items))]
+        if (len(self.items)) > 1:
+            curr = 0
+            while curr < len(self.items):
+                if self.items[curr].enabled:
+                    break
+                curr += 1
+            next = curr + 1
+            while next < len(self.items):
+                if self.items[next].enabled:
+                    if self.items[curr].offset + self.items[curr].size > self.items[next].offset:
+                        self.collisions[curr] = True
+                        self.collisions[next] = True
+                        if self.items[curr].offset + self.items[curr].size < self.items[next].offset + self.items[next].size:
+                            curr = next
+                    else:
+                        curr = next
+                next += 1
 
     def add_row(self, member):
         if not self.have_member(member):
             bisect.insort(self.items, member)
+            self.refresh_collisions()
             self.modelReset.emit()
 
     def get_scanned_variables(self, ordinal=0):
         return set(map(lambda x: x.scanned_variable, self.items))
+
+    def get_next_enabled(self, row):
+        row += 1
+        while row < self.rowCount():
+            if self.items[row].enabled:
+                return row
+            row += 1
+        return None
+
+    def calculate_array_size(self, row):
+        next_row = self.get_next_enabled(row)
+        if next_row:
+            return (self.items[next_row].offset - self.items[row].offset) / self.items[row].size
+        return 0
 
     @staticmethod
     def get_padding_member(offset, size):
@@ -358,10 +390,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     # SLOTS #
 
     def finalize(self):
-        for row in xrange(self.rowCount()):
-            if self.have_collision(row):
-                print "[Warning] Collisions detected"
-                return
+        if self.collisions.count(True):
+            print "[Warning] Collisions detected"
+            return
 
         final_tinfo = idaapi.tinfo_t()
         udt_data = idaapi.udt_type_data_t()
@@ -371,6 +402,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             gap_size = item.offset - offset
             if gap_size:
                 udt_data.push_back(TemporaryStructureModel.get_padding_member(offset, gap_size))
+            if item.is_array:
+                array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
+                if array_size:
+                    udt_data.push_back(item.get_udt_member(array_size))
+                    offset = item.offset + item.size * array_size
+                    continue
             udt_data.push_back(item.get_udt_member())
             offset = item.offset + item.size
 
@@ -398,12 +435,15 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for idx in indices:
             if self.items[idx.row()].enabled:
                 self.items[idx.row()].enabled = False
+                self.items[idx.row()].is_array = False
+        self.refresh_collisions()
         self.modelReset.emit()
 
     def enable_rows(self, indices):
         for idx in indices:
             if not self.items[idx.row()].enabled:
                 self.items[idx.row()].enabled = True
+        self.refresh_collisions()
         self.modelReset.emit()
 
     def set_origin(self, indices):
@@ -412,7 +452,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.modelReset.emit()
 
     def make_array(self, indices):
-        pass
+        if indices:
+            item = self.items[indices[0].row()]
+            if not item.is_vtable:
+                item.is_array = item.is_array ^ True
+                self.modelReset.emit()
 
     def pack_substruct(self, indices):
         pass
