@@ -124,7 +124,8 @@ class GetStructureBySize(idaapi.action_handler_t):
         library_chooser = Forms.MyChoose(
             list(map(lambda x: [x[1], x[2]], list_type_library)),
             "Select Library",
-            [["Library", 10 | idaapi.Choose2.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose2.CHCOL_PLAIN]]
+            [["Library", 10 | idaapi.Choose2.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose2.CHCOL_PLAIN]],
+            69
         )
         library_num = library_chooser.Show(True)
         if library_num != -1:
@@ -148,7 +149,8 @@ class GetStructureBySize(idaapi.action_handler_t):
             type_chooser = Forms.MyChoose(
                 matched_types,
                 "Select Type",
-                [["Ordinal", 5 | idaapi.Choose2.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]]
+                [["Ordinal", 5 | idaapi.Choose2.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
+                165
             )
             selected_type = type_chooser.Show(True)
             if selected_type != -1:

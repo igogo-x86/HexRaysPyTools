@@ -1,10 +1,11 @@
 import idaapi
 import PySide.QtGui as QtGui
+import PySide.QtCore as QtCore
 
 
 class MyChoose(idaapi.Choose2):
-    def __init__(self, items, title, cols):
-        idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL)
+    def __init__(self, items, title, cols, icon=-1):
+        idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL, icon=icon)
         self.items = items
 
     def OnClose(self):
@@ -86,9 +87,11 @@ class StructureBuilder(idaapi.PluginForm):
         btn_enable.clicked.connect(lambda: self.structure_model.enable_rows(struct_view.selectedIndexes()))
         btn_origin.clicked.connect(lambda: self.structure_model.set_origin(struct_view.selectedIndexes()))
         btn_array.clicked.connect(lambda: self.structure_model.make_array(struct_view.selectedIndexes()))
-        btn_pack.clicked.connect(lambda: self.structure_model.pack_substruct(struct_view.selectedIndexes()))
+        btn_pack.clicked.connect(lambda: self.structure_model.pack_substructure(struct_view.selectedIndexes()))
         btn_remove.clicked.connect(lambda: self.structure_model.remove_item(struct_view.selectedIndexes()))
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
+        struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.show_virtual_methods)
+        self.structure_model.dataChanged.connect(struct_view.clearSelection)
 
     def OnClose(self, form):
         pass

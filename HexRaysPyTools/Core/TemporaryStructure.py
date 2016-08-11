@@ -4,6 +4,7 @@ import idaapi
 import re
 import PySide.QtCore as QtCore
 import PySide.QtGui as QtGui
+from HexRaysPyTools.Forms import MyChoose
 
 EA64 = idc.__EA64__
 EA_SIZE = 8 if EA64 else 4
@@ -51,11 +52,47 @@ class AbstractField:
     __ge__ = lambda self, other: self.offset >= other.offset
 
 
+class VirtualFunction:
+    def __init__(self, address, offset):
+        self.address = address
+        self.offset = offset
+        self.visited = False
+
+    def __int__(self):
+        return self.address
+
+    def get_tinfo(self):
+        decompiled_function = idaapi.decompile(self.address)
+        if decompiled_function:
+            tinfo = idaapi.tinfo_t(decompiled_function.type)
+            tinfo.create_ptr(tinfo)
+            return tinfo
+        return None
+
+    def get_udt_member(self):
+        udt_member = idaapi.udt_member_t()
+        udt_member.type = self.get_tinfo()
+        udt_member.offset = self.offset
+        udt_member.name = self.name
+        udt_member.size = EA_SIZE
+        return udt_member
+
+    def get_information(self):
+        return ["0x{0:08X}".format(self.address), self.name, self.get_tinfo().dstr()]
+
+    @property
+    def name(self):
+        name = idaapi.get_short_name(self.address)
+        name = name.split('(')[0]
+        name = name.replace("`", '').replace(" ", '_').replace("'", '')
+        return name
+
+
 class VirtualTable(AbstractField):
     def __init__(self, offset, address, scanned_variable=None, origin=0):
         AbstractField.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
-        self.virtual_functions_ea = []
+        self.virtual_functions = []
         self.name = "vtable"
         self.vtable_name, self.have_nice_name = parse_vtable_name(idaapi.get_short_name(address))
         self.populate()
@@ -71,45 +108,16 @@ class VirtualTable(AbstractField):
                 func_address = idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
             if idaapi.isCode(flags):
-                self.virtual_functions_ea.append(func_address)
+                self.virtual_functions.append(VirtualFunction(func_address, address - self.address))
                 address += EA_SIZE
             else:
                 break
 
     def create_tinfo(self):
-        print "(Virtual table) at address: {0:#010X} name: {1}".format(self.address, self.name)
-        offset = 0
+        print "(Virtual table) at address: 0x{0:08X} name: {1}".format(self.address, self.name)
         udt_data = idaapi.udt_type_data_t()
-        for address in self.virtual_functions_ea:
-            decompiled_function = idaapi.decompile(address)
-            if decompiled_function:
-                guessed_type = idaapi.tinfo_t()
-                get_type = idaapi.tinfo_t()
-                idaapi.guess_tinfo2(address, guessed_type)
-                idaapi.get_tinfo2(address, get_type)
-                print "\t(Virtual function) at address: {0:#010X} name: {1} type: {2}".format(
-                    address,
-                    idaapi.get_short_name(address),
-                    decompiled_function.type.dstr()
-                )
-
-                # continue
-
-                udt_member = idaapi.udt_member_t()
-                udt_member.type = idaapi.tinfo_t()
-                tmp_tinfo = idaapi.tinfo_t(decompiled_function.type)
-                tmp_tinfo.create_ptr(tmp_tinfo)
-                udt_member.type = tmp_tinfo
-                udt_member.offset = offset
-                name = idaapi.get_short_name(address)
-                name = name.split('(')[0]
-                name = name.replace("`", '').replace(" ", '_').replace("'", '')
-                udt_member.name = name
-                udt_member.size = EA_SIZE
-
-                udt_data.push_back(udt_member)
-
-            offset += EA_SIZE
+        for function in self.virtual_functions:
+            udt_data.push_back(function.get_udt_member())
 
         final_tinfo = idaapi.tinfo_t()
         if final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT):
@@ -144,7 +152,7 @@ class VirtualTable(AbstractField):
         else:
             print "[Warning] Virtual table " + self.vtable_name + " probably already exist"
 
-    def get_udt_member(self):
+    def get_udt_member(self, offset=0):
         udt_member = idaapi.udt_member_t()
         tid = self.import_to_structures()
         if tid != idaapi.BADADDR:
@@ -152,7 +160,7 @@ class VirtualTable(AbstractField):
             tmp_tinfo = idaapi.create_typedef(self.vtable_name)
             tmp_tinfo.create_ptr(tmp_tinfo)
             udt_member.type = tmp_tinfo
-            udt_member.offset = self.offset
+            udt_member.offset = self.offset - offset
             udt_member.size = EA_SIZE
         return udt_member
 
@@ -191,15 +199,15 @@ class Field(AbstractField):
         self.tinfo = tinfo
         self.name = "field_{0:X}".format(self.offset)
 
-    def get_udt_member(self, array_size=0):
+    def get_udt_member(self, array_size=0, offset=0):
         udt_member = idaapi.udt_member_t()
-        udt_member.name = self.name
+        udt_member.name = "field_{0:X}".format(self.offset - offset)
         udt_member.type = self.tinfo
         if array_size:
             tmp = idaapi.tinfo_t(self.tinfo)
             tmp.create_array(self.tinfo, array_size)
             udt_member.type = tmp
-        udt_member.offset = self.offset
+        udt_member.offset = self.offset - offset
         udt_member.size = self.size
         return udt_member
 
@@ -284,7 +292,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         item = self.items[row]
         if role == QtCore.Qt.DisplayRole:
             if col == 0:
-                return "{0:#010X}".format(item.offset)
+                return "0x{0:08X}".format(item.offset)
             elif col == 1:
                 if not item.is_vtable and item.is_array and item.size > 0:
                     array_size = self.calculate_array_size(row)
@@ -324,14 +332,14 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for item in filter(lambda x: x.enabled, self.items[start:stop]):    # Filter disabled members
             gap_size = item.offset - offset
             if gap_size:
-                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset, gap_size))
+                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset - origin, gap_size))
             if item.is_array:
                 array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
                 if array_size:
-                    udt_data.push_back(item.get_udt_member(array_size))
+                    udt_data.push_back(item.get_udt_member(array_size, offset=origin))
                     offset = item.offset + item.size * array_size
                     continue
-            udt_data.push_back(item.get_udt_member())
+            udt_data.push_back(item.get_udt_member(offset=origin))
             offset = item.offset + item.size
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
@@ -467,7 +475,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 item.is_array ^= True
                 self.modelReset.emit()
 
-    def pack_substruct(self, indices):
+    def pack_substructure(self, indices):
         if indices:
             indices = list(map(lambda x: x.row(), indices))
             indices.sort()
@@ -488,3 +496,24 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.items = []
         self.main_offset = 0
         self.modelReset.emit()
+
+    def show_virtual_methods(self, index):
+        self.dataChanged.emit(index, index)
+
+        if index.column() == 1:
+            item = self.items[index.row()]
+            if item.is_vtable:
+                function_chooser = MyChoose(
+                    [function.get_information() for function in item.virtual_functions],
+                    "Select Virtual Function",
+                    [["Address", 5], ["Name", 15], ["Declaration", 30]],
+                    13
+                )
+                function_chooser.OnGetIcon = lambda n: 32 if item.virtual_functions[n].visited else 160
+                function_chooser.OnGetLineAttr = \
+                    lambda n: [0xd9d9d9, 0x0] if item.virtual_functions[n].visited else [0xffffff, 0x0]
+
+                idx = function_chooser.Show(True)
+                if idx != -1:
+                    item.virtual_functions[idx].visited = True
+                    idaapi.open_pseudocode(int(item.virtual_functions[idx]), 1)

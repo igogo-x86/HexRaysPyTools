@@ -40,7 +40,7 @@ Usage:
 | `int` | `*(_DWORD *) v = var` | `typeof(var)` | 0 |
 | | `*(_DWORD *) v = obj` | `typeof(obj)` | 0 |
 | | `*(_DWORD *) v = &obj` | `typeof(obj)` | 0 |
-| | `*(_DWORD *) (v + x) = sub(...)` | `return type` | 0 |
+| | `*(_DWORD *) (v + x) = sub(...)` | `return type` | x |
 | | `*(TYPE *)(v + x) = num` | `TYPE` | x |
 | | `*(_DWORD *)(v + x) = var` | `typeof(var)` | x |
 | | `*(_DWORD *)(v + x) = obj` | `typeof(obj)` | x |
