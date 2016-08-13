@@ -2,7 +2,7 @@ import HexRaysPyTools.Actions as Actions
 from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
-
+import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 
 # import Core.QtShim as QtShim
 
@@ -66,6 +66,34 @@ def hexrays_events_callback(*args):
                         if name == member_name:
                             idaapi.open_pseudocode(function.startEA, 0)
                             return 1
+    elif hexrays_event == idaapi.hxe_maturity:
+        cfunc, level_of_maturity = args[1:]
+
+        if level_of_maturity == idaapi.CMAT_BUILT:
+            print '=' * 40
+            print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
+            print '=' * 40
+            print cfunc
+
+            visitor = NegativeOffsets.SearchVisitor(cfunc)
+            visitor.apply_to(cfunc.body, None)
+            negative_lvars = visitor.result
+
+            lvars = cfunc.get_lvars()
+            for idx in xrange(len(lvars)):
+                result = NegativeOffsets.parse_lvar_comment(lvars[idx])
+                if result:
+                    negative_lvars[idx] = result
+
+            if negative_lvars:
+                visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
+                visitor.apply_to(cfunc.body, None)
+                # hx_view.set_lvar_cmt(lvar, old + lvar.name)
+        elif level_of_maturity == idaapi.CMAT_TRANS1:
+            print '=' * 40
+            print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
+            print '=' * 40
+            print cfunc
     return 0
 
 
