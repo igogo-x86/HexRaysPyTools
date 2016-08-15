@@ -6,8 +6,12 @@ import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 
 # import Core.QtShim as QtShim
 
+potential_negatives = {}
+
 
 def hexrays_events_callback(*args):
+    global potential_negatives
+
     hexrays_event = args[0]
     if hexrays_event == idaapi.hxe_keyboard:
         hx_view, key, shift = args[1:]
@@ -33,14 +37,22 @@ def hexrays_events_callback(*args):
             if local_variable.is_arg_var:
                 idaapi.attach_action_to_popup(form, popup, "my:RemoveArgument", None)
 
-        elif item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_num:
-            number_format = item.e.n.nf                       # idaapi.number_format_t
-            print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
-                number_format.flags,
-                number_format.type_name,
-                number_format.opnum
-            )
-            idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
+        elif item.citype == idaapi.VDI_EXPR:
+            if item.e.op == idaapi.cot_num:
+                number_format = item.e.n.nf                       # idaapi.number_format_t
+                print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
+                    number_format.flags,
+                    number_format.type_name,
+                    number_format.opnum
+                )
+                idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
+            elif item.e.op == idaapi.cot_var:
+                # Check if we clicked on variable that is a pointer to a structure that is potentially part of
+                # containing structure
+                if item.e.v.idx in potential_negatives:
+                    idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
+                if Actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
+                    idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
         hx_view = args[1]
@@ -75,17 +87,35 @@ def hexrays_events_callback(*args):
             print '=' * 40
             print cfunc
 
+            # First search for CONTAINING_RECORD made by Ida
             visitor = NegativeOffsets.SearchVisitor(cfunc)
             visitor.apply_to(cfunc.body, None)
             negative_lvars = visitor.result
 
+            # Second get saved information from comments
             lvars = cfunc.get_lvars()
             for idx in xrange(len(lvars)):
                 result = NegativeOffsets.parse_lvar_comment(lvars[idx])
-                if result:
+                if result and result.tinfo.equals_to(lvars[idx].type().get_pointed_object()):
                     negative_lvars[idx] = result
 
+            # Third make an analysis of local variables that a structure pointers and have reference that pass
+            # through structure boundaries. This variables will be considered as potential pointers to substructure
+            # and will get a menu on right click that helps to select Containing Structure from different libraries
+
+            structure_pointer_variables = {}
+            for idx in set(range(len(lvars))) - set(negative_lvars.keys()):
+                if lvars[idx].type().is_ptr():
+                    pointed_tinfo = lvars[idx].type().get_pointed_object()
+                    if pointed_tinfo.is_udt():
+                        structure_pointer_variables[idx] = pointed_tinfo
+
+            if structure_pointer_variables:
+                visitor = NegativeOffsets.AnalyseVisitor(structure_pointer_variables, potential_negatives)
+                visitor.apply_to(cfunc.body, None)
+
             if negative_lvars:
+                # NegativeOffsets.ReplaceVisitor.del_list[:] = []
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
                 # hx_view.set_lvar_cmt(lvar, old + lvar.name)
@@ -121,6 +151,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.RemoveReturn)
         Actions.register(Actions.ScanVariable, MyPlugin.temporary_structure)
+        Actions.register(Actions.SelectContainingStructure, potential_negatives)
+        Actions.register(Actions.ResetContainingStructure)
 
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
@@ -144,6 +176,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RemoveArgument)
         Actions.unregister(Actions.RemoveReturn)
         Actions.unregister(Actions.ScanVariable)
+        Actions.unregister(Actions.SelectContainingStructure)
+        Actions.unregister(Actions.ResetContainingStructure)
         idaapi.term_hexrays_plugin()
 
 

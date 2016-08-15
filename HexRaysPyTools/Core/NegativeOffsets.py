@@ -7,12 +7,6 @@ EA64 = idc.__EA64__
 EA_SIZE = 8 if EA64 else 4
 
 
-def check_ida_bug(tinfo, offset):
-    udt_data = idaapi.udt_type_data_t()
-    tinfo.get_udt_details(udt_data)
-    return False if filter(lambda x: x.offset == offset * 8, udt_data) else True
-
-
 def parse_lvar_comment(lvar):
     if lvar.type().is_ptr():
         m = re.search('```(.+)```', lvar.cmt)
@@ -27,7 +21,7 @@ def parse_lvar_comment(lvar):
             udt_member = filter(lambda x: x.offset == offset*8, udt_data)
             if udt_member:
                 member_name = udt_member[0].name
-                return NegativeLocalInfo(lvar.type(), parent_tinfo, offset, member_name)
+                return NegativeLocalInfo(udt_member[0].type, parent_tinfo, offset, member_name)
     return None
 
 
@@ -47,6 +41,64 @@ class NegativeLocalInfo:
             self.offset,
             self.member_name
         )
+
+
+class NegativeLocalCandidate:
+    def __init__(self, tinfo, offset):
+        """
+        Tinfo - type of the structure tha local variable points to. So it's stripped from pointer. Offset - is first
+        found offset that points outside of the structure.
+        :param tinfo: idaapi.tinfo_t
+        :param offset: int
+        """
+        self.tinfo = tinfo
+        self.offsets = [offset]
+
+    def __repr__(self):
+        return self.tinfo.dstr() + ' ' + str(self.offsets)
+
+    def is_structure_offset(self, tinfo, offset):
+        # Checks if structure tinfo contains a member at given offset
+        # TODO:array checking
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = offset * 8
+        if offset >= 0 and tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member) != -1:
+            if udt_member.type.is_udt():
+                return self.is_structure_offset(udt_member.type, offset - udt_member.offset / 8)
+            return udt_member.offset == offset * 8
+        return False
+
+    def find_containing_structures(self, type_library):
+        """
+        Given the type library creates a list of structures from this library, that contains this structure and
+        satisfy offset conditions.
+        :param type_library: idaapi.til_t
+        :returns: str(ordinal), str(offset), member_name, containing structure name
+        """
+
+        self.offsets = set(self.offsets)
+        result = []
+        parent_tinfo = idaapi.tinfo_t()
+        udt_member = idaapi.udt_member_t()
+        tmp_tinfo = idaapi.tinfo_t()
+        if not tmp_tinfo.get_named_type(type_library, self.tinfo.dstr()):
+            print "[Warning] Such type doesn't exist in '{0}' library".format(type_library.name)
+            return result
+        for ordinal in xrange(1, idaapi.get_ordinal_qty(type_library)):
+            parent_tinfo.create_typedef(type_library, ordinal)
+            udt_member.type = tmp_tinfo
+            if parent_tinfo.find_udt_member(idaapi.STRMEM_TYPE, udt_member) != -1:
+                # TODO: What if containing structure have more than one instance of structure?
+                member_offset = udt_member.offset / 8
+                is_nice_parent = True
+                for offset in self.offsets:
+                    if not self.is_structure_offset(parent_tinfo, member_offset + offset):
+                        print "BAD FATHER", parent_tinfo.dstr()
+                        is_nice_parent = False
+                        break
+                if is_nice_parent:
+                    result.append([ordinal, member_offset + min(self.offsets), udt_member.name, parent_tinfo.dstr(), udt_member.offset / 8])
+        return result
 
 
 class ReplaceVisitor(idaapi.ctree_parentee_t):
@@ -84,9 +136,9 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
         print "[DEBUG] Rebuilding negative offset", negative_lvar.offset, offset, negative_lvar.parent_tinfo.dstr()
         diff = negative_lvar.offset + offset
 
-        if check_ida_bug(negative_lvar.parent_tinfo, diff):
-            print "[IDA ERROR] Try another member pointer in CONTAINING_RECORD macro"
-            return
+        # if check_ida_bug(negative_lvar.parent_tinfo, diff * 8):
+        #     print "[IDA ERROR] Try another member pointer in CONTAINING_RECORD macro"
+        #     return
         # if diff:
         #     return
 
@@ -113,38 +165,39 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
         arg_field.consume_cexpr(cexpr_helper)
         return_tinfo = idaapi.tinfo_t(negative_lvar.parent_tinfo)
         return_tinfo.create_ptr(return_tinfo)
-        call_helper = idaapi.call_helper(return_tinfo, None, "CONTAINING_RECORD")
-        call_helper.a.push_back(arg_address)
-        call_helper.a.push_back(arg_type)
-        call_helper.a.push_back(arg_field)
-        call_helper.ea = expression.ea
-        call_helper.x.ea = expression.ea
+        new_cexpr_call = idaapi.call_helper(return_tinfo, None, "CONTAINING_RECORD")
+        new_cexpr_call.a.push_back(arg_address)
+        new_cexpr_call.a.push_back(arg_type)
+        new_cexpr_call.a.push_back(arg_field)
+        # new_cexpr_call.ea = expression.ea
+        # new_cexpr_call.x.ea = expression.ea
 
+        parent = reversed(self.parents).next().cexpr
         if diff:
             number = idaapi.make_num(diff)
-            add_helper = idaapi.cexpr_t(idaapi.cot_add, call_helper, number)
-            add_helper.type = return_tinfo
-            # print len(self.parents)
-            # print "PARENTS", idaapi.get_ctype_name(reversed(self.parents).next().op)
-            # if reversed(self.parents).next().op == idaapi.cot_ref:
-            # if True:
-            #     cast_helper = idaapi.cexpr_t(idaapi.cot_cast, add_helper)
-            #     cast_helper.type = idaapi.dummy_ptrtype(EA_SIZE, 0)
-            #     ReplaceVisitor.del_list.append(cast_helper)
-            #     ReplaceVisitor.del_list.append(add_helper)
-            #     expression.replace_by(cast_helper)
-            # else:
-
-            ReplaceVisitor.del_list.append(add_helper)
-            expression.replace_by(add_helper)
-            # if expression.op == idaapi.cot_sub:
-            #     expression.op = idaapi.cot_add
-            #     expression.type = call_helper.type
-            #     expression.x.replace_by(call_helper)
-            #     expression.y.replace_by(number)
-            # expression.replace_by(add_helper)
+            new_cexpr_add = idaapi.cexpr_t(idaapi.cot_add, new_cexpr_call, number)
+            new_cexpr_add.type = return_tinfo
+            if parent.op == idaapi.cot_ptr:
+                tmp_tinfo = idaapi.tinfo_t()
+                tmp_tinfo.create_ptr(parent.type)
+                new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_add)
+                new_cexpr_cast.type = tmp_tinfo
+                ReplaceVisitor.del_list.append(new_cexpr_cast)
+                ReplaceVisitor.del_list.append(new_cexpr_add)
+                expression.replace_by(new_cexpr_cast)
+            else:
+                ReplaceVisitor.del_list.append(new_cexpr_add)
+                expression.replace_by(new_cexpr_add)
         else:
-            expression.replace_by(call_helper)
+            if parent.op == idaapi.cot_ptr:
+                tmp_tinfo = idaapi.tinfo_t()
+                tmp_tinfo.create_ptr(parent.type)
+                new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_call)
+                new_cexpr_cast.type = tmp_tinfo
+                ReplaceVisitor.del_list.append(new_cexpr_cast)
+                expression.replace_by(new_cexpr_cast)
+            else:
+                expression.replace_by(new_cexpr_call)
 
 
 class SearchVisitor(idaapi.ctree_parentee_t):
@@ -170,6 +223,8 @@ class SearchVisitor(idaapi.ctree_parentee_t):
                         if udt_member:
                             tinfo = udt_member[0].type
                             tinfo.create_ptr(tinfo)
+                            # if tinfo.dstr() == "int *":
+                            #     tinfo = idaapi.dummy_ptrtype(EA_SIZE, 0)
                             self.result[idx] = NegativeLocalInfo(
                                 tinfo,
                                 parent_tinfo,
@@ -177,4 +232,33 @@ class SearchVisitor(idaapi.ctree_parentee_t):
                                 member_name
                             )
                             return 1
+        return 0
+
+
+class AnalyseVisitor(idaapi.ctree_parentee_t):
+    def __init__(self, candidates, potential_negatives):
+        super(AnalyseVisitor, self).__init__()
+        self.candidates = candidates
+        self.potential_negatives = potential_negatives
+        self.potential_negatives.clear()
+
+    def visit_expr(self, expression):
+        if expression.op == idaapi.cot_add and expression.y.op == idaapi.cot_num:
+            if expression.x.op == idaapi.cot_var and expression.x.v.idx in self.candidates:
+                idx = expression.x.v.idx
+                number = expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
+                if self.candidates[idx].get_size() <= number:
+                    if idx in self.potential_negatives:
+                        self.potential_negatives[idx].offsets.append(number)
+                    else:
+                        self.potential_negatives[idx] = NegativeLocalCandidate(self.candidates[idx], number)
+        elif expression.op == idaapi.cot_sub and expression.y.op == idaapi.cot_num:
+            if expression.x.op == idaapi.cot_var and expression.x.v.idx in self.candidates:
+                idx = expression.x.v.idx
+                number = -expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
+                if idx in self.potential_negatives:
+                    self.potential_negatives[idx].offsets.append(number)
+                else:
+                    self.potential_negatives[idx] = NegativeLocalCandidate(self.candidates[idx], number)
+
         return 0

@@ -1,12 +1,13 @@
 import ctypes
 import sys
+import re
 
 import idaapi
 
 import HexRaysPyTools.Forms as Forms
-# from HexRaysPyTools.Forms import StructureGraphViewer, MyChoose
+import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
-from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, EA64, LEGAL_TYPES, ScannedVariable
+from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, EA64, LEGAL_TYPES
 from HexRaysPyTools.Core.VariableScanner import CtreeVisitor
 
 
@@ -23,6 +24,69 @@ def register(action, *args):
 
 def unregister(action):
     idaapi.unregister_action(action.name)
+
+
+class TypeLibrary:
+
+    class til_t(ctypes.Structure):
+        pass
+
+    til_t._fields_ = [
+        ("name", ctypes.c_char_p),
+        ("desc", ctypes.c_char_p),
+        ("nbases", ctypes.c_int),
+        ("base", ctypes.POINTER(ctypes.POINTER(til_t)))
+    ]
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def enable_library_ordinals(library_num):
+        idaname = "ida64" if EA64 else "ida"
+        if sys.platform == "win32":
+            dll = ctypes.windll[idaname + ".wll"]
+        elif sys.platform == "linux2":
+            dll = ctypes.cdll["lib" + idaname + ".so"]
+        elif sys.platform == "darwin":
+            dll = ctypes.cdll["lib" + idaname + ".dylib"]
+
+        idati = ctypes.POINTER(TypeLibrary.til_t).in_dll(dll, "idati")
+        dll.enable_numbered_types(idati.contents.base[library_num], True)
+
+    @staticmethod
+    def choose_til():
+        idati = idaapi.cvar.idati
+        list_type_library = [(idati, idati.name, idati.desc)]
+        for idx in xrange(idaapi.cvar.idati.nbases):
+            type_library = idaapi.cvar.idati.base(idx)          # idaapi.til_t type
+            list_type_library.append((type_library, type_library.name, type_library.desc))
+
+        library_chooser = Forms.MyChoose(
+            list(map(lambda x: [x[1], x[2]], list_type_library)),
+            "Select Library",
+            [["Library", 10 | idaapi.Choose2.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose2.CHCOL_PLAIN]],
+            69
+        )
+        library_num = library_chooser.Show(True)
+        if library_num != -1:
+            selected_library = list_type_library[library_num][0]
+            max_ordinal = idaapi.get_ordinal_qty(selected_library)
+            if max_ordinal == idaapi.BADNODE:
+                TypeLibrary.enable_library_ordinals(library_num - 1)
+                max_ordinal = idaapi.get_ordinal_qty(selected_library)
+            print "[DEBUG] Maximal ordinal of lib {0} = {1}".format(selected_library.name, max_ordinal)
+            return selected_library, max_ordinal, library_num == 0
+        return None
+
+    @staticmethod
+    def import_type(library, name):
+        if library.name != idaapi.cvar.idati.name:
+            last_ordinal = idaapi.get_ordinal_qty(idaapi.cvar.idati)
+            type_id = idaapi.import_type(library, -1, name)  # tid_t
+            if type_id != idaapi.BADNODE:
+                return last_ordinal
+        return None
 
 
 class RemoveArgument(idaapi.action_handler_t):
@@ -86,57 +150,14 @@ class GetStructureBySize(idaapi.action_handler_t):
     description = "Structures with this size"
     hotkey = "W"
 
-    class til_t(ctypes.Structure):
-        pass
-
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
-        if '_fields_' not in dir(GetStructureBySize.til_t):
-            GetStructureBySize.til_t._fields_ = [
-                ("name", ctypes.c_char_p),
-                ("desc", ctypes.c_char_p),
-                ("nbases", ctypes.c_int),
-                ("base", ctypes.POINTER(ctypes.POINTER(GetStructureBySize.til_t)))
-            ]
-
-    @staticmethod
-    def enable_library_ordinals(library_num):
-        idaname = "ida64" if EA64 else "ida"
-        if sys.platform == "win32":
-            dll = ctypes.windll[idaname + ".wll"]
-        elif sys.platform == "linux2":
-            dll = ctypes.cdll["lib" + idaname + ".so"]
-        elif sys.platform == "darwin":
-            dll = ctypes.cdll["lib" + idaname + ".dylib"]
-
-        idati = ctypes.POINTER(GetStructureBySize.til_t).in_dll(dll, "idati")
-        dll.enable_numbered_types(idati.contents.base[library_num], True)
-
     @staticmethod
     def select_structure_by_size(size):
-        idati = idaapi.cvar.idati
-        list_type_library = [(idati, idati.name, idati.desc)]
-        for idx in xrange(idaapi.cvar.idati.nbases):
-            type_library = idaapi.cvar.idati.base(idx)          # idaapi.til_t type
-            list_type_library.append((type_library, type_library.name, type_library.desc))
-
-        library_chooser = Forms.MyChoose(
-            list(map(lambda x: [x[1], x[2]], list_type_library)),
-            "Select Library",
-            [["Library", 10 | idaapi.Choose2.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose2.CHCOL_PLAIN]],
-            69
-        )
-        library_num = library_chooser.Show(True)
-        if library_num != -1:
-            selected_library = list_type_library[library_num][0]
-            max_ordinal = idaapi.get_ordinal_qty(selected_library)
-            if max_ordinal == idaapi.BADNODE:
-                GetStructureBySize.enable_library_ordinals(library_num - 1)
-                max_ordinal = idaapi.get_ordinal_qty(selected_library)
-
-            print "[DEBUG] Maximal ordinal of lib {0} = {1}".format(selected_library.name, max_ordinal)
-
+        result = TypeLibrary.choose_til()
+        if result:
+            selected_library, max_ordinal, is_local_type = result
             matched_types = []
             tinfo = idaapi.tinfo_t()
             for ordinal in xrange(1, max_ordinal):
@@ -154,17 +175,10 @@ class GetStructureBySize(idaapi.action_handler_t):
             )
             selected_type = type_chooser.Show(True)
             if selected_type != -1:
-                if library_num:
-                    print "[Info] Importing type: {0}".format(matched_types[selected_type][1])
-                    last_ordinal = idaapi.get_ordinal_qty(idaapi.cvar.idati)
-                    type_id = idaapi.import_type(selected_library, -1, matched_types[selected_type][1]) # tid_t
-                    if type_id != idaapi.BADNODE:
-                        return last_ordinal
-                    else:
-                        return None
-                else:
+                if is_local_type:
                     return int(matched_types[selected_type][0])
-            return None
+                return TypeLibrary.import_type(selected_library, matched_types[selected_type][1])
+        return None
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -303,3 +317,65 @@ class CreateVtable(idaapi.action_handler_t):
         else:
             return idaapi.AST_DISABLE_FOR_FORM
 
+
+class SelectContainingStructure(idaapi.action_handler_t):
+
+    name = "my:SelectContainingStructure"
+    description = "Select Containing Structure"
+    hotkey = None
+
+    def __init__(self, potential_negatives):
+        idaapi.action_handler_t.__init__(self)
+        self.potential_negative = potential_negatives
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = TypeLibrary.choose_til()
+        if result:
+            selected_library, max_ordinal, is_local_types = result
+            lvar_idx = hx_view.item.e.v.idx
+            candidate = self.potential_negative[lvar_idx]
+            structures = candidate.find_containing_structures(selected_library)
+            items = map(lambda x: [str(x[0]), "0x{0:08X}".format(x[1]), x[2], x[3]], structures)
+            structure_chooser = Forms.MyChoose(
+                items,
+                "Select Containing Structure",
+                [["Ordinal", 5], ["Offset", 10], ["Member_name", 20], ["Structure Name", 20]],
+                165
+            )
+            selected_idx = structure_chooser.Show(modal=True)
+            if selected_idx != -1:
+                if not is_local_types:
+                    TypeLibrary.import_type(selected_library, items[selected_idx][3])
+                lvar = hx_view.cfunc.get_lvars()[lvar_idx]
+                lvar_cmt = re.sub("```.*```", '', lvar.cmt)
+                hx_view.set_lvar_cmt(
+                    lvar,
+                    lvar_cmt + "```{0}+{1}```".format(structures[selected_idx][3], structures[selected_idx][4])
+                )
+                hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+class ResetContainingStructure(idaapi.action_handler_t):
+
+    name = "my:ResetContainingStructure"
+    description = "Reset Containing Structure"
+    hotkey = None
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(lvar):
+        return True if re.search("```.*```", lvar.cmt) else False
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        lvar = hx_view.cfunc.get_lvars()[hx_view.item.e.v.idx]
+        hx_view.set_lvar_cmt(lvar, re.sub("```.*```", '', lvar.cmt))
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
