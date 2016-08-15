@@ -17,25 +17,28 @@ def hexrays_events_callback(*args):
         hx_view, key, shift = args[1:]
         if key == ord('F'):
             if Actions.ScanVariable.check(hx_view.cfunc, hx_view.item):
-                idaapi.process_ui_action("my:ScanVariable")
+                idaapi.process_ui_action(Actions.ScanVariable.name)
 
     elif hexrays_event == idaapi.hxe_populating_popup:
+        print args
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
+        print item.citype
 
         if Actions.ScanVariable.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, "my:ScanVariable", None)
+            idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
 
-        elif item.citype == idaapi.VDI_FUNC:
+        if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                idaapi.attach_action_to_popup(form, popup, "my:RemoveReturn", None)
+                idaapi.attach_action_to_popup(form, popup, Actions.RemoveReturn.name, None)
+                idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
             local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
             if local_variable.is_arg_var:
-                idaapi.attach_action_to_popup(form, popup, "my:RemoveArgument", None)
+                idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
 
         elif item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
@@ -150,6 +153,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.GetStructureBySize)
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.RemoveReturn)
+        Actions.register(Actions.ConvertToUsercall)
         Actions.register(Actions.ScanVariable, MyPlugin.temporary_structure)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
@@ -175,6 +179,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.GetStructureBySize)
         Actions.unregister(Actions.RemoveArgument)
         Actions.unregister(Actions.RemoveReturn)
+        Actions.unregister(Actions.ConvertToUsercall)
         Actions.unregister(Actions.ScanVariable)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)

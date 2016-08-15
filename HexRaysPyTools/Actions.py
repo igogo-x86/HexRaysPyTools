@@ -143,6 +143,40 @@ class RemoveReturn(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
+class ConvertToUsercall(idaapi.action_handler_t):
+
+    name = "my:ConvertToUsercall"
+    description = "Convert to __usercall"
+    hotkey = None
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        # ctx - action_activation_ctx_t
+        vu = idaapi.get_tform_vdui(ctx.form)
+        function_tinfo = idaapi.tinfo_t()
+        if not vu.cfunc.get_func_type(function_tinfo):
+            return
+        function_details = idaapi.func_type_data_t()
+        function_tinfo.get_func_details(function_details)
+        convention = idaapi.CM_CC_MASK & function_details.cc
+        if convention == idaapi.CM_CC_CDECL:
+            function_details.cc = idaapi.CM_CC_SPECIAL
+        elif convention in (idaapi.CM_CC_STDCALL, idaapi.CM_CC_FASTCALL, idaapi.CM_CC_PASCAL, idaapi.CM_CC_THISCALL):
+            function_details.cc = idaapi.CM_CC_SPECIALP
+        elif convention == idaapi.CM_CC_ELLIPSIS:
+            function_details.cc = idaapi.CM_CC_SPECIALE
+        else:
+            return
+        function_tinfo.create_func(function_details)
+        idaapi.set_tinfo2(vu.cfunc.entry_ea, function_tinfo)
+        vu.refresh_view(True)
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
 class GetStructureBySize(idaapi.action_handler_t):
     # TODO: apply type automatically if expression like `var = new(size)`
 
