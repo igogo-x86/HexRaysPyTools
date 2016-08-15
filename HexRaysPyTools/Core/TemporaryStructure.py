@@ -167,18 +167,23 @@ class VirtualTable(AbstractField):
     @staticmethod
     def check_address(address):
         # Checks if given address contains virtual table. Returns True if more than 2 function pointers found
+        # Also if table's addresses point to code in executable section, than tries to make functions at that addresses
         functions_count = 0
         while True:
-            if EA64:
-                func_address = idaapi.get_64bit(address)
-            else:
-                func_address = idaapi.get_32bit(address)
+            func_address = idaapi.get_64bit(address) if EA64 else idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
             if idaapi.isCode(flags):
                 functions_count += 1
                 address += EA_SIZE
             else:
+                segment = idaapi.getseg(func_address)
+                if segment and segment.perm & idaapi.SEGPERM_EXEC:
+                    if idc.MakeFunction(func_address):
+                        functions_count += 1
+                        address += EA_SIZE
+                        continue
                 break
+            idaapi.autoWait()
         return functions_count >= 2
 
     @property
