@@ -3,12 +3,14 @@ import idc
 
 
 class LocalType:
-    def __init__(self, name, members_ordinals, hint, selected=False, is_typedef=False):
+    def __init__(self, name, members_ordinals, hint, is_selected=False, is_typedef=False, is_enum=False, is_union=False):
         self.name = name
         self.members_ordinals = members_ordinals
         self.hint = hint
-        self.selected = selected
+        self.is_selected = is_selected
         self.is_typedef = is_typedef
+        self.is_enum = is_enum
+        self.is_union = is_union
 
     def __call__(self):
         return self.name, self.members_ordinals
@@ -21,7 +23,15 @@ class LocalType:
 
     @property
     def name_and_color(self):
-        return self.name, 0x0000FF if self.selected else 0x99FFFF if self.is_typedef else 0xffdd99
+        if self.is_selected:
+            return self.name, 0x0000FF
+        elif self.is_typedef:
+            return self.name, 0x99FFFF
+        elif self.is_enum:
+            return self.name, 0x33FF33
+        elif self.is_union:
+            return self.name, 0xcc99ff
+        return self.name, 0xffdd99
 
 
 class StructureGraph:
@@ -43,16 +53,18 @@ class StructureGraph:
         self.visited_upward = []
         self.final_edges = []
         for ordinal in self.ordinal_list:
-            self.local_types[ordinal].selected = False
+            self.local_types[ordinal].is_selected = False
         self.ordinal_list = set(self.local_types).intersection(selected)
         for ordinal in self.ordinal_list:
-            self.local_types[ordinal].selected = True
+            self.local_types[ordinal].is_selected = True
 
     @staticmethod
     def get_ordinal(tinfo):
         while tinfo.is_ptr() or tinfo.is_array():
             tinfo.remove_ptr_or_array()
         if tinfo.is_udt():
+            return tinfo.get_ordinal()
+        elif tinfo.is_enum():
             return tinfo.get_ordinal()
         elif tinfo.is_typeref():
             typeref_ordinal = tinfo.get_ordinal()
@@ -87,41 +99,47 @@ class StructureGraph:
 
     def initialize_nodes(self):
         for ordinal in xrange(1, idc.GetMaxLocalType()):
-                local_tinfo = StructureGraph.get_tinfo_by_ordinal(ordinal)
-                if not local_tinfo:
-                    return
-                name = idc.GetLocalTypeName(ordinal)
+            # if ordinal == 15:
+            #     import pydevd
+            #     pydevd.settrace("localhost", port=12345, stdoutToServer=True, stderrToServer=True)
 
-                if local_tinfo.is_typeref():
-                    typeref_ordinal = local_tinfo.get_ordinal()
-                    if typeref_ordinal:
-                        typeref_tinfo = StructureGraph.get_tinfo_by_ordinal(typeref_ordinal)
-                        if typeref_tinfo.is_typeref() or typeref_tinfo.is_udt() or typeref_tinfo.is_ptr():
-                            members_ordinals = [typeref_ordinal]
-                        else:
-                            members_ordinals = []
-                        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x3, local_tinfo, None, None)
-                        self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef, is_typedef=True)
-                elif local_tinfo.is_udt():
-                    udt_data = idaapi.udt_type_data_t()
-                    local_tinfo.get_udt_details(udt_data)
-                    members_ordinals = StructureGraph.get_members_ordinals(local_tinfo)
-                    cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x1, local_tinfo, None, None)
-                    self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef)
-                elif local_tinfo.is_ptr():
-                    typeref_ordinal = StructureGraph.get_ordinal(local_tinfo)
-                    if typeref_ordinal:
-                        cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
-                        self.local_types[ordinal] = LocalType(
-                            name,
-                            [typeref_ordinal],
-                            cdecl_typedef + ' *',
-                            is_typedef=True
-                        )
+            local_tinfo = StructureGraph.get_tinfo_by_ordinal(ordinal)
+            if not local_tinfo:
+                return
+            name = idc.GetLocalTypeName(ordinal)
+
+            if local_tinfo.is_typeref():
+                typeref_ordinal = local_tinfo.get_ordinal()
+                members_ordinals = []
+                if typeref_ordinal:
+                    typeref_tinfo = StructureGraph.get_tinfo_by_ordinal(typeref_ordinal)
+                    if typeref_tinfo.is_typeref() or typeref_tinfo.is_udt() or typeref_tinfo.is_ptr():
+                        members_ordinals = [typeref_ordinal]
+                cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x3, local_tinfo, None, None)
+                self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef, is_typedef=True)
+            elif local_tinfo.is_udt():
+                # udt_data = idaapi.udt_type_data_t()
+                # local_tinfo.get_udt_details(udt_data)
+                members_ordinals = StructureGraph.get_members_ordinals(local_tinfo)
+                cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x1, local_tinfo, None, None)
+                self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef, is_union=local_tinfo.is_union())
+            elif local_tinfo.is_ptr():
+                typeref_ordinal = StructureGraph.get_ordinal(local_tinfo)
+                if typeref_ordinal:
+                    cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
+                    self.local_types[ordinal] = LocalType(
+                        name,
+                        [typeref_ordinal],
+                        cdecl_typedef + ' *',
+                        is_typedef=True
+                    )
+            elif local_tinfo.is_enum():
+                cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x21, local_tinfo, None, None)
+                self.local_types[ordinal] = LocalType(name, [], cdecl_typedef, is_enum=True)
 
         self.ordinal_list = set(self.ordinal_list).intersection(self.local_types)
         for ordinal in self.ordinal_list:
-            self.local_types[ordinal].selected = True
+            self.local_types[ordinal].is_selected = True
 
     def calculate_edges(self):
         for first in self.local_types.keys():

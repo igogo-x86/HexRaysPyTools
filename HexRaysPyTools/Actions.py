@@ -385,7 +385,10 @@ class SelectContainingStructure(idaapi.action_handler_t):
                 lvar_cmt = re.sub("```.*```", '', lvar.cmt)
                 hx_view.set_lvar_cmt(
                     lvar,
-                    lvar_cmt + "```{0}+{1}```".format(structures[selected_idx][3], structures[selected_idx][4])
+                    lvar_cmt + "```{0}+{1}+{2}```".format(
+                        structures[selected_idx][3],
+                        structures[selected_idx][2],
+                        structures[selected_idx][1])
                 )
                 hx_view.refresh_view(True)
 
@@ -410,6 +413,7 @@ class ResetContainingStructure(idaapi.action_handler_t):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         lvar = hx_view.cfunc.get_lvars()[hx_view.item.e.v.idx]
         hx_view.set_lvar_cmt(lvar, re.sub("```.*```", '', lvar.cmt))
+        hx_view.refresh_view(True)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

@@ -11,25 +11,18 @@ def parse_lvar_comment(lvar):
     if lvar.type().is_ptr():
         m = re.search('```(.+)```', lvar.cmt)
         if m:
-            name, offset = m.group(1).split('+')
+            structure_name, member_name, offset = m.group(1).split('+')
             offset = int(offset)
             parent_tinfo = idaapi.tinfo_t()
-            if not parent_tinfo.get_named_type(idaapi.cvar.idati, name):
-                return None
-            udt_data = idaapi.udt_type_data_t()
-            parent_tinfo.get_udt_details(udt_data)
-            udt_member = filter(lambda x: x.offset == offset*8, udt_data)
-            if udt_member:
-                member_name = udt_member[0].name
-                return NegativeLocalInfo(udt_member[0].type, parent_tinfo, offset, member_name)
+            if parent_tinfo.get_named_type(idaapi.cvar.idati, structure_name) and parent_tinfo.get_size() > offset:
+                return NegativeLocalInfo(lvar.type().get_pointed_object(), parent_tinfo, offset, member_name)
     return None
 
 
 class NegativeLocalInfo:
     def __init__(self, tinfo, parent_tinfo, offset, member_name):
         self.tinfo = tinfo
-        tmp_tinfo = self.tinfo.get_pointed_object()
-        self.size = tmp_tinfo.get_size() if tmp_tinfo.is_udt else 0
+        self.size = tinfo.get_size() if tinfo.is_udt else 0
         self.parent_tinfo = parent_tinfo
         self.offset = offset
         self.member_name = member_name
@@ -68,36 +61,49 @@ class NegativeLocalCandidate:
             return udt_member.offset == offset * 8
         return False
 
+    def find_deep_members(self, parent_tinfo, target_tinfo):
+        udt_data = idaapi.udt_type_data_t()
+        parent_tinfo.get_udt_details(udt_data)
+        result = []
+        for udt_member in udt_data:
+            if udt_member.type.equals_to(target_tinfo):
+                result.append((udt_member.offset / 8, udt_member.name))
+            elif udt_member.type.is_udt():
+                for offset, name in self.find_deep_members(udt_member.type, target_tinfo):
+                    final_name = udt_member.name + '.' + name if udt_member.name else name
+                    result.append((udt_member.offset / 8 + offset, final_name))
+        return result
+
     def find_containing_structures(self, type_library):
         """
         Given the type library creates a list of structures from this library, that contains this structure and
         satisfy offset conditions.
         :param type_library: idaapi.til_t
-        :returns: str(ordinal), str(offset), member_name, containing structure name
+        :returns: ordinal, offset, member_name, containing structure name
         """
 
-        self.offsets = set(self.offsets)
+        min_offset = min(self.offsets)
+        min_offset = min_offset if min_offset < 0 else 0
+        max_offset = max(self.offsets)
+        max_offset = max_offset if max_offset > 0 else self.tinfo.get_size()
+        # TODO: Check if all offsets are legal
+
+        # Least acceptable size of the containing structure
+        min_struct_size = max_offset - min_offset
         result = []
         parent_tinfo = idaapi.tinfo_t()
-        udt_member = idaapi.udt_member_t()
-        tmp_tinfo = idaapi.tinfo_t()
-        if not tmp_tinfo.get_named_type(type_library, self.tinfo.dstr()):
+        udt_data = idaapi.udt_type_data_t()
+        target_tinfo = idaapi.tinfo_t()
+        if not target_tinfo.get_named_type(type_library, self.tinfo.dstr()):
             print "[Warning] Such type doesn't exist in '{0}' library".format(type_library.name)
             return result
         for ordinal in xrange(1, idaapi.get_ordinal_qty(type_library)):
             parent_tinfo.create_typedef(type_library, ordinal)
-            udt_member.type = tmp_tinfo
-            if parent_tinfo.find_udt_member(idaapi.STRMEM_TYPE, udt_member) != -1:
-                # TODO: What if containing structure have more than one instance of structure?
-                member_offset = udt_member.offset / 8
-                is_nice_parent = True
-                for offset in self.offsets:
-                    if not self.is_structure_offset(parent_tinfo, member_offset + offset):
-                        print "BAD FATHER", parent_tinfo.dstr()
-                        is_nice_parent = False
-                        break
-                if is_nice_parent:
-                    result.append([ordinal, member_offset + min(self.offsets), udt_member.name, parent_tinfo.dstr(), udt_member.offset / 8])
+            if parent_tinfo.get_size() >= min_struct_size:
+                for offset, name in self.find_deep_members(parent_tinfo, target_tinfo):
+                    # print "[DEBUG] Found {0} at {1} in {2}".format(name, offset, parent_tinfo.dstr())
+                    if offset + min_offset >= 0 and offset + max_offset <= parent_tinfo.get_size():
+                        result.append((ordinal, offset, name, parent_tinfo.dstr()))
         return result
 
 
@@ -116,7 +122,7 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
             index = expression.x.v.idx
             if index in self.negative_lvars:
                 offset = expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
-                if offset < self.negative_lvars[index].size:
+                if offset >= self.negative_lvars[index].size:
                     self.create_containing_record(expression, index, offset)
         elif expression.op == idaapi.cot_sub and expression.x.op == idaapi.cot_var and expression.y.op == idaapi.cot_num:
             # print "SUB TYPE", expression.type.dstr(), expression.x.type.dstr()
@@ -133,14 +139,8 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
     def create_containing_record(self, expression, index, offset):
 
         negative_lvar = self.negative_lvars[index]
-        print "[DEBUG] Rebuilding negative offset", negative_lvar.offset, offset, negative_lvar.parent_tinfo.dstr()
+        # print "[DEBUG] Rebuilding negative offset", negative_lvar.offset, offset, negative_lvar.parent_tinfo.dstr()
         diff = negative_lvar.offset + offset
-
-        # if check_ida_bug(negative_lvar.parent_tinfo, diff * 8):
-        #     print "[IDA ERROR] Try another member pointer in CONTAINING_RECORD macro"
-        #     return
-        # if diff:
-        #     return
 
         arg_address = idaapi.carg_t()
         if expression.op == idaapi.cot_var:

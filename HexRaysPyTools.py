@@ -20,10 +20,8 @@ def hexrays_events_callback(*args):
                 idaapi.process_ui_action(Actions.ScanVariable.name)
 
     elif hexrays_event == idaapi.hxe_populating_popup:
-        print args
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
-        print item.citype
 
         if Actions.ScanVariable.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
@@ -42,12 +40,12 @@ def hexrays_events_callback(*args):
 
         elif item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
-                number_format = item.e.n.nf                       # idaapi.number_format_t
-                print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
-                    number_format.flags,
-                    number_format.type_name,
-                    number_format.opnum
-                )
+                # number_format = item.e.n.nf                       # idaapi.number_format_t
+                # print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
+                #     number_format.flags,
+                #     number_format.type_name,
+                #     number_format.opnum
+                # )
                 idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
             elif item.e.op == idaapi.cot_var:
                 # Check if we clicked on variable that is a pointer to a structure that is potentially part of
@@ -85,10 +83,10 @@ def hexrays_events_callback(*args):
         cfunc, level_of_maturity = args[1:]
 
         if level_of_maturity == idaapi.CMAT_BUILT:
-            print '=' * 40
-            print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
-            print '=' * 40
-            print cfunc
+            # print '=' * 40
+            # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
+            # print '=' * 40
+            # print cfunc
 
             # First search for CONTAINING_RECORD made by Ida
             visitor = NegativeOffsets.SearchVisitor(cfunc)
@@ -122,11 +120,11 @@ def hexrays_events_callback(*args):
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
                 # hx_view.set_lvar_cmt(lvar, old + lvar.name)
-        elif level_of_maturity == idaapi.CMAT_TRANS1:
-            print '=' * 40
-            print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
-            print '=' * 40
-            print cfunc
+        # elif level_of_maturity == idaapi.CMAT_TRANS1:
+        #     print '=' * 40
+        #     print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
+        #     print '=' * 40
+        #     print cfunc
     return 0
 
 
