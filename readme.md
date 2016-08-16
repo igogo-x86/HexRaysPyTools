@@ -25,7 +25,23 @@ Usage:
 2. Select library in which find structures
 3. Select structure. Number will become `sizeof(Structure Name)` and type will be imported to Local Types
 
-### 3) Structure Builder
+### 3) Containing structures
+
+Helps to find containing structure and makes code look pretty by replacing pointers with [CONTAINING_RECORD](1) macro
+
+![img][bad_structures]
+![img][good_structures]
+
+Usage:
+
+If variable is a structure pointer and is used to address outside of its boundaries than:
+
+1. Right click -> Select Containing Structure
+2. Select Type Library
+3. Select appropriate Structure and Offset
+4. If result is disapointing then Right Click -> Reset Containing Structure and go to step 1
+
+### 4) Structure Builder
 
 ### Currently recognized access to fields
 
@@ -60,4 +76,7 @@ Usage:
 | | `*(_QWORD *)(v + x) = obj` | `typeof(obj)` | x |
 
 [0]: https://sourceforge.net/projects/classinformer/
-[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/raw/97dfdf3fa5d426a01a1ae56dc2560baee8613baf/Img/structure_builder.JPG
+[1]: https://msdn.microsoft.com/en-us/library/windows/hardware/ff542043%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/structure_builder.JPG
+[bad_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/bad.JPG
+[good_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/good.JPG
