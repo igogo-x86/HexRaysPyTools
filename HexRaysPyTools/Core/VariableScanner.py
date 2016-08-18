@@ -118,6 +118,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                     if argument.cexpr == son:
                         member_type = argument.formal_type
                         if member_type.dstr() == "void *" or member_type.dstr() == "PVOID":
+                            # TODO: if function is memset, than calculate array size
                             member_type = TemporaryStructureModel.BYTE_TINFO
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
                             return Field(

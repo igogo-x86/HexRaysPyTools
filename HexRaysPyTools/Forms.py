@@ -92,9 +92,9 @@ class StructureBuilder(idaapi.PluginForm):
         btn_origin.clicked.connect(lambda: self.structure_model.set_origin(struct_view.selectedIndexes()))
         btn_array.clicked.connect(lambda: self.structure_model.make_array(struct_view.selectedIndexes()))
         btn_pack.clicked.connect(lambda: self.structure_model.pack_substructure(struct_view.selectedIndexes()))
-        btn_remove.clicked.connect(lambda: self.structure_model.remove_item(struct_view.selectedIndexes()))
+        btn_remove.clicked.connect(lambda: self.structure_model.remove_items(struct_view.selectedIndexes()))
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
-        btn_recognize.clicked.connect(lambda: self.structure_model.recognize_shape())
+        btn_recognize.clicked.connect(lambda: self.structure_model.recognize_shape(struct_view.selectedIndexes()))
         struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.show_virtual_methods)
         self.structure_model.dataChanged.connect(struct_view.clearSelection)
 

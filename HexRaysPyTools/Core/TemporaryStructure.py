@@ -127,7 +127,7 @@ class VirtualTable(AbstractField):
                 break
 
     def create_tinfo(self):
-        print "(Virtual table) at address: 0x{0:08X} name: {1}".format(self.address, self.name)
+        # print "(Virtual table) at address: 0x{0:08X} name: {1}".format(self.address, self.name)
         udt_data = idaapi.udt_type_data_t()
         for function in self.virtual_functions:
             udt_data.push_back(function.get_udt_member())
@@ -322,8 +322,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             elif col == 2:
                 return item.name
         elif role == QtCore.Qt.FontRole:
-            if col == 1 and item.is_vtable:
-                return QtGui.QFont("Consolas", 10, QtGui.QFont.Bold)
+            if col == 1:
+                if item.is_vtable:
+                    return QtGui.QFont("Consolas", 10, QtGui.QFont.Bold)
+                elif item.is_void:
+                    return QtGui.QFont("Consolas", 10, italic=True)
         elif role == QtCore.Qt.BackgroundColorRole:
             if not item.enabled:
                 return QtGui.QColor(QtCore.Qt.gray)
@@ -439,13 +442,19 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             return (self.items[next_row].offset - self.items[row].offset) / self.items[row].size
         return 0
 
-    def get_recognized_shape(self):
+    def get_recognized_shape(self, start=0, stop=-1):
         if not self.items:
             return None
         result = []
-        enabled_items = filter(lambda x: x.enabled and not x.is_void, self.items)
-        offsets = set(map(lambda x: x.offset, enabled_items))
-        min_size = self.items[-1].offset + self.items[-1].size
+        if stop != -1:
+            base = self.items[start].offset
+            enabled_items = filter(lambda x: x.enabled and not x.is_void, self.items[start:stop])
+            offsets = set(map(lambda x: x.offset, enabled_items))
+        else:
+            base = 0
+            enabled_items = filter(lambda x: x.enabled and not x.is_void, self.items)
+            offsets = set(map(lambda x: x.offset, enabled_items))
+        min_size = enabled_items[-1].offset + enabled_items[-1].size - base
         tinfo = idaapi.tinfo_t()
         for ordinal in xrange(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
             tinfo.get_numbered_type(idaapi.cvar.idati, ordinal)
@@ -454,11 +463,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 for offset in offsets:
                     is_found = False
                     items = filter(lambda x: x.offset == offset, enabled_items)
-                    potential_members = self.get_fields_at_offset(tinfo, offset)
-                    # print ordinal, items, potential_members
+                    potential_members = self.get_fields_at_offset(tinfo, offset - base)
                     for item in items:
                         for potential_member in potential_members:
-                            # potential_member.offset = offset
                             if item.is_vtable and potential_member.is_vtable:
                                 is_found = True
                                 break
@@ -473,9 +480,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 if is_found:
                     result.append((ordinal, idaapi.tinfo_t(tinfo)))
         chooser = MyChoose(
-            [[str(x), y.dstr()] for x, y in result],
+            [[str(x), "0x{0:08X}".format(y.get_size()), y.dstr()] for x, y in result],
             "Select Structure",
-            [["Ordinal", 10], ["Structure name", 50]]
+            [["Ordinal", 5], ["Size", 10], ["Structure name", 50]]
         )
         idx = chooser.Show(modal=True)
         if idx != -1:
@@ -560,16 +567,16 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def pack_substructure(self, indices):
         if indices:
-            indices = list(map(lambda x: x.row(), indices))
-            indices.sort()
-            start, stop = indices[0], indices[-1] + 1
+            indices = sorted(indices)
+            self.dataChanged.emit(indices[0], indices[-1])
+            start, stop = indices[0].row(), indices[-1].row() + 1
             tinfo = self.pack(start, stop)
             if tinfo:
                 offset = self.items[start].offset
                 self.items = self.items[0:start] + self.items[stop:]
                 self.add_row(Field(offset, tinfo, None))
 
-    def remove_item(self, indices):
+    def remove_items(self, indices):
         rows = map(lambda x: x.row(), indices)
         if rows:
             self.items = [item for item in self.items if self.items.index(item) not in rows]
@@ -580,8 +587,30 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.main_offset = 0
         self.modelReset.emit()
 
-    def recognize_shape(self):
-        print self.get_recognized_shape()
+    def recognize_shape(self, indices):
+        if indices:
+            indices.sort()
+            self.dataChanged.emit(indices[0], indices[-1])
+
+        if len(indices) <= 1:
+            tinfo = self.get_recognized_shape()
+            if tinfo:
+                tinfo.create_ptr(tinfo)
+                for scanned_var in self.get_scanned_variables(0):
+                    scanned_var.apply_type(tinfo)
+                self.clear()
+        else:
+            # indices = sorted(indices)
+            start, stop = indices[0].row(), indices[-1].row() + 1
+            base = self.items[start].offset
+            tinfo = self.get_recognized_shape(start, stop)
+            if tinfo:
+                ptr_tinfo = idaapi.tinfo_t()
+                ptr_tinfo.create_ptr(tinfo)
+                for scanned_var in self.get_scanned_variables(base):
+                    scanned_var.apply_type(ptr_tinfo)
+                self.items = filter(lambda x: x.offset < base or x.offset >= base + tinfo.get_size(), self.items)
+                self.add_row(Field(base, tinfo, None))
 
     def show_virtual_methods(self, index):
         self.dataChanged.emit(index, index)
@@ -592,7 +621,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 function_chooser = MyChoose(
                     [function.get_information() for function in item.virtual_functions],
                     "Select Virtual Function",
-                    [["Address", 5], ["Name", 15], ["Declaration", 30]],
+                    [["Address", 10], ["Name", 15], ["Declaration", 45]],
                     13
                 )
                 function_chooser.OnGetIcon = lambda n: 32 if item.virtual_functions[n].visited else 160
