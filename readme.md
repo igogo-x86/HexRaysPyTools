@@ -25,7 +25,24 @@ Usage:
 2. Select library in which find structures
 3. Select structure. Number will become `sizeof(Structure Name)` and type will be imported to Local Types
 
-### 3) Containing structures
+### 3) Recogition of structures by shapes
+
+Helps to find suitable structure by information gleaned from pseudocode.
+
+Usage:
+
+* _Method 1_
+    1. Right click on variable with LEGAL_TYPE (See structure builder) -> Select "Recognize Shape".
+    2. Select structure.
+    3. Type of variable will be changed automatically.
+* _Method 2_
+    1. Clear Structure Builder if it's currently used.
+    2. Right click on variables supposed to be the same -> "Scan Variable".
+    3. Edit types (will be implemented later), disable or remove uninteresting fields and click button "Recognize Shape".
+    4. You can selected several fields and try to recognize shpare for them. If found and selected, they will be replaced by new structure.
+    5. After final structure selection, types of all scanned variables will be changed automatically.
+
+### 4) Containing structures
 
 Helps to find containing structure and makes code look pretty by replacing pointers with [CONTAINING_RECORD][1] macro
 
@@ -46,14 +63,45 @@ If variable is a structure pointer and is used to address outside of its boundar
 3. Select appropriate Structure and Offset
 4. If result is disapointing then Right Click -> Reset Containing Structure and go to step 1
 
-### 4) Structure Builder
+### 5) Structure Builder (Alt + F8)
+
+The place where all collected information about scanned variables can be viewed and modified
+
+![img][builder]
+
+* Types with __BOLD__ font are virtual tables. Double click opens list with all virtual functions that helps to visit them. Visited functions marked with cross and color.
+
+![img][virtual_functions]
+
+* Types with _ITALIC_ font are got as `void *` arguments and are not used in shape recognition.
+
+__Finalize__ - opens window with editable C-like declaration and assigns new type to all scanned variabled.
+
+__Disable__, __Enable__ - used for collision resoliution.
+
+__Origin__ - switches base from which offset to produce new fields to structure (this value will be added to every offset of new scanned variable).
+
+__Array__ - makes selected field as array, the size of which is calculated automatically.
+
+__Pack__ - creates and substitutes substructure for selected items (collisions for this items should be resolved).
+
+__Remove__ - removes information about selected fields.
+
+__Clear__ - clears everything.
+
+__Scanned Variables__ - do nothing.
+
+__Recognize Shape__ - looks for appropriate structure for selected fields.
 
 ### Currently recognized access to fields
 
+LEGAL_TYPES = { int, __int64, signed __int64 } - currently scannable variables
+
+Abbreviations:
 * var - variable
 * obj - any object, including Virtual Table, that will be handled specially
 * x - offset
-* TYPE - char, _BYTE, int, _DWORD, float, double
+* TYPE - char, _BYTE, int, _DWORD, float, double, etc
 
 ##### x32
 | Variable type | Situation | Type | Offset |
@@ -85,3 +133,5 @@ If variable is a structure pointer and is used to address outside of its boundar
 [structure_graph]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/structure_builder.JPG
 [bad_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/bad.JPG
 [good_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/good.JPG
+[builder]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/builder.JPG
+[virtual_functions]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/virtual_functions.JPG

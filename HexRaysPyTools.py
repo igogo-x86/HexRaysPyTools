@@ -128,7 +128,7 @@ class MyPlugin(idaapi.plugin_t):
     flags = 0
     comment = "Plugin for automatic classes reconstruction"
     help = "This is help"
-    wanted_name = "My Python plugin"
+    wanted_name = "HexRaysPyTools"
     wanted_hotkey = "Alt-F8"
     structure_builder = None
     temporary_structure = None
