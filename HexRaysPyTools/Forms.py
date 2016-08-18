@@ -32,7 +32,7 @@ class StructureBuilder(idaapi.PluginForm):
         self.parent.setStyleSheet(
             "QTableView {background-color: transparent;}"
             "QHeaderView::section {background-color: transparent; border: 1px solid;}"
-            "QPushButton {width: 80px; height: 20px;}"
+            "QPushButton {width: 50px; height: 20px;}"
             # "QPushButton::pressed {background-color: #ccccff}"
         )
         self.parent.resize(400, 600)
@@ -46,6 +46,10 @@ class StructureBuilder(idaapi.PluginForm):
         btn_pack = QtGui.QPushButton("&Pack")
         btn_remove = QtGui.QPushButton("&Remove")
         btn_clear = QtGui.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
+        btn_recognize = QtGui.QPushButton("Recognize Shape")
+        btn_scan_list = QtGui.QPushButton("Scanned Variables")
+        btn_recognize.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
+        btn_scan_list.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
 
         btn_finalize.setShortcut("f")
         btn_disable.setShortcut("d")
@@ -68,18 +72,18 @@ class StructureBuilder(idaapi.PluginForm):
         grid_box.addWidget(btn_disable, 0, 1)
         grid_box.addWidget(btn_enable, 0, 2)
         grid_box.addWidget(btn_origin, 0, 3)
+        grid_box.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Expanding), 0, 4)
+        grid_box.addWidget(btn_scan_list, 0, 5, 1, 6)
         grid_box.addWidget(btn_array, 1, 0)
         grid_box.addWidget(btn_pack, 1, 1)
         grid_box.addWidget(btn_remove, 1, 2)
         grid_box.addWidget(btn_clear, 1, 3)
-
-        horizontal_box = QtGui.QHBoxLayout()
-        horizontal_box.addLayout(grid_box)
-        horizontal_box.addStretch(1)
+        grid_box.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Expanding), 1, 4)
+        grid_box.addWidget(btn_recognize, 1, 5, 1, 6)
 
         vertical_box = QtGui.QVBoxLayout()
         vertical_box.addWidget(struct_view)
-        vertical_box.addLayout(horizontal_box)
+        vertical_box.addLayout(grid_box)
         self.parent.setLayout(vertical_box)
 
         btn_finalize.clicked.connect(lambda: self.structure_model.finalize())
@@ -90,6 +94,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_pack.clicked.connect(lambda: self.structure_model.pack_substructure(struct_view.selectedIndexes()))
         btn_remove.clicked.connect(lambda: self.structure_model.remove_item(struct_view.selectedIndexes()))
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
+        btn_recognize.clicked.connect(lambda: self.structure_model.recognize_shape())
         struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.show_virtual_methods)
         self.structure_model.dataChanged.connect(struct_view.clearSelection)
 

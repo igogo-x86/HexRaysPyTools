@@ -108,10 +108,10 @@ class NegativeLocalCandidate:
 
 
 class ReplaceVisitor(idaapi.ctree_parentee_t):
-    del_list = []
 
     def __init__(self, negative_lvars):
         super(ReplaceVisitor, self).__init__()
+        self.sinkhole = []
         self.negative_lvars = negative_lvars
         self.pvoid_tinfo = idaapi.tinfo_t(idaapi.BT_VOID)
         self.pvoid_tinfo.create_ptr(self.pvoid_tinfo)
@@ -182,11 +182,11 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
                 tmp_tinfo.create_ptr(parent.type)
                 new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_add)
                 new_cexpr_cast.type = tmp_tinfo
-                ReplaceVisitor.del_list.append(new_cexpr_cast)
-                ReplaceVisitor.del_list.append(new_cexpr_add)
+                self.sinkhole.append(new_cexpr_cast)
+                self.sinkhole.append(new_cexpr_add)
                 expression.replace_by(new_cexpr_cast)
             else:
-                ReplaceVisitor.del_list.append(new_cexpr_add)
+                self.sinkhole.append(new_cexpr_add)
                 expression.replace_by(new_cexpr_add)
         else:
             if parent.op == idaapi.cot_ptr:
@@ -194,7 +194,7 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
                 tmp_tinfo.create_ptr(parent.type)
                 new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_call)
                 new_cexpr_cast.type = tmp_tinfo
-                ReplaceVisitor.del_list.append(new_cexpr_cast)
+                self.sinkhole.append(new_cexpr_cast)
                 expression.replace_by(new_cexpr_cast)
             else:
                 expression.replace_by(new_cexpr_call)

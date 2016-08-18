@@ -2,7 +2,7 @@ from HexRaysPyTools.Core.TemporaryStructure import *
 
 
 class CtreeVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, function, variable, origin):
+    def __init__(self, function, variable, origin=0, index=None):
         """
         This Class is idaapi.ctree_visitor_t and used for for finding candidates on class members.
         Usage: CtreeVisitor.apply_to() and then CtreeVisitor.candidates
@@ -14,7 +14,10 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         super(CtreeVisitor, self).__init__()
         self.function = function
         # Dictionary {variable name => tinfo_t} of variables that are being scanned
-        self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.tif}
+        if index:
+            self.variables = {index: function.get_lvars()[index].type()}
+        else:
+            self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.type()}
         self.origin = origin
         self.candidates = []
 
@@ -32,9 +35,10 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
 
     def check_member_assignment(self, expression, index):
         """
-        We are now in cexpr_t == idaapi.cot_var This function checks if expression is part of member assignment
+        We are now in cexpr_t == idaapi.cot_var. This function checks if expression is part of member assignment
         statement. Returns None if not.
 
+        :param expression: idaapi.cexpr_t
         :param index: int
         :return: Structures.Field
         """
@@ -115,16 +119,22 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                         member_type = argument.formal_type
                         if member_type.dstr() == "void *" or member_type.dstr() == "PVOID":
                             member_type = TemporaryStructureModel.BYTE_TINFO
-                            #TODO: array of bytes instead void
-                        break
-
-                print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                return Field(
-                    offset,
-                    member_type,
-                    ScannedVariable(self.function, self.function.get_lvars()[index]),
-                    self.origin
-                )
+                            print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
+                            return Field(
+                                offset,
+                                member_type,
+                                ScannedVariable(self.function, self.function.get_lvars()[index]),
+                                self.origin,
+                                is_void=True
+                            )
+                        elif member_type.is_ptr():
+                            print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
+                            return Field(
+                                offset,
+                                member_type.get_pointed_object(),
+                                ScannedVariable(self.function, self.function.get_lvars()[index]),
+                                self.origin
+                            )
 
         return None
 

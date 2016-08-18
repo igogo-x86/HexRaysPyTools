@@ -30,7 +30,7 @@ class LocalType:
         elif self.is_enum:
             return self.name, 0x33FF33
         elif self.is_union:
-            return self.name, 0xcc99ff
+            return self.name, 0xCCCC00
         return self.name, 0xffdd99
 
 

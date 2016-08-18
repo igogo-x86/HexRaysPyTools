@@ -13,18 +13,14 @@ def hexrays_events_callback(*args):
     global potential_negatives
 
     hexrays_event = args[0]
-    if hexrays_event == idaapi.hxe_keyboard:
-        hx_view, key, shift = args[1:]
-        if key == ord('F'):
-            if Actions.ScanVariable.check(hx_view.cfunc, hx_view.item):
-                idaapi.process_ui_action(Actions.ScanVariable.name)
 
-    elif hexrays_event == idaapi.hxe_populating_popup:
+    if hexrays_event == idaapi.hxe_populating_popup:
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if Actions.ScanVariable.check(hx_view.cfunc, item):
+        if hx_view.item.get_lvar() and hx_view.item.get_lvar().type().dstr() in LEGAL_TYPES:
             idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
+            idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
@@ -116,10 +112,9 @@ def hexrays_events_callback(*args):
                 visitor.apply_to(cfunc.body, None)
 
             if negative_lvars:
-                # NegativeOffsets.ReplaceVisitor.del_list[:] = []
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
-                # hx_view.set_lvar_cmt(lvar, old + lvar.name)
+
         # elif level_of_maturity == idaapi.CMAT_TRANS1:
         #     print '=' * 40
         #     print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
@@ -153,6 +148,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RemoveReturn)
         Actions.register(Actions.ConvertToUsercall)
         Actions.register(Actions.ScanVariable, MyPlugin.temporary_structure)
+        Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
 
@@ -179,6 +175,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RemoveReturn)
         Actions.unregister(Actions.ConvertToUsercall)
         Actions.unregister(Actions.ScanVariable)
+        Actions.unregister(Actions.RecognizeShape)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)
         idaapi.term_hexrays_plugin()

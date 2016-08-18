@@ -1,6 +1,6 @@
 ## About
 
-Plugin assist in creation classes/structures and detection virtual tables. Best to use with [Class Informer](0) plugin, because it helps to automatically get original classes names
+Plugin assist in creation classes/structures and detection virtual tables. Best to use with [Class Informer][0] plugin, because it helps to automatically get original classes names
 
 # Features
 
@@ -27,9 +27,14 @@ Usage:
 
 ### 3) Containing structures
 
-Helps to find containing structure and makes code look pretty by replacing pointers with [CONTAINING_RECORD](1) macro
+Helps to find containing structure and makes code look pretty by replacing pointers with [CONTAINING_RECORD][1] macro
+
+__Before:__
 
 ![img][bad_structures]
+
+__After:__
+
 ![img][good_structures]
 
 Usage:

@@ -22,6 +22,14 @@ def parse_vtable_name(name):
     return name, True
 
 
+def generate_field_or_vtable(tinfo):
+    udt_data = idaapi.udt_type_data_t()
+    if tinfo.is_ptr() and tinfo.get_pointed_object().get_udt_details(udt_data):
+        if udt_data[0].type.is_funcptr():
+            return VirtualTable(0, 0)
+    return Field(0, tinfo, None)
+
+
 class AbstractField:
     def __init__(self, offset, scanned_variable, origin):
         """
@@ -37,12 +45,17 @@ class AbstractField:
         self.offset = offset
         self.origin = origin
         self.enabled = True
+        self.is_void = False
         self.is_array = False
         self.scanned_variable = scanned_variable
+        self.tinfo = None
 
     @property
     def type_name(self):
-        pass
+        return ''
+
+    def __repr__(self):
+        return hex(self.offset) + ' ' + self.type_name
 
     __eq__ = lambda self, other: self.offset == other.offset and self.type_name == other.type_name
     __ne__ = lambda self, other: self.offset != other.offset or self.type_name != other.type_name
@@ -78,7 +91,7 @@ class VirtualFunction:
         return udt_member
 
     def get_information(self):
-        return ["0x{0:08X}".format(self.address), self.name, self.get_tinfo().dstr()]
+        return ["0x{0:08X}".format(self.address), self.name, self.get_tinfo().get_pointed_object().dstr()]
 
     @property
     def name(self):
@@ -121,8 +134,8 @@ class VirtualTable(AbstractField):
 
         final_tinfo = idaapi.tinfo_t()
         if final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT):
-            print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE |
-                                                                 idaapi.PRTYPE_SEMI, final_tinfo, self.name, None)
+            # print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE
+            #                                                      | idaapi.PRTYPE_SEMI, final_tinfo, self.name, None)
             return final_tinfo
         else:
             print "[ERROR] Virtual table creation failed"
@@ -199,9 +212,11 @@ class VirtualTable(AbstractField):
 
 
 class Field(AbstractField):
-    def __init__(self, offset, tinfo, scanned_variable, origin=0):
+    def __init__(self, offset, tinfo, scanned_variable, origin=0, is_void=False):
         AbstractField.__init__(self, offset + origin, scanned_variable, origin)
         self.tinfo = tinfo
+        if is_void:
+            self.is_void = self.is_array = True
         self.name = "field_{0:X}".format(self.offset)
 
     def get_udt_member(self, array_size=0, offset=0):
@@ -424,6 +439,69 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             return (self.items[next_row].offset - self.items[row].offset) / self.items[row].size
         return 0
 
+    def get_recognized_shape(self):
+        if not self.items:
+            return None
+        result = []
+        enabled_items = filter(lambda x: x.enabled and not x.is_void, self.items)
+        offsets = set(map(lambda x: x.offset, enabled_items))
+        min_size = self.items[-1].offset + self.items[-1].size
+        tinfo = idaapi.tinfo_t()
+        for ordinal in xrange(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
+            tinfo.get_numbered_type(idaapi.cvar.idati, ordinal)
+            if tinfo.is_udt() and tinfo.get_size() >= min_size:
+                is_found = False
+                for offset in offsets:
+                    is_found = False
+                    items = filter(lambda x: x.offset == offset, enabled_items)
+                    potential_members = self.get_fields_at_offset(tinfo, offset)
+                    # print ordinal, items, potential_members
+                    for item in items:
+                        for potential_member in potential_members:
+                            # potential_member.offset = offset
+                            if item.is_vtable and potential_member.is_vtable:
+                                is_found = True
+                                break
+                            elif not (item.is_vtable or potential_member.is_vtable):
+                                if item.tinfo.equals_to(potential_member.tinfo):
+                                    is_found = True
+                                    break
+                        if is_found:
+                            break
+                    if not is_found:
+                        break
+                if is_found:
+                    result.append((ordinal, idaapi.tinfo_t(tinfo)))
+        chooser = MyChoose(
+            [[str(x), y.dstr()] for x, y in result],
+            "Select Structure",
+            [["Ordinal", 10], ["Structure name", 50]]
+        )
+        idx = chooser.Show(modal=True)
+        if idx != -1:
+            return result[idx][1]
+        return None
+
+    def get_fields_at_offset(self, tinfo, offset):
+        result = []
+        udt_data = idaapi.udt_type_data_t()
+        tinfo.get_udt_details(udt_data)
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = offset * 8
+        idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        if idx != -1:
+            while idx < tinfo.get_udt_nmembers() and udt_data[idx].offset <= offset * 8:
+                udt_member = udt_data[idx]
+                if udt_member.offset == offset * 8:
+                    result.append(generate_field_or_vtable(udt_member.type))
+                if udt_member.type.is_array():
+                    if (offset - udt_member.offset / 8) % udt_member.type.get_array_element().get_size() == 0:
+                        result.append(generate_field_or_vtable(udt_member.type.get_array_element()))
+                elif udt_member.type.is_udt():
+                    result.extend(self.get_fields_at_offset(udt_member.type, offset - udt_member.offset / 8))
+                idx += 1
+        return result
+
     @staticmethod
     def get_padding_member(offset, size):
         udt_member = idaapi.udt_member_t()
@@ -501,6 +579,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.items = []
         self.main_offset = 0
         self.modelReset.emit()
+
+    def recognize_shape(self):
+        print self.get_recognized_shape()
 
     def show_virtual_methods(self, index):
         self.dataChanged.emit(index, index)

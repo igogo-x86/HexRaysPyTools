@@ -5,9 +5,8 @@ import re
 import idaapi
 
 import HexRaysPyTools.Forms as Forms
-import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
-from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, EA64, LEGAL_TYPES
+from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, EA64, LEGAL_TYPES, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import CtreeVisitor
 
 
@@ -252,42 +251,52 @@ class ScanVariable(idaapi.action_handler_t):
 
     name = "my:ScanVariable"
     description = "Scan Variable"
-    hotkey = None
+    hotkey = "F"
 
     def __init__(self, temporary_structure):
         self.temporary_structure = temporary_structure
         idaapi.action_handler_t.__init__(self)
 
-    @staticmethod
-    def check(cfunc, item):
-        """
-        Checks if variable belongs to cfunc and have a type that is supportable for scanning
-
-        :param cfunc: idaapi.cfunct_t
-        :param item: idaapi.ctree_item_t
-        :return: bool
-        """
-        if item.citype == idaapi.VDI_EXPR:
-            if item.e.op == idaapi.cot_var:
-                local_variable = cfunc.get_lvars()[item.e.v.idx]
-                if local_variable.type().dstr() in LEGAL_TYPES:
-                    return True
-        elif item.citype == idaapi.VDI_LVAR:
-            local_variable = item.get_lvar()
-            if local_variable.type().dstr() in LEGAL_TYPES:
-                return True
-        else:
-            return False
-
     def activate(self, ctx):
         vu = idaapi.get_tform_vdui(ctx.form)
         variable = vu.item.get_lvar()  # lvar_t
         print "Local variable type: %s" % variable.tif.dstr()
-        if variable.tif.dstr() in LEGAL_TYPES:
+        if variable and variable.tif.dstr() in LEGAL_TYPES:
             scanner = CtreeVisitor(vu.cfunc, variable, self.temporary_structure.main_offset)
             scanner.apply_to(vu.cfunc.body, None)
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            return idaapi.AST_DISABLE_FOR_FORM
+
+
+class RecognizeShape(idaapi.action_handler_t):
+
+    name = "my:RecognizeShape"
+    description = "Recognize Shape"
+    hotkey = None
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        variable = hx_view.item.get_lvar()  # lvar_t
+        if variable and variable.tif.dstr() in LEGAL_TYPES:
+            scanner = CtreeVisitor(hx_view.cfunc, variable)
+            scanner.apply_to(hx_view.cfunc.body, None)
+            structure = TemporaryStructureModel()
+            for field in scanner.candidates:
+                structure.add_row(field)
+            tinfo = structure.get_recognized_shape()
+            if tinfo:
+                tinfo.create_ptr(tinfo)
+                hx_view.set_lvar_type(variable, tinfo)
+                hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
