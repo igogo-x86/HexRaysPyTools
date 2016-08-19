@@ -221,7 +221,7 @@ class Field(AbstractField):
 
     def get_udt_member(self, array_size=0, offset=0):
         udt_member = idaapi.udt_member_t()
-        udt_member.name = "field_{0:X}".format(self.offset - offset)
+        udt_member.name = "field_{0:X}".format(self.offset - offset) if self.name[:6] == "field_" else self.name
         udt_member.type = self.tinfo
         if array_size:
             tmp = idaapi.tinfo_t(self.tinfo)
@@ -307,6 +307,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def columnCount(self, *args):
         return len(self.headers)
 
+    def flags(self, index):
+        if index.column() == 2:
+            return super(TemporaryStructureModel, self).flags(index) | QtGui.QAbstractItemView.DoubleClicked
+        return super(TemporaryStructureModel, self).flags(index)
+
     def data(self, index, role):
         row, col = index.row(), index.column()
         item = self.items[row]
@@ -321,6 +326,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return item.type_name
             elif col == 2:
                 return item.name
+        elif role == QtCore.Qt.ToolTipRole:
+            if col == 1:
+                return self.items[row].size * (self.calculate_array_size(row) if self.items[row].is_array else 1)
+        elif role == QtCore.Qt.EditRole:
+            if col == 2:
+                return self.items[row].name
         elif role == QtCore.Qt.FontRole:
             if col == 1:
                 if item.is_vtable:
@@ -335,6 +346,14 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     return QtGui.QBrush(QtGui.QColor("#ff8080"))
             if self.have_collision(row):
                 return QtGui.QBrush(QtGui.QColor("#ffff99"))
+
+    def setData(self, index, value, role):
+        row, col = index.row(), index.column()
+        if role == QtCore.Qt.EditRole:
+            self.items[row].name = value
+            self.dataChanged.emit(index, index)
+            return True
+        return False
 
     def headerData(self, section, orientation, role):
         if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:

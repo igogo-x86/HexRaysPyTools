@@ -29,7 +29,7 @@ Usage:
 
 ### 3) Recogition of structures by shapes
 
-Helps to find suitable structure by information gleaned from pseudocode.
+Helps to find suitable structure by information gleaned from pseudocode after variable scanning. 
 
 Usage:
 
@@ -76,6 +76,8 @@ The place where all collected information about scanned variables can be viewed 
 ![img][virtual_functions]
 
 * Types with _ITALIC_ font are got as `void *` arguments and are not used in shape recognition.
+
+* Field's names are editable by double click
 
 __Finalize__ - opens window with editable C-like declaration and assigns new type to all scanned variabled.
 
