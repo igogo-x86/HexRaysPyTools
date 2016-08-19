@@ -9,6 +9,8 @@ Plugin assist in creation classes/structures and detection virtual tables. Best 
 Shows relationship between structures.
 ![img][structure_graph]
 
+Also: dark green node is union, light green - enum.
+ 
 Usage:
 
 1. Open Local Types
@@ -128,6 +130,12 @@ Abbreviations:
 | | `*(_QWORD *)(v + x) = var` | `typeof(var)` | x |
 | | `*(_QWORD *)(v + x) = obj` | `typeof(obj)` | x |
 
+### 6) Function signature manipulation
+
+1. Right click on first line -> "Remove Return" converts return type to void
+2. Right click on argument -> "Remove Argument" disposes of this argument
+3. Right click on convention -> "Convert to __usercall" converts to __usercall or __userpurge (same as __usercall but the callee cleans the stack)
+
 [0]: https://sourceforge.net/projects/classinformer/
 [1]: https://msdn.microsoft.com/en-us/library/windows/hardware/ff542043%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 [structure_graph]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/structure_builder.JPG
@@ -135,3 +143,7 @@ Abbreviations:
 [good_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/good.JPG
 [builder]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/builder.JPG
 [virtual_functions]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/virtual_functions.JPG
+
+### 7) Recast Item (Shift+R)
+
+If you have instruction like this: `v1 = (TYPE) expression;`, than Right click -> "Recast Item" menu changes type of v1 to final type of expression. v2 can be either variable or expression of any complexity.

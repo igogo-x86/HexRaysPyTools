@@ -18,6 +18,9 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
+        if Actions.RecastItem.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RecastItem.name, None)
+
         if hx_view.item.get_lvar() and hx_view.item.get_lvar().type().dstr() in LEGAL_TYPES:
             idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
@@ -151,6 +154,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
+        Actions.register(Actions.RecastItem)
 
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
@@ -178,6 +182,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RecognizeShape)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)
+        Actions.unregister(Actions.RecastItem)
         idaapi.term_hexrays_plugin()
 
 

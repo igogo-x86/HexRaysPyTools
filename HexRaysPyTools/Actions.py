@@ -426,3 +426,37 @@ class ResetContainingStructure(idaapi.action_handler_t):
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
+
+class RecastItem(idaapi.action_handler_t):
+
+    name = "my:RecastItem"
+    description = "Recast Item"
+    hotkey = "Shift+R"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_EXPR:
+            expression = ctree_item.e
+            while expression and (expression.op != idaapi.cot_asg):
+                expression = cfunc.body.find_parent_of(expression)
+            if expression and expression.cexpr.x.op == idaapi.cot_var and expression.cexpr.y.op == idaapi.cot_cast:
+                return cfunc.get_lvars()[expression.cexpr.x.v.idx], expression.cexpr.y.x.type
+        return None
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+        if result:
+            lvar, tinfo = result
+            if hx_view.set_lvar_type(lvar, tinfo):
+                hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            return idaapi.AST_DISABLE_FOR_FORM
