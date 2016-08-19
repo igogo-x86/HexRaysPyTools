@@ -108,10 +108,10 @@ class NegativeLocalCandidate:
 
 
 class ReplaceVisitor(idaapi.ctree_parentee_t):
+    sinkhole = []
 
     def __init__(self, negative_lvars):
         super(ReplaceVisitor, self).__init__()
-        self.sinkhole = []
         self.negative_lvars = negative_lvars
         self.pvoid_tinfo = idaapi.tinfo_t(idaapi.BT_VOID)
         self.pvoid_tinfo.create_ptr(self.pvoid_tinfo)

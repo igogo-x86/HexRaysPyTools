@@ -21,6 +21,11 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         self.origin = origin
         self.candidates = []
 
+        self.PVOID_TINFO = idaapi.tinfo_t()
+        self.PVOID_TINFO.create_ptr(idaapi.tinfo_t(idaapi.BT_VOID))
+        self.CONST_PVOID_TINFO = idaapi.tinfo_t()
+        self.CONST_PVOID_TINFO.create_ptr(idaapi.tinfo_t(idaapi.BT_VOID | idaapi.BTM_CONST))
+
         self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
 
     def visit_expr(self, expression):
@@ -116,8 +121,9 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
             if parent.op == idaapi.cot_call:
                 for argument in parent.a:
                     if argument.cexpr == son:
-                        member_type = argument.formal_type
-                        if member_type.dstr() == "void *" or member_type.dstr() == "PVOID":
+                        member_type = idaapi.tinfo_t(argument.formal_type)
+                        if member_type.equals_to(self.PVOID_TINFO) or member_type.equals_to(self.CONST_PVOID_TINFO):
+                        # if member_type.dstr() == "void *" or member_type.dstr() == "PVOID":
                             # TODO: if function is memset, than calculate array size
                             member_type = TemporaryStructureModel.BYTE_TINFO
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
@@ -128,15 +134,16 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                                 self.origin,
                                 is_void=True
                             )
-                        elif member_type.is_ptr():
+                        else:
+                            if member_type.is_ptr():
+                                member_type = member_type.get_pointed_object()
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
                             return Field(
                                 offset,
-                                member_type.get_pointed_object(),
+                                member_type,
                                 ScannedVariable(self.function, self.function.get_lvars()[index]),
                                 self.origin
                             )
-
         return None
 
 

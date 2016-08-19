@@ -134,7 +134,7 @@ Abbreviations:
 
 1. Right click on first line -> "Remove Return" converts return type to void
 2. Right click on argument -> "Remove Argument" disposes of this argument
-3. Right click on convention -> "Convert to __usercall" converts to __usercall or __userpurge (same as __usercall but the callee cleans the stack)
+3. Right click on convention -> "Convert to __usercall" switches to __usercall or __userpurge (same as __usercall but the callee cleans the stack)
 
 [0]: https://sourceforge.net/projects/classinformer/
 [1]: https://msdn.microsoft.com/en-us/library/windows/hardware/ff542043%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
@@ -146,4 +146,4 @@ Abbreviations:
 
 ### 7) Recast Item (Shift+R)
 
-If you have instruction like this: `v1 = (TYPE) expression;`, than Right click -> "Recast Item" menu changes type of v1 to final type of expression. v2 can be either variable or expression of any complexity.
+If you have instruction like this: `v1 = (TYPE) expr;` than Right click -> "Recast Item" menu changes type of v1 to final type of expr. expr can be either variable or expression of any complexity.

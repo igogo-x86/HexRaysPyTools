@@ -454,6 +454,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             base = 0
             enabled_items = filter(lambda x: x.enabled and not x.is_void, self.items)
             offsets = set(map(lambda x: x.offset, enabled_items))
+        if not enabled_items: return
         min_size = enabled_items[-1].offset + enabled_items[-1].size - base
         tinfo = idaapi.tinfo_t()
         for ordinal in xrange(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
@@ -491,6 +492,8 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def get_fields_at_offset(self, tinfo, offset):
         result = []
+        if offset == 0:
+            result.append(generate_field_or_vtable(tinfo))
         udt_data = idaapi.udt_type_data_t()
         tinfo.get_udt_details(udt_data)
         udt_member = idaapi.udt_member_t()
@@ -500,7 +503,10 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             while idx < tinfo.get_udt_nmembers() and udt_data[idx].offset <= offset * 8:
                 udt_member = udt_data[idx]
                 if udt_member.offset == offset * 8:
-                    result.append(generate_field_or_vtable(udt_member.type))
+                    if udt_member.type.is_ptr():
+                        result.append(generate_field_or_vtable(idaapi.get_unk_type(EA_SIZE)))
+                    elif not udt_member.type.is_udt():
+                        result.append(generate_field_or_vtable(udt_member.type))
                 if udt_member.type.is_array():
                     if (offset - udt_member.offset / 8) % udt_member.type.get_array_element().get_size() == 0:
                         result.append(generate_field_or_vtable(udt_member.type.get_array_element()))
