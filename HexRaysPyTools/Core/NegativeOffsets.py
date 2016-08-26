@@ -108,7 +108,6 @@ class NegativeLocalCandidate:
 
 
 class ReplaceVisitor(idaapi.ctree_parentee_t):
-    sinkhole = []
 
     def __init__(self, negative_lvars):
         super(ReplaceVisitor, self).__init__()
@@ -176,25 +175,24 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
         if diff:
             number = idaapi.make_num(diff)
             new_cexpr_add = idaapi.cexpr_t(idaapi.cot_add, new_cexpr_call, number)
+            new_cexpr_add.thisown = False
             new_cexpr_add.type = return_tinfo
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
                 new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_add)
+                new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
-                self.sinkhole.append(new_cexpr_cast)
-                self.sinkhole.append(new_cexpr_add)
                 expression.replace_by(new_cexpr_cast)
             else:
-                self.sinkhole.append(new_cexpr_add)
                 expression.replace_by(new_cexpr_add)
         else:
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
                 new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_call)
+                new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
-                self.sinkhole.append(new_cexpr_cast)
                 expression.replace_by(new_cexpr_cast)
             else:
                 expression.replace_by(new_cexpr_call)

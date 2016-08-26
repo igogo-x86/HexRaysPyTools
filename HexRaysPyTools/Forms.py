@@ -61,8 +61,10 @@ class StructureBuilder(idaapi.PluginForm):
 
         struct_view = QtGui.QTableView()
         struct_view.setModel(self.structure_model)
+        # struct_view.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
         struct_view.verticalHeader().setVisible(False)
+        struct_view.verticalHeader().setDefaultSectionSize(24)
         struct_view.horizontalHeader().setStretchLastSection(True)
         struct_view.horizontalHeader().setResizeMode(QtGui.QHeaderView.ResizeToContents)
 

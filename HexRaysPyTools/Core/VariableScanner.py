@@ -111,7 +111,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                         else:
                             member_type = cast_type
                             print "(Call function) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                        return Field(
+                        return Member(
                             offset,
                             member_type,
                             ScannedVariable(self.function, self.function.get_lvars()[index]),
@@ -123,22 +123,19 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                     if argument.cexpr == son:
                         member_type = idaapi.tinfo_t(argument.formal_type)
                         if member_type.equals_to(self.PVOID_TINFO) or member_type.equals_to(self.CONST_PVOID_TINFO):
-                        # if member_type.dstr() == "void *" or member_type.dstr() == "PVOID":
                             # TODO: if function is memset, than calculate array size
                             member_type = TemporaryStructureModel.BYTE_TINFO
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                            return Field(
+                            return VoidMember(
                                 offset,
-                                member_type,
                                 ScannedVariable(self.function, self.function.get_lvars()[index]),
-                                self.origin,
-                                is_void=True
+                                self.origin
                             )
                         else:
                             if member_type.is_ptr():
                                 member_type = member_type.get_pointed_object()
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                            return Field(
+                            return Member(
                                 offset,
                                 member_type,
                                 ScannedVariable(self.function, self.function.get_lvars()[index]),
