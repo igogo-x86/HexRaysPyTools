@@ -76,32 +76,37 @@ class AbstractMember:
 
 
 class VirtualFunction:
-    def __init__(self, address, offset):
+    def __init__(self, address, offset, tinfo=None):
         self.address = address
         self.offset = offset
         self.visited = False
+        if tinfo:
+            self.tinfo = tinfo
+        else:
+            decompiled_function = idaapi.decompile(self.address)
+            if decompiled_function:
+                self.tinfo = idaapi.tinfo_t(decompiled_function.type)
+            else:
+                print "[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address)
 
     def __int__(self):
         return self.address
 
-    def get_tinfo(self):
-        decompiled_function = idaapi.decompile(self.address)
-        if decompiled_function:
-            tinfo = idaapi.tinfo_t(decompiled_function.type)
-            tinfo.create_ptr(tinfo)
-            return tinfo
-        return None
+    def get_ptr_tinfo(self):
+        ptr_tinfo = idaapi.tinfo_t()
+        ptr_tinfo.create_ptr(self.tinfo)
+        return ptr_tinfo
 
     def get_udt_member(self):
         udt_member = idaapi.udt_member_t()
-        udt_member.type = self.get_tinfo()
+        udt_member.type = self.get_ptr_tinfo()
         udt_member.offset = self.offset
         udt_member.name = self.name
         udt_member.size = EA_SIZE
         return udt_member
 
     def get_information(self):
-        return ["0x{0:08X}".format(self.address), self.name, self.get_tinfo().get_pointed_object().dstr()]
+        return ["0x{0:08X}".format(self.address), self.name, self.tinfo.dstr()]
 
     @property
     def name(self):
@@ -346,11 +351,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def columnCount(self, *args):
         return len(self.headers)
-
-    def flags(self, index):
-        if index.column() == 2:
-            return super(TemporaryStructureModel, self).flags(index) | QtGui.QAbstractItemView.DoubleClicked
-        return super(TemporaryStructureModel, self).flags(index)
 
     def data(self, index, role):
         row, col = index.row(), index.column()

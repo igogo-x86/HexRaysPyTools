@@ -338,6 +338,28 @@ class ShowGraph(idaapi.action_handler_t):
             return idaapi.AST_DISABLE_FOR_FORM
 
 
+class ShowClasses(idaapi.action_handler_t):
+
+    name = "my:ShowClasses"
+    description = "Classes"
+    hotkey = "Alt+F1"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        """
+        :param ctx: idaapi.action_activation_ctx_t
+        :return:    None
+        """
+        if not idaapi.find_tform('Classes'):
+            class_viewer = Forms.ClassViewer()
+            class_viewer.Show()
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
 class CreateVtable(idaapi.action_handler_t):
 
     name = "my:CreateVtable"

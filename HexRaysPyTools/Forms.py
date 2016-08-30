@@ -1,6 +1,7 @@
 import idaapi
 import PySide.QtGui as QtGui
 import PySide.QtCore as QtCore
+import HexRaysPyTools.Core.Classes as Classes
 
 
 class MyChoose(idaapi.Choose2):
@@ -31,7 +32,7 @@ class StructureBuilder(idaapi.PluginForm):
     def init_ui(self):
         self.parent.setStyleSheet(
             "QTableView {background-color: transparent;}"
-            "QHeaderView::section {background-color: transparent; border: 1px solid;}"
+            "QHeaderView::section {background-color: transparent; border: 0.5px solid;}"
             "QPushButton {width: 50px; height: 20px;}"
             # "QPushButton::pressed {background-color: #ccccff}"
         )
@@ -104,7 +105,7 @@ class StructureBuilder(idaapi.PluginForm):
         pass
 
     def Show(self, caption=None, options=0):
-        return idaapi.PluginForm.Show(self, caption, options=0)
+        return idaapi.PluginForm.Show(self, caption, options=options)
 
 
 class StructureGraphViewer(idaapi.GraphViewer):
@@ -134,3 +135,61 @@ class StructureGraphViewer(idaapi.GraphViewer):
     def OnDblClick(self, node_id):
         self.graph.change_selected([self[node_id]])
         self.Refresh()
+
+
+class ClassViewer(idaapi.PluginForm):
+    def __init__(self):
+        super(ClassViewer, self).__init__()
+        self.parent = None
+        self.class_tree = QtGui.QTreeView()
+        self.menu = QtGui.QMenu(self.parent)
+
+    def OnCreate(self, form):
+        self.parent = self.FormToPySideWidget(form)
+        self.init_ui()
+
+    def init_ui(self):
+        self.parent.setWindowTitle('Classes')
+        self.parent.setStyleSheet(
+            "QTreeView::item:!has-children { background-color: #fefbd8; border: 0.5px solid lightgray ;}"
+            "QTreeView::item:has-children { background-color: #80ced6; border-top: 1px solid black ;}"
+            "QTreeView::item:selected { background-color: #618685; show-decoration-selected: 1;}"
+            "QTreeView {background-color: #d5f4e6; }"
+            "QHeaderView::section {background-color: transparent; border: 1px solid;}"
+        )
+
+        class_model = Classes.TreeModel()
+        self.class_tree.setModel(class_model)
+        self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.class_tree.expandAll()
+        self.class_tree.header().setStretchLastSection(True)
+        self.class_tree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.class_tree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+
+        set_arg_action = QtGui.QAction("Set First Argument Type", self.class_tree)
+        rollback_action = QtGui.QAction("Rollback", self.class_tree)
+        commit_action = QtGui.QAction("Commit", self.class_tree)
+
+        set_arg_action.triggered.connect(lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes()))
+        rollback_action.triggered.connect(lambda: class_model.rollback())
+        commit_action.triggered.connect(lambda: class_model.commit())
+
+        self.menu.addAction(set_arg_action)
+        self.menu.addAction(rollback_action)
+        self.menu.addAction(commit_action)
+
+        vertical_box = QtGui.QVBoxLayout()
+        vertical_box.addWidget(self.class_tree)
+        self.parent.setLayout(vertical_box)
+
+        self.class_tree.activated[QtCore.QModelIndex].connect(class_model.open_function)
+        self.class_tree.customContextMenuRequested[QtCore.QPoint].connect(self.show_menu)
+
+    def OnClose(self, form):
+        pass
+
+    def Show(self, caption=None, options=0):
+        return idaapi.PluginForm.Show(self, caption, options=options)
+
+    def show_menu(self, point):
+        self.menu.exec_(self.class_tree.mapToGlobal(point))

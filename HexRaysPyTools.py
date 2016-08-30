@@ -3,6 +3,7 @@ from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
+import HexRaysPyTools.Core.Helper as Helper
 
 # import Core.QtShim as QtShim
 
@@ -68,16 +69,11 @@ def hexrays_events_callback(*args):
                     udt_data = idaapi.udt_type_data_t()
                     structure_tinfo.get_udt_details(udt_data)
                     member_name = filter(lambda x: x.offset == member_offset * 8, udt_data)[0].name
+                    func_ea = Helper.get_func_address_by_name(member_name)
+                    if func_ea:
+                        idaapi.open_pseudocode(func_ea, 0)
+                        return 1
 
-                    # And finally look through all functions and find the same name. Sigh...
-                    for idx in xrange(idaapi.get_func_qty()):
-                        function = idaapi.getn_func(idx)
-                        name = idaapi.get_short_name(function.startEA)
-                        name = name.split('(')[0]
-                        name = name.replace("`", '').replace("_", '').replace("'", '')
-                        if name == member_name:
-                            idaapi.open_pseudocode(function.startEA, 0)
-                            return 1
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]
 
@@ -146,6 +142,7 @@ class MyPlugin(idaapi.plugin_t):
 
         Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
+        Actions.register(Actions.ShowClasses)
         Actions.register(Actions.GetStructureBySize)
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.RemoveReturn)
@@ -156,6 +153,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.ResetContainingStructure)
         Actions.register(Actions.RecastItem)
 
+        idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
         return idaapi.PLUGIN_KEEP
@@ -174,6 +172,7 @@ class MyPlugin(idaapi.plugin_t):
         idaapi.msg("term() called!\n")
         Actions.unregister(Actions.CreateVtable)
         Actions.unregister(Actions.ShowGraph)
+        Actions.unregister(Actions.ShowClasses)
         Actions.unregister(Actions.GetStructureBySize)
         Actions.unregister(Actions.RemoveArgument)
         Actions.unregister(Actions.RemoveReturn)
