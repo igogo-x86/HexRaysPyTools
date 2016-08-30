@@ -4,6 +4,7 @@ import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
+import HexRaysPyTools.Core.Const as Const
 
 # import Core.QtShim as QtShim
 
@@ -22,7 +23,7 @@ def hexrays_events_callback(*args):
         if Actions.RecastItem.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItem.name, None)
 
-        if hx_view.item.get_lvar() and hx_view.item.get_lvar().type().dstr() in LEGAL_TYPES:
+        if hx_view.item.get_lvar() and filter(lambda x: x.equals_to(hx_view.item.get_lvar().type()), Const.LEGAL_TYPES):
             idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
 
@@ -155,6 +156,8 @@ class MyPlugin(idaapi.plugin_t):
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
+
+        Const.init()
 
         return idaapi.PLUGIN_KEEP
 

@@ -3,9 +3,6 @@ import re
 import idaapi
 
 import idc
-EA64 = idc.__EA64__
-EA_SIZE = 8 if EA64 else 4
-
 
 def parse_lvar_comment(lvar):
     if lvar.type().is_ptr():
@@ -221,8 +218,6 @@ class SearchVisitor(idaapi.ctree_parentee_t):
                         if udt_member:
                             tinfo = udt_member[0].type
                             tinfo.create_ptr(tinfo)
-                            # if tinfo.dstr() == "int *":
-                            #     tinfo = idaapi.dummy_ptrtype(EA_SIZE, 0)
                             self.result[idx] = NegativeLocalInfo(
                                 tinfo,
                                 parent_tinfo,

@@ -1,3 +1,4 @@
+import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.TemporaryStructure import *
 
 
@@ -20,11 +21,6 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
             self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.type()}
         self.origin = origin
         self.candidates = []
-
-        self.PVOID_TINFO = idaapi.tinfo_t()
-        self.PVOID_TINFO.create_ptr(idaapi.tinfo_t(idaapi.BT_VOID))
-        self.CONST_PVOID_TINFO = idaapi.tinfo_t()
-        self.CONST_PVOID_TINFO.create_ptr(idaapi.tinfo_t(idaapi.BT_VOID | idaapi.BTM_CONST))
 
         self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
 
@@ -56,7 +52,7 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         offset = 0
         member_type = None
 
-        if self.variables[index].dstr() in ("int", "__int64", "signed __int64"):
+        if self.variables[index].equals_to(Const.X_WORD_TINFO):
             if parent.op == idaapi.cot_add and parent.y.op == idaapi.cot_num:
                 offset = parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))            # x64
                 son = parent
@@ -122,9 +118,9 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
                 for argument in parent.a:
                     if argument.cexpr == son:
                         member_type = idaapi.tinfo_t(argument.formal_type)
-                        if member_type.equals_to(self.PVOID_TINFO) or member_type.equals_to(self.CONST_PVOID_TINFO):
+                        if member_type.equals_to(Const.PVOID_TINFO) or member_type.equals_to(Const.CONST_PVOID_TINFO):
                             # TODO: if function is memset, than calculate array size
-                            member_type = TemporaryStructureModel.BYTE_TINFO
+                            member_type = Const.BYTE_TINFO
                             print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
                             return VoidMember(
                                 offset,

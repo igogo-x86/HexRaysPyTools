@@ -4,11 +4,9 @@ import idaapi
 import re
 import PySide.QtCore as QtCore
 import PySide.QtGui as QtGui
-from HexRaysPyTools.Forms import MyChoose
+import HexRaysPyTools.Core.Const as Const
 
-EA64 = idc.__EA64__
-EA_SIZE = 8 if EA64 else 4
-LEGAL_TYPES = ("_DWORD *", "int", "__int64", "signed __int64", "void *")
+from HexRaysPyTools.Forms import MyChoose
 
 
 def parse_vtable_name(name):
@@ -102,7 +100,7 @@ class VirtualFunction:
         udt_member.type = self.get_ptr_tinfo()
         udt_member.offset = self.offset
         udt_member.name = self.name
-        udt_member.size = EA_SIZE
+        udt_member.size = Const.EA_SIZE
         return udt_member
 
     def get_information(self):
@@ -130,14 +128,14 @@ class VirtualTable(AbstractMember):
         # TODO: Check if address of virtual function is in code section and then try to make function
         address = self.address
         while True:
-            if EA64:
+            if Const.EA64:
                 func_address = idaapi.get_64bit(address)
             else:
                 func_address = idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
             if idaapi.isCode(flags):
                 self.virtual_functions.append(VirtualFunction(func_address, address - self.address))
-                address += EA_SIZE
+                address += Const.EA_SIZE
             else:
                 break
 
@@ -205,7 +203,7 @@ class VirtualTable(AbstractMember):
             tmp_tinfo.create_ptr(tmp_tinfo)
             udt_member.type = tmp_tinfo
             udt_member.offset = self.offset - offset
-            udt_member.size = EA_SIZE
+            udt_member.size = Const.EA_SIZE
         return udt_member
 
     def type_equals_to(self, tinfo):
@@ -227,17 +225,17 @@ class VirtualTable(AbstractMember):
         # Also if table's addresses point to code in executable section, than tries to make functions at that addresses
         functions_count = 0
         while True:
-            func_address = idaapi.get_64bit(address) if EA64 else idaapi.get_32bit(address)
+            func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
             if idaapi.isCode(flags):
                 functions_count += 1
-                address += EA_SIZE
+                address += Const.EA_SIZE
             else:
                 segment = idaapi.getseg(func_address)
                 if segment and segment.perm & idaapi.SEGPERM_EXEC:
                     if idc.MakeFunction(func_address):
                         functions_count += 1
-                        address += EA_SIZE
+                        address += Const.EA_SIZE
                         continue
                 break
             idaapi.autoWait()
@@ -253,7 +251,7 @@ class VirtualTable(AbstractMember):
 
     @property
     def size(self):
-        return EA_SIZE
+        return Const.EA_SIZE
 
 
 class Member(AbstractMember):
@@ -277,7 +275,7 @@ class Member(AbstractMember):
 
 class VoidMember(Member):
     def __init__(self, offset, scanned_variable, origin=0):
-        Member.__init__(self, offset, TemporaryStructureModel.BYTE_TINFO, scanned_variable, origin)
+        Member.__init__(self, offset, Const.BYTE_TINFO, scanned_variable, origin)
         self.is_array = True
 
     def type_equals_to(self, tinfo):
@@ -327,7 +325,6 @@ class ScannedVariable:
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
-    BYTE_TINFO = None
 
     def __init__(self, *args):
         """
@@ -342,7 +339,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.items = []
         self.collisions = []
         self.structure_name = "CHANGE_MY_NAME"
-        TemporaryStructureModel.BYTE_TINFO = idaapi.tinfo_t(idaapi.BTF_BYTE)
 
     # OVERLOADED METHODS #
 
@@ -556,8 +552,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 udt_member = udt_data[idx]
                 if udt_member.offset == offset * 8:
                     if udt_member.type.is_ptr():
-                        result.append(idaapi.get_unk_type(EA_SIZE))
-                        result.append(idaapi.dummy_ptrtype(EA_SIZE, False))
+                        # result.append(idaapi.get_unk_type(Const.EA_SIZE))     ???
+                        result.append(udt_member.type)
+                        result.append(idaapi.dummy_ptrtype(Const.EA_SIZE, False))
                     elif not udt_member.type.is_udt():
                         result.append(udt_member.type)
                 if udt_member.type.is_array():
@@ -566,6 +563,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 elif udt_member.type.is_udt():
                     result.extend(self.get_fields_at_offset(udt_member.type, offset - udt_member.offset / 8))
                 idx += 1
+        print map(lambda x: x.dstr(), result)
         return result
 
     @staticmethod
@@ -573,14 +571,14 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         udt_member = idaapi.udt_member_t()
         if size == 1:
             udt_member.name = "gap_{0:X}".format(offset)
-            udt_member.type = TemporaryStructureModel.BYTE_TINFO
-            udt_member.size = TemporaryStructureModel.BYTE_TINFO.get_size()
+            udt_member.type = Const.BYTE_TINFO
+            udt_member.size = Const.BYTE_TINFO.get_size()
             udt_member.offset = offset
             return udt_member
 
         array_data = idaapi.array_type_data_t()
         array_data.base = 0
-        array_data.elem_type = TemporaryStructureModel.BYTE_TINFO
+        array_data.elem_type = Const.BYTE_TINFO
         array_data.nelems = size
         tmp_tinfo = idaapi.tinfo_t()
         tmp_tinfo.create_array(array_data)

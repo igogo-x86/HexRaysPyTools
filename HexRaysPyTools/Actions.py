@@ -5,8 +5,9 @@ import re
 import idaapi
 
 import HexRaysPyTools.Forms as Forms
+import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
-from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, EA64, LEGAL_TYPES, TemporaryStructureModel
+from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import CtreeVisitor
 
 
@@ -42,7 +43,7 @@ class TypeLibrary:
 
     @staticmethod
     def enable_library_ordinals(library_num):
-        idaname = "ida64" if EA64 else "ida"
+        idaname = "ida64" if Const.EA64 else "ida"
         if sys.platform == "win32":
             dll = ctypes.windll[idaname + ".wll"]
         elif sys.platform == "linux2":
@@ -261,7 +262,8 @@ class ScanVariable(idaapi.action_handler_t):
         vu = idaapi.get_tform_vdui(ctx.form)
         variable = vu.item.get_lvar()  # lvar_t
         print "Local variable type: %s" % variable.tif.dstr()
-        if variable and variable.tif.dstr() in LEGAL_TYPES:
+        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+            print "YEEEEPP"
             scanner = CtreeVisitor(vu.cfunc, variable, self.temporary_structure.main_offset)
             scanner.apply_to(vu.cfunc.body, None)
             for field in scanner.candidates:
@@ -286,7 +288,7 @@ class RecognizeShape(idaapi.action_handler_t):
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and variable.tif.dstr() in LEGAL_TYPES:
+        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
             scanner = CtreeVisitor(hx_view.cfunc, variable)
             scanner.apply_to(hx_view.cfunc.body, None)
             structure = TemporaryStructureModel()
