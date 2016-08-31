@@ -214,6 +214,7 @@ class Class:
 
 
 class TreeModel(QtCore.QAbstractItemModel):
+    # TODO: Add higlighting if eip in function, consider setting breakpoints
 
     def __init__(self):
         super(TreeModel, self).__init__()

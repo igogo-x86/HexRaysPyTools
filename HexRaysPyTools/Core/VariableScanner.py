@@ -15,128 +15,128 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
         super(CtreeVisitor, self).__init__()
         self.function = function
         # Dictionary {variable name => tinfo_t} of variables that are being scanned
-        if index:
+        if index is not None:
             self.variables = {index: function.get_lvars()[index].type()}
         else:
             self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.type()}
         self.origin = origin
         self.candidates = []
 
-        self.convert_citem = lambda x: (x.is_expr() and x.cexpr) or x.cinsn
+    def create_member(self, offset, index, tinfo=None, ea=0):
+        # Creates appropriate member (VTable, regular member, void *member) depending on input
+        if ea:
+            if VirtualTable.check_address(ea):
+                return VirtualTable(
+                    offset,
+                    ea,
+                    ScannedVariable(self.function, self.function.get_lvars()[index]),
+                    self.origin
+                )
+        if tinfo:
+            return Member(
+                offset,
+                tinfo,
+                ScannedVariable(self.function, self.function.get_lvars()[index]),
+                self.origin
+            )
+        else:
+            return VoidMember(
+                offset,
+                ScannedVariable(self.function, self.function.get_lvars()[index]),
+                self.origin
+            )
+
+    def add_variable(self, index):
+        self.variables[index] = self.function.get_lvars()[index].type()
 
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
-            if index in self.variables.keys():
-                if len(self.parents) > 2:               # ????
-                    result = self.check_member_assignment(expression, index)
-                    if result:
-                        self.candidates.append(result)
+            if index in self.variables:
+                # if len(self.parents) > 2:               # ????
+                result = self.new_check_member_assignment(expression, index)
+                if result:
+                    self.candidates.append(result)
         return 0
 
-    def check_member_assignment(self, expression, index):
+    def new_check_member_assignment(self, expression, index):
         """
         We are now in cexpr_t == idaapi.cot_var. This function checks if expression is part of member assignment
         statement. Returns None if not.
 
         :param expression: idaapi.cexpr_t
         :param index: int
-        :return: Structures.Field
+        :return: Structures.AbstractField
         """
-        parents_queue = reversed(self.parents)
-        parent_generator = lambda: parents_queue.next().cexpr
-        son = expression
-        parent = parent_generator()
+        parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
+        parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
 
-        cast_type = None
-        offset = 0
-        member_type = None
+        # Assignment like (v1 = v2) where v2 is scanned variable
+        if parents_type[0:2] == ['asg', 'expr']:
+            if parents[0].y == expression:
+                if parents[0].x.op == idaapi.cot_var:
+                    self.add_variable(parents[0].x.v.idx)
+                    return
 
+        # Assignment like v1 = (TYPE) v2 where TYPE is one the supported types
+        elif parents_type[0:3] == ['cast', 'asg', 'expr']:
+            if parents[1].x.op == idaapi.cot_var:
+                if filter(lambda x: x.equals_to(parents[0].type), Const.LEGAL_TYPES):
+                    self.add_variable(parents[1].x.v.idx)
+                    return
+
+        # --------------------------------------------------------------------------------------------
+        # When variable is DWORD, int, __int64 etc
+        # --------------------------------------------------------------------------------------------
         if self.variables[index].equals_to(Const.X_WORD_TINFO):
-            if parent.op == idaapi.cot_add and parent.y.op == idaapi.cot_num:
-                offset = parent.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))            # x64
-                son = parent
-                parent = parent_generator()
+            if parents_type[0] == 'add':
+                if parents[0].y.op != idaapi.cot_num:
+                    return
+                offset = parents.pop(0).y.n._value
+                parents_type.pop(0)
+            else:
+                offset = 0
 
-            if parent.op == idaapi.cot_cast:
-                cast_type = parent.type
-                cast_type.remove_ptr_or_array()
-                son = parent
-                parent = parent_generator()
-            elif not parent.op == idaapi.cot_call:
-                return None
+            # *(TYPE *) (var + x) = object
+            if parents_type[0:4] == ['cast', 'ptr', 'asg', 'expr'] and parents[2].x == parents[1]:
+                right_child = parents[2].y
+                if right_child.op == idaapi.cot_ref:
+                    right_child = right_child.x
+                if right_child.op == idaapi.cot_obj:
+                    member_type = idaapi.tinfo_t(right_child.type)
+                    member_type.create_ptr(member_type)
+                    return self.create_member(offset, index, member_type, right_child.obj_ea)
+                else:
+                    return self.create_member(offset, index, right_child.type)
 
-            if parent.op == idaapi.cot_ptr:
-                left_son = parent
-                son = parent
-                parent = parent_generator()
+            elif parents_type[0:2] == ['cast', 'call']:
+                if parents[0].type.equals_to(Const.PVOID_TINFO) or parents[0].type.equals_to(Const.CONST_PVOID_TINFO):
 
-                if parent.op == idaapi.cot_asg:
-                    if left_son == parent.x:
-                        right_son = parent.y
-                        if right_son.op == idaapi.cot_ref:
-                            right_son = right_son.x
-                        if right_son.op == idaapi.cot_var:
-                            member_type = self.function.get_lvars()[right_son.v.idx].tif
-                            print "(Variable) offset: {0:#010X} index: {1}".format(offset, right_son.v.idx)
-                        elif right_son.op == idaapi.cot_num:
-                            print "(Number) offset: {0:#010X}, value: {1}".format(offset, right_son.n._value)
-                            member_type = cast_type
-                        elif right_son.op == idaapi.cot_fnum:
-                            print "(Float Number) offset: {0:#010X}, value: {1}".format(offset, right_son.fpc._print())
-                            member_type = cast_type
-                        elif right_son.op == idaapi.cot_obj:
-                            member_type = right_son.type
-                            if VirtualTable.check_address(right_son.obj_ea):
-                                return VirtualTable(
-                                    offset,
-                                    right_son.obj_ea,
-                                    ScannedVariable(self.function, self.function.get_lvars()[index]),
-                                    self.origin
-                                )
-                            print "(Object) offset: {0:#010X} name: {1}, size: {2}, address: {3:#010X}".format(
-                                offset,
-                                member_type.dstr(),
-                                member_type.get_size(),
-                                right_son.obj_ea
-                            )
-                            member_type.create_ptr(member_type)
-                        elif right_son.op == idaapi.cot_call:
-                            member_type = right_son.x.type.get_rettype()
-                            print "(Call function) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                        else:
-                            member_type = cast_type
-                            print "(Call function) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                        return Member(
-                            offset,
-                            member_type,
-                            ScannedVariable(self.function, self.function.get_lvars()[index]),
-                            self.origin
-                        )
+                    # TODO: Recursion
 
-            if parent.op == idaapi.cot_call:
-                for argument in parent.a:
-                    if argument.cexpr == son:
-                        member_type = idaapi.tinfo_t(argument.formal_type)
-                        if member_type.equals_to(Const.PVOID_TINFO) or member_type.equals_to(Const.CONST_PVOID_TINFO):
-                            # TODO: if function is memset, than calculate array size
-                            member_type = Const.BYTE_TINFO
-                            print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                            return VoidMember(
-                                offset,
-                                ScannedVariable(self.function, self.function.get_lvars()[index]),
-                                self.origin
-                            )
-                        else:
-                            if member_type.is_ptr():
-                                member_type = member_type.get_pointed_object()
-                            print "(Argument) offset: {0:#010X}, type: {1}".format(offset, member_type.dstr())
-                            return Member(
-                                offset,
-                                member_type,
-                                ScannedVariable(self.function, self.function.get_lvars()[index]),
-                                self.origin
-                            )
-        return None
+                    return self.create_member(offset, index)
+                else:
+                    return self.create_member(offset, index, parents[0].type)
 
+            elif parents_type[0] == 'call':
 
+                arg_index = None
+                for arg_index in xrange(len(parents[0].a)):
+                    if expression.is_child_of(parents[0].a[arg_index]):
+                        break
+
+                new_function = idaapi.decompile(parents[0].x.obj_ea)
+                if new_function:
+                    scanner = CtreeVisitor(new_function, None, self.origin + offset, arg_index)
+                    scanner.apply_to(new_function.body, None)
+                    self.candidates.extend(scanner.candidates)
+                    return None
+
+            elif parents_type[0] == 'cast':
+                return self.create_member(offset, index, parents[0].type)
+
+    # --------------------------------------------------------------------------------------------
+    # When variable is DWORD *, QWORD * etc
+    # --------------------------------------------------------------------------------------------
+        elif self.variables[index].equals_to(Const.PX_WORD_TINFO):
+            print "[DEBUG] Parents:", parents_type, "Offset:", None

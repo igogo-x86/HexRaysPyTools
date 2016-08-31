@@ -311,14 +311,18 @@ class ScannedVariable:
                 idaapi.get_short_name(self.function.entry_ea)
             )
             # Finding lvar of new window that have the same name that saved one and applying tinfo_t
-            lvar = filter(lambda x: x.name == self.lvar.name, hx_view.cfunc.get_lvars())[0]
-            hx_view.set_lvar_type(lvar, tinfo)
+            lvar = filter(lambda x: x == self.lvar, hx_view.cfunc.get_lvars())
+            if lvar:
+                print "+++++++++++"
+                hx_view.set_lvar_type(lvar[0], tinfo)
+            else:
+                print "-----------"
             # idaapi.close_pseudocode(hx_view.form)
         else:
             print "[Warning] Failed to apply type"
 
     def __eq__(self, other):
-        return self.function.entry_ea == other.function.entry_ea and self.lvar.name == other.lvar.name
+        return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
 
     def __hash__(self):
         return hash((self.function.entry_ea, self.lvar.name))
@@ -383,7 +387,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
         if role == QtCore.Qt.EditRole:
-            self.items[row].name = value
+            self.items[row].name = str(value)
             self.dataChanged.emit(index, index)
             return True
         return False
