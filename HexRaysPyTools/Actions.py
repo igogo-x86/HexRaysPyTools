@@ -261,9 +261,7 @@ class ScanVariable(idaapi.action_handler_t):
     def activate(self, ctx):
         vu = idaapi.get_tform_vdui(ctx.form)
         variable = vu.item.get_lvar()  # lvar_t
-        print "Local variable type: %s" % variable.tif.dstr()
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            print "YEEEEPP"
             scanner = CtreeVisitor(vu.cfunc, variable, self.temporary_structure.main_offset)
             scanner.apply_to(vu.cfunc.body, None)
             for field in scanner.candidates:

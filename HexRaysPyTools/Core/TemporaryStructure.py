@@ -227,12 +227,14 @@ class VirtualTable(AbstractMember):
         while True:
             func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
+            # print "[INFO] Address 0x{0:08X}".format(func_address)
             if idaapi.isCode(flags):
                 functions_count += 1
                 address += Const.EA_SIZE
             else:
                 segment = idaapi.getseg(func_address)
                 if segment and segment.perm & idaapi.SEGPERM_EXEC:
+                    idc.MakeUnknown(func_address, 1, idaapi.DOUNK_SIMPLE)
                     if idc.MakeFunction(func_address):
                         functions_count += 1
                         address += Const.EA_SIZE
@@ -280,6 +282,9 @@ class VoidMember(Member):
 
     def type_equals_to(self, tinfo):
         return True
+
+    def switch_array_flag(self):
+        pass
 
     @property
     def font(self):
@@ -556,7 +561,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 udt_member = udt_data[idx]
                 if udt_member.offset == offset * 8:
                     if udt_member.type.is_ptr():
-                        # result.append(idaapi.get_unk_type(Const.EA_SIZE))     ???
+                        result.append(idaapi.get_unk_type(Const.EA_SIZE))
                         result.append(udt_member.type)
                         result.append(idaapi.dummy_ptrtype(Const.EA_SIZE, False))
                     elif not udt_member.type.is_udt():
@@ -567,7 +572,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 elif udt_member.type.is_udt():
                     result.extend(self.get_fields_at_offset(udt_member.type, offset - udt_member.offset / 8))
                 idx += 1
-        print map(lambda x: x.dstr(), result)
         return result
 
     @staticmethod

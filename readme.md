@@ -1,4 +1,4 @@
-## About
+# About
 
 Plugin assist in creation classes/structures and detection virtual tables. Best to use with [Class Informer][0] plugin, because it helps to automatically get original classes names
 
@@ -107,30 +107,26 @@ Abbreviations:
 * x - offset
 * TYPE - char, _BYTE, int, _DWORD, float, double, etc
 
-##### x32
 | Variable type | Situation | Type | Offset |
 | --- | --- | --- | --- |
-| `int` | `*(_DWORD *) v = var` | `typeof(var)` | 0 |
-| | `*(_DWORD *) v = obj` | `typeof(obj)` | 0 |
-| | `*(_DWORD *) v = &obj` | `typeof(obj)` | 0 |
-| | `*(_DWORD *) (v + x) = sub(...)` | `return type` | x |
-| | `*(TYPE *)(v + x) = num` | `TYPE` | x |
-| | `*(_DWORD *)(v + x) = var` | `typeof(var)` | x |
-| | `*(_DWORD *)(v + x) = obj` | `typeof(obj)` | x |
-| | `sub(..., v + x, ...)` | `DWORD` or `int` | x |
-| | `sub(..., *(TYPE *) (v + x), ...)` | `TYPE` (passed by value)| x |
-| | `sub(..., (TYPE *) (v + x), ...)` | `TYPE` (passed by reference) | x |
-
-
-#### x64
-| Variable type | Situation | Type | Offset |
-| --- | --- | --- | --- |
-| `__int64`, `signed __int64` | `*(_QWORD *) v = var` | `typeof(var)` | 0 |
-| | `*(_QWORD *) v = obj` | `typeof(obj)` | 0 |
-| | `*(_QWORD *) v = &obj` | `typeof(obj)` | 0 |
-| | `*(TYPE *)(v + x) = num` | `TYPE` | x |
-| | `*(_QWORD *)(v + x) = var` | `typeof(var)` | x |
-| | `*(_QWORD *)(v + x) = obj` | `typeof(obj)` | x |
+| `XWORD` | `*(XWORD *) (var + x) = obj`| `typeof(obj) *` | `x` |
+| `XWORD` | `*(XWORD *) (var + x) = &obj`| `typeof(obj) *` | `x` |
+| `XWORD` | `*(TYPE *) (var + x)`| `TYPE` | `x` |
+| `XWORD` | `function(... , (LEGAL_TYPE) (var + x), ...)` | _BYTE[]_ and recursion started for this function and argument index | `x` |
+| `XWORD` | `function(... , (TYPE) (var + x), ...)`| argument's type | `x` |
+| `XWORD` | `function(... , var + x, ...)`| argument's type | `x` |
+| `XWORD *`, `PVOID` | `*var = obj` | `typeof(obj) *` | `0` |
+| `XWORD *`, `PVOID` | `*var = &obj` | `typeof(obj) *` | `0` |
+| `XWORD *`, `PVOID`| `*var = ???` | `XWORD` | `0` |
+| `XWORD *` | `var[idx] = obj` |` typeof(obj) * ` | `idx * sizeof(XWORD)` |
+| `XWORD *` | `var[idx] = &obj` |` typeof(obj) * ` | `idx * sizeof(XWORD)` |
+| `XWORD *` | `var[idx] = ???` |` XWORD ` | `idx * sizeof(XWORD)` |
+| `XWORD *`, `PVOID` | `*((TYPE *) var + x)`| `TYPE` | `x * sizeof(TYPE)` |
+| `XWORD *`, `PVOID` | `function(... , (LEGAL_TYPE) (var + x), ...)` | _BYTE[]_ and recursion started for this function and argument index | `x * sizeof(XWORD)` |
+| `XWORD *`, `PVOID` | `function(... , (TYPE) (var + x), ...)`| argument's type | `x * sizeof(XWORD)` |
+| `PVOID` | `function(... , (TYPE *)var + x, ...)`| argument's type | `x * sizeof(TYPE)` |
+| `PVOID` | `function(... , (TYPE)var + x, ...)`| argument's type | `x` |
+| `PVOID` | `(TYPE *) ((char *)var + x)`| TYPE | `x` |
 
 ### 6) Function signature manipulation
 
@@ -140,11 +136,11 @@ Abbreviations:
 
 [0]: https://sourceforge.net/projects/classinformer/
 [1]: https://msdn.microsoft.com/en-us/library/windows/hardware/ff542043%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
-[structure_graph]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/structure_builder.JPG
-[bad_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/bad.JPG
-[good_structures]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/good.JPG
-[builder]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/builder.JPG
-[virtual_functions]: https://rg-git/traineeship/HexRaysPyTools/raw/master/Img/virtual_functions.JPG
+[structure_graph]: Img/structure_builder.JPG
+[bad_structures]: Img/bad.JPG
+[good_structures]: Img/good.JPG
+[builder]: Img/builder.JPG
+[virtual_functions]: Img/virtual_functions.JPG
 
 ### 7) Recast Item (Shift+R)
 
