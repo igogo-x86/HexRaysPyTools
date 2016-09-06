@@ -8,7 +8,7 @@ import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import CtreeVisitor
+from HexRaysPyTools.Core.VariableScanner import CtreeVisitor, FunctionTouchVisitor
 
 
 def register(action, *args):
@@ -259,19 +259,21 @@ class ScanVariable(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):
-        vu = idaapi.get_tform_vdui(ctx.form)
-        variable = vu.item.get_lvar()  # lvar_t
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            scanner = CtreeVisitor(vu.cfunc, variable, self.temporary_structure.main_offset)
-            scanner.apply_to(vu.cfunc.body, None)
+            index = list(hx_view.cfunc.get_lvars()).index(variable)
+            if FunctionTouchVisitor.touch(hx_view.cfunc.entry_ea):
+                hx_view.refresh_view(True)
+            scanner = CtreeVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
+            scanner.apply_to(hx_view.cfunc.body, None)
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class RecognizeShape(idaapi.action_handler_t):
@@ -287,7 +289,10 @@ class RecognizeShape(idaapi.action_handler_t):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            scanner = CtreeVisitor(hx_view.cfunc, variable)
+            index = list(hx_view.cfunc.get_lvars()).index(variable)
+            if FunctionTouchVisitor.touch(hx_view.cfunc.entry_ea):
+                hx_view.refresh_view(True)
+            scanner = CtreeVisitor(hx_view.cfunc, 0, index)
             scanner.apply_to(hx_view.cfunc.body, None)
             structure = TemporaryStructureModel()
             for field in scanner.candidates:
@@ -301,8 +306,7 @@ class RecognizeShape(idaapi.action_handler_t):
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class ShowGraph(idaapi.action_handler_t):

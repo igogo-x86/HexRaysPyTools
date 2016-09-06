@@ -3,6 +3,7 @@ from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
+import HexRaysPyTools.Core.VariableScanner as VariableScanner
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
 
@@ -157,6 +158,7 @@ class MyPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
+        VariableScanner.touched_functions.clear()
         Const.init()
 
         return idaapi.PLUGIN_KEEP

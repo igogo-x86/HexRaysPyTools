@@ -2,24 +2,49 @@ import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
 from HexRaysPyTools.Core.TemporaryStructure import *
 
+touched_functions = set()
+
+
+class FunctionTouchVisitor(idaapi.ctree_parentee_t):
+    def __init__(self):
+        super(FunctionTouchVisitor, self).__init__()
+
+    def visit_expr(self, expression):
+        if expression.op == idaapi.cot_call:
+            self.touch(expression.x.obj_ea)
+        return 0
+
+    @staticmethod
+    def touch(ea):
+        if ea not in touched_functions:
+            touched_functions.add(ea)
+            try:
+                cfunc = idaapi.decompile(ea)
+                if cfunc:
+                    touch_visitor = FunctionTouchVisitor()
+                    touch_visitor.apply_to(cfunc.body, None)
+                    idaapi.decompile(ea)
+                    return True
+            except idaapi.DecompilationFailure:
+                print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=ea)
+        return False
+
 
 class CtreeVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, function, variable, origin=0, index=None):
+    def __init__(self, function, origin, index):
         """
         This Class is idaapi.ctree_visitor_t and used for for finding candidates on class members.
         Usage: CtreeVisitor.apply_to() and then CtreeVisitor.candidates
 
         :param function: idaapi.cfunc_t
-        :param variable: idaapi.lvar_t
         :param origin: offset in main structure from which scanning is propagating
+        :param index: variable index
         """
         super(CtreeVisitor, self).__init__()
         self.function = function
         # Dictionary {variable name => tinfo_t} of variables that are being scanned
-        if index is not None:
-            self.variables = {index: function.get_lvars()[index].type()}
-        else:
-            self.variables = {map(lambda x: x.name, function.get_lvars()).index(variable.name): variable.type()}
+
+        self.variables = {index: function.get_lvars()[index].type()}
         self.origin = origin
         self.candidates = []
 
@@ -86,14 +111,14 @@ class CtreeVisitor(idaapi.ctree_parentee_t):
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
 
-        print "[Info] Scanning also function {name} at 0x{ea:08X}".format(
+        print "[Info] Scanning function {name} at 0x{ea:08X}".format(
             name=idaapi.get_short_name(ea),
             ea=ea
         )
         try:
             new_function = idaapi.decompile(ea)
             if new_function:
-                scanner = CtreeVisitor(new_function, None, self.origin + offset, arg_index)
+                scanner = CtreeVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
         except idaapi.DecompilationFailure:
