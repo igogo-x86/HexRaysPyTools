@@ -6,9 +6,14 @@ import idaapi
 
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
+import HexRaysPyTools.Core.Helper as Helper
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import CtreeVisitor, FunctionTouchVisitor
+
+RECAST_VARIABLE = 0
+RECAST_FUNCTION = 1
+RECAST_RETURN = 2
 
 
 def register(action, *args):
@@ -454,11 +459,11 @@ class ResetContainingStructure(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-class RecastItem(idaapi.action_handler_t):
+class RecastItemLeft(idaapi.action_handler_t):
 
-    name = "my:RecastItem"
+    name = "my:RecastItemLeft"
     description = "Recast Item"
-    hotkey = "Shift+R"
+    hotkey = "Shift+L"
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -466,23 +471,90 @@ class RecastItem(idaapi.action_handler_t):
     @staticmethod
     def check(cfunc, ctree_item):
         if ctree_item.citype == idaapi.VDI_EXPR:
-            expression = ctree_item.e
+            expression = ctree_item.e if ctree_item.it.is_expr() else ctree_item.i
+
+            if expression.op == idaapi.cot_cast:
+                parent = cfunc.body.find_parent_of(expression).cexpr
+                if parent.op == idaapi.cot_call:
+                    arg_index, _ = Helper.get_func_argument_info(parent, expression)
+                    idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
+                    return RECAST_FUNCTION, arg_index, parent.x.type.get_pointed_object(), expression.x.type, parent.x.obj_ea
+                elif parent.op == idaapi.cit_return:
+                    idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
+                    return RECAST_RETURN, expression.x.type
+            elif expression.op == idaapi.cit_return:
+                child = expression.creturn.expr
+                if child.op == idaapi.cot_cast:
+                    idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
+                    return RECAST_RETURN, child.x.type
+
             while expression and (expression.op != idaapi.cot_asg):
                 expression = cfunc.body.find_parent_of(expression)
             if expression and expression.cexpr.x.op == idaapi.cot_var and expression.cexpr.y.op == idaapi.cot_cast:
-                return cfunc.get_lvars()[expression.cexpr.x.v.idx], expression.cexpr.y.x.type
-        return None
+                variable = cfunc.get_lvars()[expression.cexpr.x.v.idx]
+                idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
+                return RECAST_VARIABLE, expression.cexpr.y.x.type, variable
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         result = self.check(hx_view.cfunc, hx_view.item)
+
         if result:
-            lvar, tinfo = result
-            if hx_view.set_lvar_type(lvar, tinfo):
-                hx_view.refresh_view(True)
+            if result[0] == RECAST_VARIABLE:
+                tinfo, lvar = result[1:]
+                if hx_view.set_lvar_type(lvar, tinfo):
+                    hx_view.refresh_view(True)
+
+            elif result[0] == RECAST_FUNCTION:
+                arg_index, func_tinfo, arg_tinfo, address = result[1:]
+
+                print func_tinfo.dstr()
+                func_data = idaapi.func_type_data_t()
+                func_tinfo.get_func_details(func_data)
+                func_data[arg_index].type = arg_tinfo
+                new_func_tinfo = idaapi.tinfo_t()
+                new_func_tinfo.create_func(func_data)
+                if idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE):
+                    hx_view.refresh_view(True)
+            elif result[0] == RECAST_RETURN:
+                return_type = result[1]
+
+                function_tinfo = idaapi.tinfo_t()
+                hx_view.cfunc.get_func_type(function_tinfo)
+                func_data = idaapi.func_type_data_t()
+                function_tinfo.get_func_details(func_data)
+                func_data.rettype = return_type
+                function_tinfo.create_func(func_data)
+                if idaapi.apply_tinfo2(hx_view.cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
+                    hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class RecastItemRight(RecastItemLeft):
+
+    name = "my:RecastItemRight"
+    description = "Recast Item"
+    hotkey = "Shift+R"
+
+    def __init__(self):
+        RecastItemLeft.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_EXPR:
+            expression = ctree_item.e.cexpr
+            if expression.op == idaapi.cot_var:
+                parent = cfunc.body.find_parent_of(expression).cexpr
+                if parent.op == idaapi.cot_cast:
+                    variable = cfunc.get_lvars()[expression.v.idx]
+                    idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
+                    return RECAST_VARIABLE, parent.type, variable
+            elif expression.op == idaapi.cot_cast:
+                if expression.x.op == idaapi.cot_var:
+                    variable = cfunc.get_lvars()[expression.x.v.idx]
+                    idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
+                    return RECAST_VARIABLE, expression.type, variable

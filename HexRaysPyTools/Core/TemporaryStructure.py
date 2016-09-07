@@ -241,7 +241,7 @@ class VirtualTable(AbstractMember):
                         continue
                 break
             idaapi.autoWait()
-        return functions_count >= 2
+        return functions_count
 
     @property
     def type_name(self):
@@ -400,6 +400,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def headerData(self, section, orientation, role):
         if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
             return self.headers[section]
+
+    def flags(self, index):
+        if index.column() == 2:
+            return super(TemporaryStructureModel, self).flags(index) | QtGui.QAbstractItemView.DoubleClicked
+        return super(TemporaryStructureModel, self).flags(index)
 
     # HELPER METHODS #
 

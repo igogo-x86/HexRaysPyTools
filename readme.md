@@ -99,13 +99,16 @@ __Recognize Shape__ - looks for appropriate structure for selected fields.
 
 ### Currently recognized access to fields
 
-LEGAL_TYPES = { int, __int64, signed __int64 } - currently scannable variables
+LEGAL_TYPES = { DWORD, QWORD, DWORD *, QWORD *, void * } - if variable's type is one of this types or derivated from them, then it can be scanned by Right-Click-> Scan Variable.
 
 Abbreviations:
 * var - variable
 * obj - any object, including Virtual Table, that will be handled specially
 * x - offset
-* TYPE - char, _BYTE, int, _DWORD, float, double, etc
+* TYPE - simple (char, byte, float, ...) or complicated type not from LEGAL_TYPES
+* XWORD - DWORD or QWORD
+* PXWORD - DWORD * or QWORD *
+* PVOID - void *, PVOID
 
 | Variable type | Situation | Type | Offset |
 | --- | --- | --- | --- |
@@ -142,6 +145,13 @@ Abbreviations:
 [builder]: Img/builder.JPG
 [virtual_functions]: Img/virtual_functions.JPG
 
-### 7) Recast Item (Shift+R)
+### 7) Recasting (Shift+R, Shift+L)
 
-If you have instruction like this: `v1 = (TYPE) expr;` than Right click -> "Recast Item" menu changes type of v1 to final type of expr. expr can be either variable or expression of any complexity.
+Expressions from the table, can be quickly modified. Select cast item or variable and press hotkey or select from Right-Click Menu Recast Variable, Return or Argument.
+
+| Original | Shift+L | Shift+R
+| --- | --- | --- |
+| var = (TYPE) expr | var type -> TYPE  |  |
+| exp = (TYPE) var |  | var type -> TYPE |
+| function(..., (TYPE) var, ...) | functions' argument -> TYPE | var type -> TYPE |
+| return (TYPE) var | functions' return type -> TYPE | var type -> TYPE |

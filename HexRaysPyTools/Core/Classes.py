@@ -122,7 +122,7 @@ class Class:
         tinfo.get_numbered_type(idaapi.cvar.idati, ordinal)
         if tinfo.is_struct():
             name = tinfo.dstr()
-            full_name = name
+            full_name = [name]
             udt_data = idaapi.udt_type_data_t()
             tmp_tinfo = tinfo
             while tmp_tinfo.is_struct() and tmp_tinfo.get_udt_nmembers():
@@ -139,13 +139,13 @@ class Class:
                                 return None
                         vtable_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tmp_tinfo.dstr())
                         if vtable_ordinal:
-                            result_class = Class(name, full_name, ordinal, vtable_ordinal, tmp_tinfo)
+                            result_class = Class(name, "::".join(full_name), ordinal, vtable_ordinal, tmp_tinfo)
                             result_class.functions = [
                                 VirtualMethod(udt_member.type.get_pointed_object(), udt_member.name, result_class)
                                 for udt_member in virtual_functions
                             ]
                             return result_class
-                full_name += '::' + tmp_tinfo.dstr()
+                full_name.append(tmp_tinfo.dstr())
                 tmp_tinfo.get_udt_details(udt_data)
         return None
 

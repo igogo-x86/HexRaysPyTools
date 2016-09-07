@@ -125,14 +125,14 @@ class StructureGraph:
                 self.local_types[ordinal] = LocalType(name, members_ordinals, cdecl_typedef, is_union=local_tinfo.is_union())
             elif local_tinfo.is_ptr():
                 typeref_ordinal = StructureGraph.get_ordinal(local_tinfo)
-                if typeref_ordinal:
-                    cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
-                    self.local_types[ordinal] = LocalType(
-                        name,
-                        [typeref_ordinal],
-                        cdecl_typedef + ' *',
-                        is_typedef=True
-                    )
+                members_ordinals = [typeref_ordinal] if typeref_ordinal else []
+                cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x2, local_tinfo, None, None)
+                self.local_types[ordinal] = LocalType(
+                    name,
+                    members_ordinals,
+                    cdecl_typedef + ' *',
+                    is_typedef=True
+                )
             elif local_tinfo.is_enum():
                 cdecl_typedef = idaapi.print_tinfo(None, 4, 5, 0x21, local_tinfo, None, None)
                 self.local_types[ordinal] = LocalType(name, [], cdecl_typedef, is_enum=True)

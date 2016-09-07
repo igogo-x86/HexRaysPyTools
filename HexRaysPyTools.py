@@ -21,8 +21,11 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if Actions.RecastItem.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItem.name, None)
+        if Actions.RecastItemRight.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
+
+        if Actions.RecastItemLeft.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
 
         if hx_view.item.get_lvar() and filter(lambda x: x.equals_to(hx_view.item.get_lvar().type()), Const.LEGAL_TYPES):
             idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
@@ -153,7 +156,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
-        Actions.register(Actions.RecastItem)
+        Actions.register(Actions.RecastItemRight)
+        Actions.register(Actions.RecastItemLeft)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -186,7 +190,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RecognizeShape)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)
-        Actions.unregister(Actions.RecastItem)
+        Actions.unregister(Actions.RecastItemRight)
+        Actions.unregister(Actions.RecastItemLeft)
         idaapi.term_hexrays_plugin()
 
 
