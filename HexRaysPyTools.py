@@ -66,18 +66,22 @@ def hexrays_events_callback(*args):
         if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
             # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
             # After that remove pointer and get member name with the same offset
-            structure_tinfo = item.e.x.type
-            member_offset = item.e.m
-            if structure_tinfo.is_ptr():
-                structure_tinfo.remove_ptr_or_array()
-                if structure_tinfo.is_udt():
-                    udt_data = idaapi.udt_type_data_t()
-                    structure_tinfo.get_udt_details(udt_data)
-                    member_name = filter(lambda x: x.offset == member_offset * 8, udt_data)[0].name
-                    func_ea = Helper.get_func_address_by_name(member_name)
-                    if func_ea:
-                        idaapi.open_pseudocode(func_ea, 0)
-                        return 1
+
+            if item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
+
+                vtable_tinfo = item.e.x.type.get_pointed_object()
+                method_offset = item.e.m
+                class_tinfo = item.e.x.x.x.type.get_pointed_object()
+                vtable_offset = item.e.x.x.m
+
+                udt_member = idaapi.udt_member_t()
+                udt_member.offset = method_offset * 8
+                vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+
+                func_ea = Helper.get_virtual_func_address(class_tinfo, vtable_offset, udt_member.name)
+                if func_ea:
+                    idaapi.open_pseudocode(func_ea, 0)
+                    return 1
 
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]
@@ -196,4 +200,5 @@ class MyPlugin(idaapi.plugin_t):
 
 
 def PLUGIN_ENTRY():
+    idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_demangled_names)
     return MyPlugin()

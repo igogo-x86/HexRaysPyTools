@@ -1,4 +1,3 @@
-import sys
 import idaapi
 import HexRaysPyTools.Core.Helper as Helper
 
@@ -12,9 +11,7 @@ class VirtualMethod:
         self.name = name
         self.name_modified = False
         self.parent = parent
-        self.base_address = Helper.get_func_address_by_name(name)
-        if not self.base_address:
-            self.base_address = Helper.get_func_address_by_name(parent.name + '::' + name)
+        self.base_address = Helper.get_virtual_func_address(self.parent.tinfo, 0, name)
         if self.base_address:
             self.base_address -= idaapi.get_imagebase()
         self.rowcount = 0
@@ -24,9 +21,8 @@ class VirtualMethod:
         self.tinfo = new_function.tinfo
         self.name_modified = False
         self.tinfo_modified = False
-        self.base_address = Helper.get_func_address_by_name(self.name)
-        if not self.base_address:
-            self.base_address = Helper.get_func_address_by_name(self.parent.name + '::' + self.name)
+
+        self.base_address = Helper.get_virtual_func_address(self.parent.tinfo, 0, self.name)
         if self.base_address:
             self.base_address -= idaapi.get_imagebase()
 
@@ -92,7 +88,10 @@ class VirtualMethod:
 
     def open_function(self):
         if self.address:
-            idaapi.open_pseudocode(self.address, 1)
+            if idaapi.decompile(self.address):
+                idaapi.open_pseudocode(self.address, 0)
+            else:
+                idaapi.jumpto(self.address)
 
     def commit(self):
         if self.name_modified:
@@ -147,7 +146,6 @@ class Class:
                             return result_class
                 full_name.append(tmp_tinfo.dstr())
                 tmp_tinfo.get_udt_details(udt_data)
-        return None
 
     def update_from_local_type(self):
 
@@ -202,6 +200,12 @@ class Class:
     def children(self):
         return self.functions
 
+    @property
+    def tinfo(self):
+        tinfo = idaapi.tinfo_t()
+        tinfo.get_numbered_type(idaapi.cvar.idati, self.ordinal)
+        return tinfo
+
     def set_first_argument_type(self):
         for function in self.functions:
             function.set_first_argument_type()
@@ -226,10 +230,12 @@ class TreeModel(QtCore.QAbstractItemModel):
         self.init()
 
     def init(self):
+        idaapi.show_wait_box("Looking for classes...")
         for ordinal in xrange(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
             result = Class.create_class(ordinal)
             if result:
                 self.classes.append(result)
+        idaapi.hide_wait_box()
 
     def flags(self, index):
         if index.isValid():

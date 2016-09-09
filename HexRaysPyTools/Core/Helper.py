@@ -1,20 +1,33 @@
 import idaapi
+import idautils
+import idc
+
+demangled_names = {}
 
 
-def get_func_address_by_name(name):
-    """
-    Looks through all functions and find the one with the same name. Sigh...
+def init_demangled_names(*args):
 
-    :param name: str
-    :return ea_t or None
-    """
-    for idx in xrange(idaapi.get_func_qty()):
-        function = idaapi.getn_func(idx)
-        func_name = idaapi.get_short_name(function.startEA)
-        func_name = func_name.split('(')[0].replace("`", '').replace("'", '')
-        if func_name == name:
-            return function.startEA
-    return None
+    demangled_names.clear()
+    for address, name in idautils.Names():
+        short_name = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
+        if short_name:
+            demangled_names[short_name.split('(')[0]] = address
+    print "[DEBUG] Demangled names have been initialized"
+
+
+def get_virtual_func_address(tinfo, offset, name):
+
+    offset *= 8
+    address = idc.LocByName(name)
+    udt_member = idaapi.udt_member_t()
+    while address == idaapi.BADADDR and tinfo.is_struct():
+        address = demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
+        udt_member.offset = offset
+        tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        tinfo = udt_member.type
+        offset = offset - udt_member.offset
+
+    return address if address != idaapi.BADADDR else None
 
 
 def get_func_argument_info(function, expression):
