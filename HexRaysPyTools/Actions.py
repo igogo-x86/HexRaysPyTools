@@ -12,7 +12,7 @@ from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStruct
 from HexRaysPyTools.Core.VariableScanner import CtreeVisitor, FunctionTouchVisitor
 
 RECAST_VARIABLE = 0
-RECAST_FUNCTION = 1
+RECAST_ARGUMENT = 1
 RECAST_RETURN = 2
 
 
@@ -268,7 +268,7 @@ class ScanVariable(idaapi.action_handler_t):
         variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
-            if FunctionTouchVisitor.touch(hx_view.cfunc.entry_ea):
+            if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
             scanner = CtreeVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.apply_to(hx_view.cfunc.body, None)
@@ -295,7 +295,7 @@ class RecognizeShape(idaapi.action_handler_t):
         variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
-            if FunctionTouchVisitor.touch(hx_view.cfunc.entry_ea):
+            if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
             scanner = CtreeVisitor(hx_view.cfunc, 0, index)
             scanner.apply_to(hx_view.cfunc.body, None)
@@ -471,29 +471,35 @@ class RecastItemLeft(idaapi.action_handler_t):
     @staticmethod
     def check(cfunc, ctree_item):
         if ctree_item.citype == idaapi.VDI_EXPR:
-            expression = ctree_item.e if ctree_item.it.is_expr() else ctree_item.i
+            expression = ctree_item.it.to_specific_type
 
-            if expression.op == idaapi.cot_cast:
-                parent = cfunc.body.find_parent_of(expression).cexpr
-                if parent.op == idaapi.cot_call:
-                    arg_index, _ = Helper.get_func_argument_info(parent, expression)
-                    idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
-                    return RECAST_FUNCTION, arg_index, parent.x.type.get_pointed_object(), expression.x.type, parent.x.obj_ea
-                elif parent.op == idaapi.cit_return:
-                    idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
-                    return RECAST_RETURN, expression.x.type
-            elif expression.op == idaapi.cit_return:
-                child = expression.creturn.expr
-                if child.op == idaapi.cot_cast:
-                    idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
-                    return RECAST_RETURN, child.x.type
+            child = None
+            while expression and expression.op not in (idaapi.cot_asg, idaapi.cit_return, idaapi.cot_call):
+                child = expression
+                expression = cfunc.body.find_parent_of(expression).to_specific_type
 
-            while expression and (expression.op != idaapi.cot_asg):
-                expression = cfunc.body.find_parent_of(expression)
-            if expression and expression.cexpr.x.op == idaapi.cot_var and expression.cexpr.y.op == idaapi.cot_cast:
-                variable = cfunc.get_lvars()[expression.cexpr.x.v.idx]
-                idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
-                return RECAST_VARIABLE, expression.cexpr.y.x.type, variable
+            if expression:
+                if expression.op == idaapi.cot_asg and expression.x.op == idaapi.cot_var \
+                        and expression.y.op == idaapi.cot_cast:
+                    variable = cfunc.get_lvars()[expression.x.v.idx]
+                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
+                    return RECAST_VARIABLE, expression.y.x.type, variable
+                elif expression.op == idaapi.cit_return:
+                    child = child or expression.creturn.expr
+                    if child.op == idaapi.cot_cast:
+                        idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
+                        return RECAST_RETURN, child.x.type
+                elif expression.op == idaapi.cot_call:
+                    if child and child.op == idaapi.cot_cast:
+                        arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
+                        idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
+                        return (
+                            RECAST_ARGUMENT,
+                            arg_index,
+                            expression.x.type.get_pointed_object(),
+                            child.x.type,
+                            expression.x.obj_ea
+                        )
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -505,7 +511,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                 if hx_view.set_lvar_type(lvar, tinfo):
                     hx_view.refresh_view(True)
 
-            elif result[0] == RECAST_FUNCTION:
+            elif result[0] == RECAST_ARGUMENT:
                 arg_index, func_tinfo, arg_tinfo, address = result[1:]
 
                 print func_tinfo.dstr()
@@ -546,6 +552,7 @@ class RecastItemRight(RecastItemLeft):
     @staticmethod
     def check(cfunc, ctree_item):
         if ctree_item.citype == idaapi.VDI_EXPR:
+
             expression = ctree_item.e.cexpr
             if expression.op == idaapi.cot_var:
                 parent = cfunc.body.find_parent_of(expression).cexpr

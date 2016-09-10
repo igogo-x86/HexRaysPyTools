@@ -6,27 +6,34 @@ touched_functions = set()
 
 
 class FunctionTouchVisitor(idaapi.ctree_parentee_t):
-    def __init__(self):
+    def __init__(self, cfunc):
         super(FunctionTouchVisitor, self).__init__()
+        self.functions = set()
+        self.cfunc = cfunc
 
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_call:
-            self.touch(expression.x.obj_ea)
+            self.functions.add(expression.x.obj_ea)
         return 0
 
-    @staticmethod
-    def touch(ea):
-        if ea not in touched_functions:
-            touched_functions.add(ea)
+    def touch_all(self):
+        for address in self.functions.difference(touched_functions):
+            touched_functions.add(address)
             try:
-                cfunc = idaapi.decompile(ea)
+                cfunc = idaapi.decompile(address)
                 if cfunc:
-                    touch_visitor = FunctionTouchVisitor()
+                    touch_visitor = FunctionTouchVisitor(cfunc)
                     touch_visitor.apply_to(cfunc.body, None)
-                    idaapi.decompile(ea)
-                    return True
+                    touch_visitor.touch_all()
             except idaapi.DecompilationFailure:
-                print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=ea)
+                print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=address)
+        idaapi.decompile(self.cfunc.entry_ea)
+
+    def process(self):
+        if self.cfunc.entry_ea not in touched_functions:
+            self.apply_to(self.cfunc.body, None)
+            self.touch_all()
+            return True
         return False
 
 

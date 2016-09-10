@@ -61,7 +61,7 @@ class VirtualMethod:
     @property
     def color(self):
         # return QtGui.QBrush(QtGui.QColor("#ffffb3"))
-        return QtGui.QColor("#ffffb3")
+        return QtGui.QColor("#fefbd8")
 
     @property
     def tooltip(self):
@@ -187,7 +187,7 @@ class Class:
     @property
     def color(self):
         # return QtGui.QBrush(QtGui.QColor("#ffb3ff")):
-        return QtGui.QColor("#ffb3ff")
+        return QtGui.QColor("#80ced6")
 
     @property
     def tooltip(self):
