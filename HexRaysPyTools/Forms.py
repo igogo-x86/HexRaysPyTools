@@ -48,9 +48,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_remove = QtGui.QPushButton("&Remove")
         btn_clear = QtGui.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
         btn_recognize = QtGui.QPushButton("Recognize Shape")
-        btn_scan_list = QtGui.QPushButton("Scanned Variables")
         btn_recognize.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
-        btn_scan_list.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
 
         btn_finalize.setShortcut("f")
         btn_disable.setShortcut("d")
@@ -76,7 +74,6 @@ class StructureBuilder(idaapi.PluginForm):
         grid_box.addWidget(btn_enable, 0, 2)
         grid_box.addWidget(btn_origin, 0, 3)
         grid_box.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Expanding), 0, 4)
-        grid_box.addWidget(btn_scan_list, 0, 5, 1, 6)
         grid_box.addWidget(btn_array, 1, 0)
         grid_box.addWidget(btn_pack, 1, 1)
         grid_box.addWidget(btn_remove, 1, 2)
@@ -98,7 +95,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_remove.clicked.connect(lambda: self.structure_model.remove_items(struct_view.selectedIndexes()))
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
         btn_recognize.clicked.connect(lambda: self.structure_model.recognize_shape(struct_view.selectedIndexes()))
-        struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.show_virtual_methods)
+        struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.activated)
         self.structure_model.dataChanged.connect(struct_view.clearSelection)
 
     def OnClose(self, form):

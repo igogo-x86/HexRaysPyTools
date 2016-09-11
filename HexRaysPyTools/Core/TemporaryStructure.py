@@ -4,8 +4,9 @@ import idaapi
 import re
 import PySide.QtCore as QtCore
 import PySide.QtGui as QtGui
-import HexRaysPyTools.Core.Const as Const
-
+import Const
+import Helper
+import VariableScanner
 from HexRaysPyTools.Forms import MyChoose
 
 
@@ -18,6 +19,29 @@ def parse_vtable_name(name):
         # const class_name:`vftable' case
         return "Vtable_" + m.group(1), True
     return name, True
+
+
+def create_member(function, origin, offset, index, tinfo=None, ea=0):
+    # Creates appropriate member (VTable, regular member, void *member) depending on input
+    if ea:
+        if VirtualTable.check_address(ea):
+            return VirtualTable(
+                offset,
+                ea,
+                ScannedVariable(function, function.get_lvars()[index]),
+                origin
+            )
+    if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
+        return Member(
+            offset,
+            tinfo,
+            ScannedVariable(function, function.get_lvars()[index]),
+            origin
+        )
+    else:
+        # VoidMember shouldn't have ScannedVariable because after finalizing it can affect on normal functions
+        # like `memset`
+        return VoidMember(offset, None, origin)
 
 
 class AbstractMember:
@@ -36,7 +60,7 @@ class AbstractMember:
         self.origin = origin
         self.enabled = True
         self.is_array = False
-        self.scanned_variable = scanned_variable
+        self.scanned_variables = {scanned_variable} if scanned_variable else set()
         self.tinfo = None
 
     def type_equals_to(self, tinfo):
@@ -63,7 +87,14 @@ class AbstractMember:
     def __repr__(self):
         return hex(self.offset) + ' ' + self.type_name
 
-    __eq__ = lambda self, other: self.offset == other.offset and self.type_name == other.type_name
+    def __eq__(self, other):
+        """ I'm aware that it's dirty but have no time to refactor whole file to nice one """
+
+        if self.offset == other.offset and self.type_name == other.type_name:
+            self.scanned_variables |= other.scanned_variables
+            return True
+        return False
+
     __ne__ = lambda self, other: self.offset != other.offset or self.type_name != other.type_name
     __lt__ = lambda self, other: self.offset < other.offset or \
                                  (self.offset == other.offset and self.type_name < other.type_name)
@@ -74,18 +105,10 @@ class AbstractMember:
 
 
 class VirtualFunction:
-    def __init__(self, address, offset, tinfo=None):
+    def __init__(self, address, offset):
         self.address = address
         self.offset = offset
         self.visited = False
-        if tinfo:
-            self.tinfo = tinfo
-        else:
-            decompiled_function = idaapi.decompile(self.address)
-            if decompiled_function:
-                self.tinfo = idaapi.tinfo_t(decompiled_function.type)
-            else:
-                print "[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address)
 
     def __int__(self):
         return self.address
@@ -113,19 +136,24 @@ class VirtualFunction:
         name = name.replace("`", '').replace(" ", '_').replace("'", '')
         return name
 
+    @property
+    def tinfo(self):
+        decompiled_function = idaapi.decompile(self.address)
+        if decompiled_function:
+            return idaapi.tinfo_t(decompiled_function.type)
+        print "[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address)
+
 
 class VirtualTable(AbstractMember):
     def __init__(self, offset, address, scanned_variable=None, origin=0):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
         self.virtual_functions = []
-        self.name = "vtable"
+        self.name = "vtable" + ("_{0:X}".format(self.offset) if self.offset else '')
         self.vtable_name, self.have_nice_name = parse_vtable_name(idaapi.get_short_name(address))
         self.populate()
-        self.tinfo = self.create_tinfo()
 
     def populate(self):
-        # TODO: Check if address of virtual function is in code section and then try to make function
         address = self.address
         while True:
             if Const.EA64:
@@ -150,8 +178,7 @@ class VirtualTable(AbstractMember):
             # print "\n\t(Final structure)\n" + idaapi.print_tinfo('\t', 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE
             #                                                      | idaapi.PRTYPE_SEMI, final_tinfo, self.name, None)
             return final_tinfo
-        else:
-            print "[ERROR] Virtual table creation failed"
+        print "[ERROR] Virtual table creation failed"
 
     def import_to_structures(self, ask=False):
         """
@@ -160,7 +187,7 @@ class VirtualTable(AbstractMember):
         :return: idaapi.tid_t
         """
         cdecl_typedef = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
-                                           self.tinfo, self.vtable_name, None)
+                                           self.create_tinfo(), self.vtable_name, None)
         if ask:
             cdecl_typedef = idaapi.asktext(0x10000, cdecl_typedef, "The following new type will be created")
             if not cdecl_typedef:
@@ -189,10 +216,29 @@ class VirtualTable(AbstractMember):
         function_chooser.OnGetLineAttr = \
             lambda n: [0xd9d9d9, 0x0] if self.virtual_functions[n].visited else [0xffffff, 0x0]
 
+        # Very nasty, but have no time to make nice QT window instead Ida Choose2 menu.
+        # This function creates menu "Scan All"
+        function_chooser.popup_names = ["Scan All", "-", "Scan", "-"]
+        function_chooser.OnInsertLine = self.scan_virtual_functions
+        function_chooser.OnEditLine = self.scan_virtual_function
+
         idx = function_chooser.Show(True)
         if idx != -1:
             self.virtual_functions[idx].visited = True
             idaapi.open_pseudocode(int(self.virtual_functions[idx]), 1)
+
+    def scan_virtual_function(self, index):
+        function = idaapi.decompile(self.virtual_functions[index].address)
+        if Helper.FunctionTouchVisitor(function).process():
+            function = idaapi.decompile(self.virtual_functions[index].address)
+        scanner = VariableScanner.DeepSearchVisitor(function, self.offset, 0)
+        scanner.apply_to(function.body, None)
+        for candidate in scanner.candidates:
+            Helper.temporary_structure.add_row(candidate)
+
+    def scan_virtual_functions(self):
+        for idx in xrange(len(self.virtual_functions)):
+            self.scan_virtual_function(idx)
 
     def get_udt_member(self, offset=0):
         udt_member = idaapi.udt_member_t()
@@ -303,12 +349,13 @@ class ScannedVariable:
         self.function = function
         self.lvar = variable
 
-    def apply_type(self, tinfo):
-        """
-        Finally apply Class'es tinfo to this variable
+    @property
+    def function_name(self):
+        return idaapi.get_short_name(self.function.entry_ea)
 
-        :param tinfo: idaapi.tinfo_t
-        """
+    def apply_type(self, tinfo):
+        """ Finally apply Class'es tinfo to this variable """
+
         hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
         if hx_view:
             print "[Info] Applying tinfo to variable {0} in function {1}".format(
@@ -490,8 +537,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.modelReset.emit()
 
     def get_scanned_variables(self, origin=0):
-        return set(
-            map(lambda x: x.scanned_variable, filter(lambda x: x.scanned_variable and x.origin == origin, self.items))
+        return reduce(
+            lambda result, x: result | x,
+            map(
+                lambda x: x.scanned_variables,
+                filter(lambda x: x.origin == origin, self.items)
+            )
         )
 
     def get_next_enabled(self, row):
@@ -530,7 +581,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 for offset in offsets:
                     is_found = False
                     items = filter(lambda x: x.offset == offset, enabled_items)
-                    potential_members = self.get_fields_at_offset(tinfo, offset - base)
+                    potential_members = Helper.get_fields_at_offset(tinfo, offset - base)
                     for item in items:
                         for potential_member in potential_members:
                             if item.type_equals_to(potential_member):
@@ -551,33 +602,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         if idx != -1:
             return result[idx][1]
         return None
-
-    def get_fields_at_offset(self, tinfo, offset):
-        result = []
-        if offset == 0:
-            result.append(tinfo)
-        udt_data = idaapi.udt_type_data_t()
-        tinfo.get_udt_details(udt_data)
-        udt_member = idaapi.udt_member_t()
-        udt_member.offset = offset * 8
-        idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
-        if idx != -1:
-            while idx < tinfo.get_udt_nmembers() and udt_data[idx].offset <= offset * 8:
-                udt_member = udt_data[idx]
-                if udt_member.offset == offset * 8:
-                    if udt_member.type.is_ptr():
-                        result.append(idaapi.get_unk_type(Const.EA_SIZE))
-                        result.append(udt_member.type)
-                        result.append(idaapi.dummy_ptrtype(Const.EA_SIZE, False))
-                    elif not udt_member.type.is_udt():
-                        result.append(udt_member.type)
-                if udt_member.type.is_array():
-                    if (offset - udt_member.offset / 8) % udt_member.type.get_array_element().get_size() == 0:
-                        result.append(udt_member.type.get_array_element())
-                elif udt_member.type.is_udt():
-                    result.extend(self.get_fields_at_offset(udt_member.type, offset - udt_member.offset / 8))
-                idx += 1
-        return result
 
     @staticmethod
     def get_padding_member(offset, size):
@@ -665,7 +689,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             tinfo = self.get_recognized_shape()
             if tinfo:
                 tinfo.create_ptr(tinfo)
-                for scanned_var in self.get_scanned_variables(0):
+                for scanned_var in self.get_scanned_variables(origin=0):
                     scanned_var.apply_type(tinfo)
                 self.clear()
         else:
@@ -681,8 +705,22 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 self.items = filter(lambda x: x.offset < base or x.offset >= base + tinfo.get_size(), self.items)
                 self.add_row(Member(base, tinfo, None))
 
-    def show_virtual_methods(self, index):
+    def activated(self, index):
         self.dataChanged.emit(index, index)
 
-        if index.column() == 1:
+        # Double click on offset, opens window with variables
+        if index.column() == 0:
+            item = self.items[index.row()]
+            scanned_variables = list(item.scanned_variables)
+            variable_chooser = MyChoose(
+                map(lambda x: [x.function_name, x.lvar.name], scanned_variables),
+                "Select Variable",
+                [["Function name", 25], ["Variable name", 25]]
+            )
+            row = variable_chooser.Show(modal=True)
+            if row != -1:
+                idaapi.open_pseudocode(scanned_variables[row].function.entry_ea, 0)
+
+        # Double click on type. If type is virtual table than opens windows with virtual methods
+        elif index.column() == 1:
             self.items[index.row()].activate()

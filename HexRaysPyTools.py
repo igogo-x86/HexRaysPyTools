@@ -1,4 +1,5 @@
 import HexRaysPyTools.Actions as Actions
+import HexRaysPyTools.Core.Helper
 from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
@@ -138,16 +139,13 @@ class MyPlugin(idaapi.plugin_t):
     help = "This is help"
     wanted_name = "HexRaysPyTools"
     wanted_hotkey = "Alt-F8"
-    structure_builder = None
-    temporary_structure = None
 
     @staticmethod
     def init():
-        idaapi.msg("init() called\n")
         if not idaapi.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
 
-        MyPlugin.temporary_structure = TemporaryStructureModel()
+        Helper.temporary_structure = TemporaryStructureModel()
 
         Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
@@ -156,7 +154,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.RemoveReturn)
         Actions.register(Actions.ConvertToUsercall)
-        Actions.register(Actions.ScanVariable, MyPlugin.temporary_structure)
+        Actions.register(Actions.ScanVariable, Helper.temporary_structure)
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
@@ -166,23 +164,22 @@ class MyPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
-        VariableScanner.touched_functions.clear()
+        Helper.touched_functions.clear()
         Const.init()
 
         return idaapi.PLUGIN_KEEP
 
     @staticmethod
     def run(arg):
-        idaapi.msg("run() called!\n")
-
-        if not MyPlugin.structure_builder:
-            MyPlugin.structure_builder = Forms.StructureBuilder(MyPlugin.temporary_structure)
-        MyPlugin.structure_builder.Show()
+        tform = idaapi.find_tform("Structure Builder")
+        if tform:
+            idaapi.switchto_tform(tform, True)
+        else:
+            Forms.StructureBuilder(Helper.temporary_structure).Show()
 
     @staticmethod
     def term():
-        MyPlugin.temporary_structure.clear()
-        idaapi.msg("term() called!\n")
+        Helper.temporary_structure.clear()
         Actions.unregister(Actions.CreateVtable)
         Actions.unregister(Actions.ShowGraph)
         Actions.unregister(Actions.ShowClasses)

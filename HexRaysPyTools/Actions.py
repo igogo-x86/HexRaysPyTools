@@ -9,7 +9,8 @@ import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import CtreeVisitor, FunctionTouchVisitor
+from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor
+from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 
 RECAST_VARIABLE = 0
 RECAST_ARGUMENT = 1
@@ -270,7 +271,7 @@ class ScanVariable(idaapi.action_handler_t):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
-            scanner = CtreeVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
+            scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.apply_to(hx_view.cfunc.body, None)
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
@@ -295,9 +296,7 @@ class RecognizeShape(idaapi.action_handler_t):
         variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
-            if FunctionTouchVisitor(hx_view.cfunc).process():
-                hx_view.refresh_view(True)
-            scanner = CtreeVisitor(hx_view.cfunc, 0, index)
+            scanner = ShallowSearchVisitor(hx_view.cfunc, 0, index)
             scanner.apply_to(hx_view.cfunc.body, None)
             structure = TemporaryStructureModel()
             for field in scanner.candidates:
