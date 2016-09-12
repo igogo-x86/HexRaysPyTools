@@ -3,6 +3,8 @@ import Const
 import Helper
 import TemporaryStructure
 
+scanned_functions = set()
+
 
 class ShallowSearchVisitor(idaapi.ctree_parentee_t):
     def __init__(self, function, origin, index):
@@ -20,7 +22,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
         self.variables = {index: function.get_lvars()[index].type()}
         self.origin = origin
-        self.candidates = []
+        self.candidates = [self.create_member(0, index)]
 
     def create_member(self, offset, index, tinfo=None, ea=0):
         return TemporaryStructure.create_member(self.function, self.origin, offset, index, tinfo, ea)
@@ -35,7 +37,8 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 if not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index)
-            elif arg_type.equals_to(Const.X_WORD_TINFO) or arg_type.equals_to(Const.PX_WORD_TINFO):
+            elif arg_type.equals_to(Const.X_WORD_TINFO) or arg_type.equals_to(Const.PX_WORD_TINFO) or \
+                    arg_type.equals_to(Const.PBYTE_TINFO):
                 nice_tinfo = Helper.get_nice_pointed_object(arg_type)
                 if nice_tinfo:
                     return self.create_member(offset, index, nice_tinfo)
@@ -49,13 +52,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
         # When we have pointer resolution from the left and expression from the right
         try:
-            right_expr = kwargs['object']
+            right_expr, cast_type = kwargs['object'], kwargs['default']
             if right_expr.op in (idaapi.cot_ref, idaapi.cot_cast):
                 right_expr = right_expr.x
             if right_expr.op == idaapi.cot_obj:
                 member_type = idaapi.tinfo_t(right_expr.type)
                 member_type.create_ptr(member_type)
                 return self.create_member(offset, index, member_type, right_expr.obj_ea)
+            if right_expr.op in Const.COT_ARITHMETIC:
+                return self.create_member(offset, index, cast_type)
             return self.create_member(offset, index, right_expr.type)
         except KeyError:
             pass
@@ -125,7 +130,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 if parents_type[2] == 'ptr':
                     if parents_type[3] == 'asg' and parents[3].x == parents[2]:
                         # *(TYPE *)(var + x) = ???
-                        return self.get_member(offset, index, object=parents[3].y)
+                        return self.get_member(
+                            offset, index, object=parents[3].y, default=parents[1].type.get_pointed_object()
+                        )
                     return self.create_member(offset, index, parents[1].type.get_pointed_object())
 
                 elif parents_type[2] == 'call':
@@ -143,7 +150,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
                 if parents_type[2] == 'asg' and parents[2].x == parents[1]:
                     # *(TYPE *)var = ???
-                    return self.get_member(0, index, object=parents[2].y)
+                    return self.get_member(0, index, object=parents[2].y, default=parents[0].type.get_pointed_object())
                 return self.create_member(0, index, parents[0].type.get_pointed_object())
 
             elif parents_type[0:2] == ['cast', 'call']:
@@ -168,17 +175,21 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 if parents[0].y.op != idaapi.cot_num:
                     # There's no way to handle with dynamic offset
                     return None
-                offset = parents[0].y.numval() * Const.EA_SIZE
+                offset = parents[0].y.numval() * self.variables[index].get_ptrarr_objsize()
                 if parents_type[1] == 'asg' and parents[1].x == parents[0]:
                     # var[idx] = ???
-                    return self.get_member(offset, index, object=parents[1].y)
+                    return self.get_member(
+                        offset, index, object=parents[1].y, default=self.variables[index].get_pointed_object()
+                    )
                 elif parents_type[1] == 'cast':
                     # (TYPE) var[idx]
                     return self.create_member(offset, index, parents[1].type)
                 return self.create_member(offset, index, Const.X_WORD_TINFO)
             elif parents_type[0:2] == ['ptr', 'asg']:
                 # *var = ???
-                return self.get_member(0, index, object=parents[1].y)
+                return self.get_member(
+                    0, index, object=parents[1].y, default=self.variables[index].get_pointed_object()
+                )
             else:
                 if parents_type[0:2] == ['cast', 'ptr']:
 
@@ -187,18 +198,22 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                         return self.get_member(0, index, call=parents[2], arg=parents[1])
                     elif parents_type[2] == 'asg' and parents[2].x == parents[1]:
                         # *(TYPE *) var = ???
-                        return self.get_member(0, index, object=parents[2].y)
+                        return self.get_member(
+                            0, index, object=parents[2].y, default=parents[0].type.get_pointed_object()
+                        )
 
                 elif parents_type[0:2] == ['cast', 'add']:
                     if parents[1].theother(parents[0]).op != idaapi.cot_num:
                         return None
                     offset = parents[1].theother(parents[0]).numval()
-                    offset *= parents[0].type.get_pointed_object().get_size() if parents[0].type.is_ptr() else 1
+                    offset *= parents[0].type.get_ptrarr_objsize() if parents[0].type.is_ptr() else 1
 
                     if parents_type[2] == 'ptr':
                         if parents_type[3] == 'asg' and parents[3].x == parents[2]:
                             # *((TYPE *)var + x) = ???
-                            return self.get_member(offset, index, object=parents[3].y)
+                            return self.get_member(
+                                offset, index, object=parents[3].y, default=parents[0].type.get_pointed_object()
+                            )
                         return self.create_member(offset, index, parents[0].type.get_pointed_object())
                     elif parents_type[2] == 'call':
                         # call(..., (TYPE)var + offset, ...)
@@ -210,14 +225,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 elif parents_type[0:2] == ['add', 'cast']:
                     if parents[0].theother(expression).op != idaapi.cot_num:
                         return None
-                    offset = parents[0].theother(expression).numval() * Const.EA_SIZE
+                    offset = parents[0].theother(expression).numval() * self.variables[index].get_ptrarr_objsize()
 
                     if parents_type[2] == 'call':
                         # call(..., (TYPE)(var + x), ...)
                         return self.get_member(offset, index, call=parents[2], arg=parents[1])
                     elif parents_type[2] == 'asg' and parents[2].x == parents[1]:
                         # (TYPE)(var + x) = ???
-                        return self.get_member(offset, index, object=parents[2].y)
+                        print "[Warning] Inform me if it is possible to see this message"
+                        # return self.get_member(offset, index, object=parents[2].y, default=self.variables[index])
                     else:
                         return self.create_member(offset, index, parents[1].type.get_pointed_object())
 
@@ -225,7 +241,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     # call(..., var + offset, ...)
                     if parents[0].theother(expression).op != idaapi.cot_num:
                         return None
-                    offset = parents[0].theother(expression).numval() * Const.EA_SIZE
+                    offset = parents[0].theother(expression).numval() * self.variables[index].get_ptrarr_objsize()
                     return self.get_member(offset, index, call=parents[1], arg=parents[0])
 
                 elif parents_type[0:2] == ['cast', 'call']:
@@ -239,6 +255,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 "Function:", idaapi.get_ea_name(self.function.entry_ea), \
                 "Address: 0x{0:08X}".format(expression.ea)
 
+    def process(self):
+        """
+        Function that starts recursive search, initializes and clears set of visited functions so that we
+        don't wind up in infinite recursion.
+        """
+        scanned_functions.add(self.function.entry_ea)
+        self.apply_to(self.function.body, None)
+        scanned_functions.clear()
+
 
 class DeepSearchVisitor(ShallowSearchVisitor):
     def __init__(self, function, origin, index):
@@ -247,13 +272,15 @@ class DeepSearchVisitor(ShallowSearchVisitor):
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
 
-        print "[Info] Scanning function {name} at 0x{ea:08X}".format(
-            name=idaapi.get_short_name(ea),
-            ea=ea
-        )
+        if ea in scanned_functions:
+            return
         try:
+            scanned_functions.add(ea)
             new_function = idaapi.decompile(ea)
             if new_function:
+                print "[Info] Scanning function {name} at 0x{ea:08X}".format(
+                    name=idaapi.get_short_name(ea), ea=ea
+                )
                 scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)

@@ -338,7 +338,7 @@ class VoidMember(Member):
 
 
 class ScannedVariable:
-    def __init__(self, function, variable):
+    def __init__(self, function, variable, applicable=True):
         """
         Class for storing variable and it's function that have been scanned previously.
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
@@ -348,6 +348,7 @@ class ScannedVariable:
         """
         self.function = function
         self.lvar = variable
+        self.applicable = applicable
 
     @property
     def function_name(self):
@@ -357,7 +358,7 @@ class ScannedVariable:
         """ Finally apply Class'es tinfo to this variable """
 
         hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
-        if hx_view:
+        if hx_view and self.applicable:
             print "[Info] Applying tinfo to variable {0} in function {1}".format(
                 self.lvar.name,
                 idaapi.get_short_name(self.function.entry_ea)
@@ -419,7 +420,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             elif col == 2:
                 return item.name
         elif role == QtCore.Qt.ToolTipRole:
-            if col == 1:
+            if col == 0:
+                return self.items[row].offset
+            elif col == 1:
                 return self.items[row].size * (self.calculate_array_size(row) if self.items[row].is_array else 1)
         elif role == QtCore.Qt.EditRole:
             if col == 2:
@@ -438,7 +441,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
-        if role == QtCore.Qt.EditRole:
+        if role == QtCore.Qt.EditRole and idaapi.isident(str(value)):
             self.items[row].name = str(value)
             self.dataChanged.emit(index, index)
             return True

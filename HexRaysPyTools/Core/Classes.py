@@ -36,7 +36,7 @@ class VirtualMethod:
 
     def setData(self, column, value):
         if column == 0:
-            if not set('`()"[];').intersection(value) and self.name != value:
+            if idaapi.isident(value) and self.name != value:
                 self.name = value
                 self.name_modified = True
                 self.parent.modified = True
