@@ -21,27 +21,31 @@ def parse_vtable_name(name):
     return name, True
 
 
-def create_member(function, origin, offset, index, tinfo=None, ea=0):
+def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0):
     # Creates appropriate member (VTable, regular member, void *member) depending on input
     if ea:
         if VirtualTable.check_address(ea):
             return VirtualTable(
                 offset,
                 ea,
-                ScannedVariable(function, function.get_lvars()[index]),
+                ScannedVariable(function, function.get_lvars()[index], expression_address),
                 origin
             )
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
         return Member(
             offset,
             tinfo,
-            ScannedVariable(function, function.get_lvars()[index]),
+            ScannedVariable(function, function.get_lvars()[index], expression_address),
             origin
         )
     else:
         # VoidMember shouldn't have ScannedVariable because after finalizing it can affect on normal functions
         # like `memset`
-        return VoidMember(offset, None, origin)
+        return VoidMember(
+            offset,
+            ScannedVariable(function, function.get_lvars()[index], expression_address, False),
+            origin
+        )
 
 
 class AbstractMember:
@@ -138,6 +142,7 @@ class VirtualFunction:
 
     @property
     def tinfo(self):
+        # TODO: return void() when failed to decompile
         decompiled_function = idaapi.decompile(self.address)
         if decompiled_function:
             return idaapi.tinfo_t(decompiled_function.type)
@@ -338,7 +343,7 @@ class VoidMember(Member):
 
 
 class ScannedVariable:
-    def __init__(self, function, variable, applicable=True):
+    def __init__(self, function, variable, expression_address, applicable=True):
         """
         Class for storing variable and it's function that have been scanned previously.
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
@@ -348,6 +353,7 @@ class ScannedVariable:
         """
         self.function = function
         self.lvar = variable
+        self.expression_address = expression_address
         self.applicable = applicable
 
     @property
@@ -371,8 +377,6 @@ class ScannedVariable:
             else:
                 print "-----------"
             # idaapi.close_pseudocode(hx_view.form)
-        else:
-            print "[Warning] Failed to apply type"
 
     def __eq__(self, other):
         return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
@@ -716,13 +720,16 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             item = self.items[index.row()]
             scanned_variables = list(item.scanned_variables)
             variable_chooser = MyChoose(
-                map(lambda x: [x.function_name, x.lvar.name], scanned_variables),
+                map(
+                    lambda x: [x.function_name, x.lvar.name, "0x{0:08X}".format(x.expression_address)],
+                    scanned_variables
+                ),
                 "Select Variable",
-                [["Function name", 25], ["Variable name", 25]]
+                [["Function name", 25], ["Variable name", 25], ["Expression address", 25]]
             )
             row = variable_chooser.Show(modal=True)
             if row != -1:
-                idaapi.open_pseudocode(scanned_variables[row].function.entry_ea, 0)
+                idaapi.open_pseudocode(scanned_variables[row].expression_address, 0)
 
         # Double click on type. If type is virtual table than opens windows with virtual methods
         elif index.column() == 1:

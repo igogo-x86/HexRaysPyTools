@@ -250,8 +250,7 @@ class GetStructureBySize(idaapi.action_handler_t):
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class ScanVariable(idaapi.action_handler_t):
@@ -272,7 +271,7 @@ class ScanVariable(idaapi.action_handler_t):
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
             scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
-            scanner.apply_to(hx_view.cfunc.body, None)
+            scanner.process()
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
 
@@ -297,7 +296,7 @@ class RecognizeShape(idaapi.action_handler_t):
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             scanner = ShallowSearchVisitor(hx_view.cfunc, 0, index)
-            scanner.apply_to(hx_view.cfunc.body, None)
+            scanner.process()
             structure = TemporaryStructureModel()
             for field in scanner.candidates:
                 structure.add_row(field)
