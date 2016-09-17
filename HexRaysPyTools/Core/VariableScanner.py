@@ -3,6 +3,7 @@ import Const
 import Helper
 import TemporaryStructure
 
+SCAN_ALL_ARGUMENTS = True
 scanned_functions = set()
 
 
@@ -25,7 +26,6 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         self.expression_address = idaapi.BADADDR
         self.candidates = [self.create_member(0, index)]
         self.protected_variables = {index}
-        scanned_functions.clear()
         scanned_functions.add((function.entry_ea, index))
 
     def create_member(self, offset, index, tinfo=None, ea=0):
@@ -40,7 +40,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             call_expr, arg_expr = kwargs['call'], kwargs['arg']
             arg_index, arg_type = Helper.get_func_argument_info(call_expr, arg_expr)
             if arg_type.equals_to(Const.PVOID_TINFO) or arg_type.equals_to(Const.CONST_PVOID_TINFO):
-                if not arg_index:
+                if SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index)
             elif arg_type.equals_to(Const.X_WORD_TINFO) or arg_type.equals_to(Const.PX_WORD_TINFO) or \
@@ -48,7 +48,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 nice_tinfo = Helper.get_nice_pointed_object(arg_type)
                 if nice_tinfo:
                     return self.create_member(offset, index, nice_tinfo)
-                if not arg_index:
+                if SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index)
             arg_type.remove_ptr_or_array()
@@ -81,12 +81,12 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
             if index in self.variables:
-                result = self.new_check_member_assignment(expression, index)
+                result = self.check_member_assignment(expression, index)
                 if result:
                     self.candidates.append(result)
         return 0
 
-    def new_check_member_assignment(self, expression, index):
+    def check_member_assignment(self, expression, index):
         """
         We are now in cexpr_t == idaapi.cot_var. This function checks if expression is part of member assignment
         statement. Returns None if not.
@@ -147,11 +147,10 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
         # Universal call with no cast conversion and offsets: call(..., this, ...)
         if parents_type[0] == 'call':
-            arg_index = None
-            for arg_index in xrange(len(parents[0].a)):
-                if parents[0].a[arg_index].op == idaapi.cot_var and parents[0].a[arg_index].v.idx == index:
-                    break
-            self.scan_function(parents[0].x.obj_ea, 0, arg_index)
+            arg_index, _ = Helper.get_func_argument_info(parents[0], expression)
+            if SCAN_ALL_ARGUMENTS or not arg_index:
+                self.scan_function(parents[0].x.obj_ea, 0, arg_index)
+            return
 
         # --------------------------------------------------------------------------------------------
         # When variable is DWORD, int, __int64 etc
@@ -307,12 +306,20 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     # call(..., (TYPE) var, ...)
                     return self.get_member(0, index, call=parents[1], arg=parents[0])
 
-        if 'return' not in parents_type[0:2]:
+                elif parents_type[0] == 'ptr':
+                    if parents_type[1] == 'cast':
+                        # (TYPE) *var
+                        return self.create_member(0, index, parents[0].type)
+                    # *var
+                    return self.create_member(0, index, self.variables[index].get_pointed_object())
+
+        if 'return' not in parents_type[0:2] and parents_type[0] not in ('if', 'band', 'eq', 'ne', 'cast'):
             print "[DEBUG] Unhandled type", self.variables[index].dstr(), \
-                "Parents:", parents_type, \
+                "Index:", index, \
                 "Offset:", offset, \
                 "Function:", idaapi.get_ea_name(self.function.entry_ea), \
-                "Address: 0x{0:08X}".format(expression.ea)
+                "Address: 0x{0:08X}".format(expression.ea), \
+                "Parents:", parents_type
 
     def process(self):
         """
@@ -336,8 +343,8 @@ class DeepSearchVisitor(ShallowSearchVisitor):
             scanned_functions.add((ea, arg_index))
             new_function = idaapi.decompile(ea)
             if new_function:
-                print "[Info] Scanning function {name} at 0x{ea:08X}".format(
-                    name=idaapi.get_short_name(ea), ea=ea
+                print "[Info] Scanning function {name} at 0x{ea:08X}, origin: 0x{origin:04X}".format(
+                    name=idaapi.get_short_name(ea), ea=ea, origin=self.origin + offset
                 )
                 scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)

@@ -107,6 +107,10 @@ def get_fields_at_offset(tinfo, offset):
     return result
 
 
+def is_legal_type(tinfo):
+    return bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))
+
+
 touched_functions = set()
 
 

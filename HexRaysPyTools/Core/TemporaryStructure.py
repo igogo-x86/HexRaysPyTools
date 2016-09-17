@@ -23,29 +23,17 @@ def parse_vtable_name(name):
 
 def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0):
     # Creates appropriate member (VTable, regular member, void *member) depending on input
+    scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
     if ea:
         if VirtualTable.check_address(ea):
-            return VirtualTable(
-                offset,
-                ea,
-                ScannedVariable(function, function.get_lvars()[index], expression_address),
-                origin
-            )
+            return VirtualTable(offset, ea, scanned_variable, origin)
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
-        return Member(
-            offset,
-            tinfo,
-            ScannedVariable(function, function.get_lvars()[index], expression_address),
-            origin
-        )
+        return Member(offset, tinfo, scanned_variable, origin)
     else:
         # VoidMember shouldn't have ScannedVariable because after finalizing it can affect on normal functions
         # like `memset`
-        return VoidMember(
-            offset,
-            ScannedVariable(function, function.get_lvars()[index], expression_address, False),
-            origin
-        )
+        scanned_variable.applicable = False
+        return VoidMember(offset, scanned_variable, origin)
 
 
 class AbstractMember:
@@ -236,10 +224,14 @@ class VirtualTable(AbstractMember):
         function = idaapi.decompile(self.virtual_functions[index].address)
         if Helper.FunctionTouchVisitor(function).process():
             function = idaapi.decompile(self.virtual_functions[index].address)
-        scanner = VariableScanner.DeepSearchVisitor(function, self.offset, 0)
-        scanner.apply_to(function.body, None)
-        for candidate in scanner.candidates:
-            Helper.temporary_structure.add_row(candidate)
+        if function.arguments and function.arguments[0].is_arg_var and Helper.is_legal_type(function.arguments[0].tif):
+            print "[Info] Scanning virtual function at 0x{0:08X}".format(function.entry_ea)
+            scanner = VariableScanner.DeepSearchVisitor(function, self.offset, 0)
+            scanner.apply_to(function.body, None)
+            for candidate in scanner.candidates:
+                Helper.temporary_structure.add_row(candidate)
+        else:
+            print "[Warning] Bad type of first argument in virtual function at 0x{0:08X}".format(function.entry_ea)
 
     def scan_virtual_functions(self):
         for idx in xrange(len(self.virtual_functions)):
@@ -343,7 +335,7 @@ class VoidMember(Member):
 
 
 class ScannedVariable:
-    def __init__(self, function, variable, expression_address, applicable=True):
+    def __init__(self, function, variable, expression_address, origin, applicable=True):
         """
         Class for storing variable and it's function that have been scanned previously.
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
@@ -354,6 +346,7 @@ class ScannedVariable:
         self.function = function
         self.lvar = variable
         self.expression_address = expression_address
+        self.origin = origin
         self.applicable = applicable
 
     @property
@@ -363,20 +356,29 @@ class ScannedVariable:
     def apply_type(self, tinfo):
         """ Finally apply Class'es tinfo to this variable """
 
-        hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
-        if hx_view and self.applicable:
-            print "[Info] Applying tinfo to variable {0} in function {1}".format(
-                self.lvar.name,
-                idaapi.get_short_name(self.function.entry_ea)
-            )
-            # Finding lvar of new window that have the same name that saved one and applying tinfo_t
-            lvar = filter(lambda x: x == self.lvar, hx_view.cfunc.get_lvars())
-            if lvar:
-                print "+++++++++++"
-                hx_view.set_lvar_type(lvar[0], tinfo)
-            else:
-                print "-----------"
-            # idaapi.close_pseudocode(hx_view.form)
+        if self.applicable:
+            hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
+            if hx_view:
+                print "[Info] Applying tinfo to variable {0} in function {1}".format(
+                    self.lvar.name,
+                    idaapi.get_short_name(self.function.entry_ea)
+                )
+                # Finding lvar of new window that have the same name that saved one and applying tinfo_t
+                lvar = filter(lambda x: x == self.lvar, hx_view.cfunc.get_lvars())
+                if lvar:
+                    print "+++++++++++"
+                    hx_view.set_lvar_type(lvar[0], tinfo)
+                else:
+                    print "-----------"
+
+    def to_list(self):
+        """ Creates list that is acceptable to MyChoose2 viewer """
+        return [
+            "0x{0:04X}".format(self.origin),
+            self.function_name,
+            self.lvar.name,
+            "0x{0:08X}".format(self.expression_address)
+        ]
 
     def __eq__(self, other):
         return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
@@ -720,12 +722,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             item = self.items[index.row()]
             scanned_variables = list(item.scanned_variables)
             variable_chooser = MyChoose(
-                map(
-                    lambda x: [x.function_name, x.lvar.name, "0x{0:08X}".format(x.expression_address)],
-                    scanned_variables
-                ),
+                map(lambda x: x.to_list(), scanned_variables),
                 "Select Variable",
-                [["Function name", 25], ["Variable name", 25], ["Expression address", 25]]
+                [["Origin", 4], ["Function name", 25], ["Variable name", 25], ["Expression address", 10]]
             )
             row = variable_chooser.Show(modal=True)
             if row != -1:

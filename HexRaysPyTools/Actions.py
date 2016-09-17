@@ -56,6 +56,9 @@ class TypeLibrary:
             dll = ctypes.cdll["lib" + idaname + ".so"]
         elif sys.platform == "darwin":
             dll = ctypes.cdll["lib" + idaname + ".dylib"]
+        else:
+            print "[ERROR] Failed to enable ordinals"
+            return
 
         idati = ctypes.POINTER(TypeLibrary.til_t).in_dll(dll, "idati")
         dll.enable_numbered_types(idati.contents.base[library_num], True)
@@ -473,10 +476,11 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             child = None
             while expression and expression.op not in (idaapi.cot_asg, idaapi.cit_return, idaapi.cot_call):
-                child = expression
-                expression = cfunc.body.find_parent_of(expression).to_specific_type
+                child = expression.to_specific_type
+                expression = cfunc.body.find_parent_of(expression)
 
             if expression:
+                expression = expression.to_specific_type
                 if expression.op == idaapi.cot_asg and expression.x.op == idaapi.cot_var \
                         and expression.y.op == idaapi.cot_cast:
                     variable = cfunc.get_lvars()[expression.x.v.idx]
@@ -558,6 +562,7 @@ class RecastItemRight(RecastItemLeft):
                     variable = cfunc.get_lvars()[expression.v.idx]
                     idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
                     return RECAST_VARIABLE, parent.type, variable
+
             elif expression.op == idaapi.cot_cast:
                 if expression.x.op == idaapi.cot_var:
                     variable = cfunc.get_lvars()[expression.x.v.idx]
