@@ -362,9 +362,12 @@ class ShowClasses(idaapi.action_handler_t):
         :param ctx: idaapi.action_activation_ctx_t
         :return:    None
         """
-        if not idaapi.find_tform('Classes'):
+        tform = idaapi.find_tform('Classes')
+        if not tform:
             class_viewer = Forms.ClassViewer()
             class_viewer.Show()
+        else:
+            idaapi.switchto_tform(tform, True)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

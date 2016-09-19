@@ -148,10 +148,10 @@ class ClassViewer(idaapi.PluginForm):
     def init_ui(self):
         self.parent.setWindowTitle('Classes')
         self.parent.setStyleSheet(
-            "QTreeView::item:!has-children { background-color: #fefbd8; border: 0.5px solid lightgray ;}"
-            "QTreeView::item:has-children { background-color: #80ced6; border-top: 1px solid black ;}"
-            "QTreeView::item:selected { background-color: #618685; show-decoration-selected: 1;}"
-            "QTreeView {background-color: #d5f4e6; }"
+            # "QTreeView::item:!has-children { background-color: #fefbd8; border: 0.5px solid lightgray ;}"
+            # "QTreeView::item:has-children { background-color: #80ced6; border-top: 1px solid black ;}"
+            # "QTreeView::item:selected { background-color: #618685; show-decoration-selected: 1;}"
+            "QTreeView {background-color: transparent; }"
             "QHeaderView::section {background-color: transparent; border: 1px solid;}"
         )
 
@@ -163,17 +163,21 @@ class ClassViewer(idaapi.PluginForm):
         self.class_tree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
         self.class_tree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
-        set_arg_action = QtGui.QAction("Set First Argument Type", self.class_tree)
-        rollback_action = QtGui.QAction("Rollback", self.class_tree)
-        commit_action = QtGui.QAction("Commit", self.class_tree)
+        action_set_arg = QtGui.QAction("Set First Argument Type", self.class_tree)
+        action_rollback = QtGui.QAction("Rollback", self.class_tree)
+        action_refresh = QtGui.QAction("Refresh", self.class_tree)
+        action_commit = QtGui.QAction("Commit", self.class_tree)
 
-        set_arg_action.triggered.connect(lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes()))
-        rollback_action.triggered.connect(lambda: class_model.rollback())
-        commit_action.triggered.connect(lambda: class_model.commit())
+        action_set_arg.triggered.connect(lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes()))
+        action_rollback.triggered.connect(lambda: class_model.rollback())
+        action_refresh.triggered.connect(lambda: class_model.refresh())
+        action_commit.triggered.connect(lambda: class_model.commit())
+        class_model.refreshed.connect(self.class_tree.expandAll)
 
-        self.menu.addAction(set_arg_action)
-        self.menu.addAction(rollback_action)
-        self.menu.addAction(commit_action)
+        self.menu.addAction(action_refresh)
+        self.menu.addAction(action_set_arg)
+        self.menu.addAction(action_rollback)
+        self.menu.addAction(action_commit)
 
         vertical_box = QtGui.QVBoxLayout()
         vertical_box.addWidget(self.class_tree)
