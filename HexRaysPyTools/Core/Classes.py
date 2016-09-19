@@ -1,5 +1,6 @@
 import idc
 import idaapi
+import HexRaysPyTools.Forms
 import Helper
 
 from PySide import QtGui, QtCore
@@ -13,6 +14,7 @@ class VirtualMethod(object):
         self.tinfo = tinfo
         self.tinfo_modified = False
         self.name = name
+        self.class_name = None
         self.name_modified = False
         self.parents = [parent]
         self.base_address = idc.LocByName(name)
@@ -45,7 +47,7 @@ class VirtualMethod(object):
         if column == 0:
             return self.name
         elif column == 1:
-            return self.tinfo.dstr()
+            return self.tinfo.get_pointed_object().dstr()
         elif column == 2:
             return "0x{0:08X}".format(self.address) if self.address else None
 
@@ -58,7 +60,19 @@ class VirtualMethod(object):
                     parent.modified = True
                 return True
         elif column == 1:
-            pass
+            tinfo = idaapi.tinfo_t()
+            split = value.split('(')
+            if len(split) == 2:
+                value = split[0] + ' ' + self.name + '(' + split[1] + ';'
+                if idaapi.parse_decl2(idaapi.cvar.idati, value, '', tinfo, idaapi.PT_TYP):
+                    if tinfo.is_func():
+                        tinfo.create_ptr(tinfo)
+                        if tinfo.dstr() != self.tinfo.dstr():
+                            self.tinfo = tinfo
+                            self.tinfo_modified = True
+                            for parent in self.parents:
+                                parent.modified = True
+                            return True
         return False
 
     def font(self, column):
@@ -69,10 +83,11 @@ class VirtualMethod(object):
         return QtGui.QFont("Consolas", 10, 0)
 
     def flags(self, column):
-        if column == 2:
-            return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
-        else:
-            return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsEditable
+        if column != 2:
+            if self.address:
+                return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsEditable
+        return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
+
 
     @property
     def color(self):
@@ -87,19 +102,27 @@ class VirtualMethod(object):
     def address(self):
         return self.base_address + idaapi.get_imagebase() if self.base_address else None
 
-    def set_first_argument_type(self):
+    def set_first_argument_type(self, name):
         func_data = idaapi.func_type_data_t()
-        if self.tinfo.get_func_details(func_data) and self.tinfo.get_nargs():
-            if len(self.parents) > 1:
-                print "[Info] Function {0} have more than one parent. Please set first argument manually".format(
-                    self.name
-                )
-                return
-            tinfo = self.parents[0].get_class_tinfo()
-            tinfo.create_ptr(tinfo)
-            func_data[0].type = tinfo
-            self.tinfo.create_func(func_data)
-            self.tinfo_modified = True
+        func_tinfo = self.tinfo.get_pointed_object()
+        class_tinfo = idaapi.tinfo_t()
+        if func_tinfo.get_func_details(func_data) and func_tinfo.get_nargs() and \
+                class_tinfo.get_named_type(idaapi.cvar.idati, name):
+            class_tinfo.create_ptr(class_tinfo)
+            first_arg_tinfo = func_data[0].type
+            if (first_arg_tinfo.is_ptr() and first_arg_tinfo.get_pointed_object().is_udt()) or \
+                    Helper.is_legal_type(func_data[0].type):
+                func_data[0].type = class_tinfo
+                func_data[0].name = "this"
+                func_tinfo.create_func(func_data)
+                func_tinfo.create_ptr(func_tinfo)
+                if func_tinfo.dstr() != self.tinfo.dstr():
+                    self.tinfo = func_tinfo
+                    self.tinfo_modified = True
+                    for parent in self.parents:
+                        parent.modified = True
+            else:
+                print "[Warning] function {0} probably have wrong type".format(self.name)
 
     def open_function(self):
         if self.address:
@@ -116,7 +139,7 @@ class VirtualMethod(object):
         if self.tinfo_modified:
             self.tinfo_modified = False
             if self.address:
-                idaapi.set_tinfo2(self.address, self.tinfo)
+                idaapi.apply_tinfo2(self.address, self.tinfo.get_pointed_object(), idaapi.TINFO_DEFINITE)
 
     def __eq__(self, other):
         return self.address == other.address
@@ -130,6 +153,7 @@ class VirtualTable(object):
         self.ordinal = ordinal
         self.tinfo = tinfo
         self.class_ = [class_]
+        self.class_name = None
         self.virtual_functions = []
         self.name = self.tinfo.dstr()
         self._modified = False
@@ -164,6 +188,10 @@ class VirtualTable(object):
                 self.modified = False
             else:
                 print "[ERROR] Something have been modified in Local types. Please refresh this view"
+
+    def set_first_argument_type(self, class_name):
+        for function in self.virtual_functions:
+            function.set_first_argument_type(class_name)
 
     @property
     def modified(self):
@@ -236,6 +264,7 @@ class VirtualTable(object):
 class Class(object):
     def __init__(self, name, tinfo, ordinal):
         self.name = name
+        self.class_name = name
         self.ordinal = ordinal
         self.parent = None
         self.vtables = {}
@@ -293,6 +322,10 @@ class Class(object):
             tinfo.set_numbered_type(idaapi.cvar.idati, self.ordinal, idaapi.NTF_REPLACE, self.name)
             self.modified = False
 
+    def set_first_argument_type(self, class_name):
+        if 0 in self.vtables:
+            self.vtables[0].set_first_argument_type(class_name)
+
     def data(self, column):
         if column == 0:
             return self.name
@@ -333,10 +366,6 @@ class Class(object):
         tinfo = idaapi.tinfo_t()
         tinfo.get_numbered_type(idaapi.cvar.idati, self.ordinal)
         return tinfo
-
-    def set_first_argument_type(self):
-        for function in self.functions:
-            function.set_first_argument_type()
 
     def open_function(self):
         pass
@@ -388,7 +417,6 @@ class TreeModel(QtCore.QAbstractItemModel):
                 vtable_item.children = [TreeItem(function, 0, vtable_item) for function in vtable.virtual_functions]
                 class_item.children.append(vtable_item)
             self.tree_data.append(class_item)
-            print class_item
 
         idaapi.hide_wait_box()
 
@@ -407,7 +435,7 @@ class TreeModel(QtCore.QAbstractItemModel):
         if index.isValid():
             node = index.internalPointer()
             if node.parent:
-                return self.createIndex(node.parent.row, 0, node.parent)
+                return self.createIndex(0, 0, node.parent)
         return QtCore.QModelIndex()
 
     def rowCount(self, index=QtCore.QModelIndex()):
@@ -437,8 +465,6 @@ class TreeModel(QtCore.QAbstractItemModel):
         if role == QtCore.Qt.EditRole and value != "":
             node = index.internalPointer()
             result = node.item.setData(index.column(), str(value))
-            # if result:
-            #     index.parent().internalPointer().update_local_type()
         return result
 
     def headerData(self, section, orientation, role):
@@ -446,15 +472,17 @@ class TreeModel(QtCore.QAbstractItemModel):
             return self.headers[section]
 
     def set_first_argument_type(self, indexes):
-        class_indexes = filter(lambda x: x.internalPointer().children, indexes)
-        for class_index in class_indexes:
-            class_index.internalPointer().item.set_first_argument_type()
-
-        handled_classes = map(lambda x: x.internalPointer(), class_indexes)
-        for index in indexes:
-            node = index.internalPointer()
-            if index.column() == 1 and node.parent and node.parent not in handled_classes:
-                index.internalPointer().set_first_argument_type()
+        indexes = filter(lambda x: x.column() == 0, indexes)
+        class_name = indexes[0].internalPointer().item.class_name
+        if not class_name:
+            classes = [[x.item.name] for x in self.tree_data]
+            class_chooser = HexRaysPyTools.Forms.MyChoose(classes, "Select Class", [["Name", 25]])
+            idx = class_chooser.Show(True)
+            if idx != -1:
+                class_name = classes[idx][0]
+        if class_name:
+            for index in indexes:
+                index.internalPointer().item.set_first_argument_type(class_name)
 
     def refresh(self):
         self.tree_data = []

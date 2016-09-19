@@ -1,7 +1,7 @@
 import idaapi
 import PySide.QtGui as QtGui
 import PySide.QtCore as QtCore
-import HexRaysPyTools.Core.Classes as Classes
+import Core.Classes
 
 
 class MyChoose(idaapi.Choose2):
@@ -139,6 +139,12 @@ class ClassViewer(idaapi.PluginForm):
         super(ClassViewer, self).__init__()
         self.parent = None
         self.class_tree = QtGui.QTreeView()
+
+        self.action_set_arg = QtGui.QAction("Set First Argument Type", self.class_tree)
+        self.action_rollback = QtGui.QAction("Rollback", self.class_tree)
+        self.action_refresh = QtGui.QAction("Refresh", self.class_tree)
+        self.action_commit = QtGui.QAction("Commit", self.class_tree)
+
         self.menu = QtGui.QMenu(self.parent)
 
     def OnCreate(self, form):
@@ -155,7 +161,7 @@ class ClassViewer(idaapi.PluginForm):
             "QHeaderView::section {background-color: transparent; border: 1px solid;}"
         )
 
-        class_model = Classes.TreeModel()
+        class_model = Core.Classes.TreeModel()
         self.class_tree.setModel(class_model)
         self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.class_tree.expandAll()
@@ -163,21 +169,18 @@ class ClassViewer(idaapi.PluginForm):
         self.class_tree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
         self.class_tree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
-        action_set_arg = QtGui.QAction("Set First Argument Type", self.class_tree)
-        action_rollback = QtGui.QAction("Rollback", self.class_tree)
-        action_refresh = QtGui.QAction("Refresh", self.class_tree)
-        action_commit = QtGui.QAction("Commit", self.class_tree)
-
-        action_set_arg.triggered.connect(lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes()))
-        action_rollback.triggered.connect(lambda: class_model.rollback())
-        action_refresh.triggered.connect(lambda: class_model.refresh())
-        action_commit.triggered.connect(lambda: class_model.commit())
+        self.action_set_arg.triggered.connect(
+            lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes())
+        )
+        self.action_rollback.triggered.connect(lambda: class_model.rollback())
+        self.action_refresh.triggered.connect(lambda: class_model.refresh())
+        self.action_commit.triggered.connect(lambda: class_model.commit())
         class_model.refreshed.connect(self.class_tree.expandAll)
 
-        self.menu.addAction(action_refresh)
-        self.menu.addAction(action_set_arg)
-        self.menu.addAction(action_rollback)
-        self.menu.addAction(action_commit)
+        self.menu.addAction(self.action_refresh)
+        self.menu.addAction(self.action_set_arg)
+        self.menu.addAction(self.action_rollback)
+        self.menu.addAction(self.action_commit)
 
         vertical_box = QtGui.QVBoxLayout()
         vertical_box.addWidget(self.class_tree)
@@ -193,4 +196,9 @@ class ClassViewer(idaapi.PluginForm):
         return idaapi.PluginForm.Show(self, caption, options=options)
 
     def show_menu(self, point):
+        self.action_set_arg.setEnabled(True)
+        indexes = filter(lambda x: x.column() == 0, self.class_tree.selectedIndexes())
+        if len(indexes) > 1:
+            if filter(lambda x: len(x.internalPointer().children) > 0, indexes):
+                self.action_set_arg.setEnabled(False)
         self.menu.exec_(self.class_tree.mapToGlobal(point))
