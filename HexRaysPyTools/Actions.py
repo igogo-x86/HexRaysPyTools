@@ -256,11 +256,37 @@ class GetStructureBySize(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class ScanVariable(idaapi.action_handler_t):
+class ShallowScanVariable(idaapi.action_handler_t):
 
-    name = "my:ScanVariable"
+    name = "my:ShallowScanVariable"
     description = "Scan Variable"
     hotkey = "F"
+
+    def __init__(self, temporary_structure):
+        self.temporary_structure = temporary_structure
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        variable = hx_view.item.get_lvar()  # lvar_t
+        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+            index = list(hx_view.cfunc.get_lvars()).index(variable)
+            scanner = ShallowSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
+            scanner.process()
+            for field in scanner.candidates:
+                self.temporary_structure.add_row(field)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class DeepScanVariable(idaapi.action_handler_t):
+
+    name = "my:DeepScanVariable"
+    description = "Deep Scan Variable"
+    hotkey = "shift+F"
 
     def __init__(self, temporary_structure):
         self.temporary_structure = temporary_structure

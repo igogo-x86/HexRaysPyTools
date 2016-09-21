@@ -27,7 +27,8 @@ def hexrays_events_callback(*args):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
 
         if hx_view.item.get_lvar() and filter(lambda x: x.equals_to(hx_view.item.get_lvar().type()), Const.LEGAL_TYPES):
-            idaapi.attach_action_to_popup(form, popup, Actions.ScanVariable.name, None)
+            idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
+            idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
@@ -158,7 +159,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.RemoveReturn)
         Actions.register(Actions.ConvertToUsercall)
-        Actions.register(Actions.ScanVariable, Helper.temporary_structure)
+        Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
+        Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
@@ -191,7 +193,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RemoveArgument)
         Actions.unregister(Actions.RemoveReturn)
         Actions.unregister(Actions.ConvertToUsercall)
-        Actions.unregister(Actions.ScanVariable)
+        Actions.unregister(Actions.ShallowScanVariable)
+        Actions.unregister(Actions.DeepScanVariable)
         Actions.unregister(Actions.RecognizeShape)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)

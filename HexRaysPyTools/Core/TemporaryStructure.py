@@ -2,8 +2,9 @@ import bisect
 import idc
 import idaapi
 import re
-import PySide.QtCore as QtCore
-import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+# import PySide.QtGui as QtGui
+from HexRaysPyTools.Cute import *
 import Const
 import Helper
 import VariableScanner
@@ -63,6 +64,10 @@ class AbstractMember:
 
     def activate(self):
         pass
+
+    def set_enabled(self, enable):
+        self.enabled = enable
+        self.is_array = False
 
     @property
     def type_name(self):
@@ -328,6 +333,9 @@ class VoidMember(Member):
 
     def switch_array_flag(self):
         pass
+
+    def set_enabled(self, enable):
+        self.enabled = enable
 
     @property
     def font(self):
@@ -641,8 +649,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
     def disable_rows(self, indices):
         for idx in indices:
             if self.items[idx.row()].enabled:
-                self.items[idx.row()].enabled = False
-                self.items[idx.row()].is_array = False
+                self.items[idx.row()].set_enabled(False)
         self.refresh_collisions()
         self.modelReset.emit()
 

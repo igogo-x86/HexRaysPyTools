@@ -3,7 +3,8 @@ import idaapi
 import HexRaysPyTools.Forms
 import Helper
 
-from PySide import QtGui, QtCore
+# from PySide import QtGui, QtCore
+from HexRaysPyTools.Cute import *
 
 all_virtual_functions = {}      # name    -> VirtualMethod
 all_virtual_tables = {}         # ordinal -> VirtualTable

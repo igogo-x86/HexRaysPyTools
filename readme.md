@@ -69,6 +69,11 @@ If variable is a structure pointer and is used to address outside of its boundar
 
 The place where all collected information about scanned variables can be viewed and modified
 
+Two ways to collect information:
+
+* Right Click on variable -> Scan Variable. Recognizes fields usage in current function
+* Right Click on variable -> Deep Scan Variable. First recursively touches functions to make Ida recognize propper arguments (this happens only once for each function during session). Than recursively applies scanner to variables and functions that get our structure pointer as argument.
+
 ![img][builder]
 
 * Types with __BOLD__ font are virtual tables. Double click opens list with all virtual functions that helps to visit them. Visited functions marked with cross and color.

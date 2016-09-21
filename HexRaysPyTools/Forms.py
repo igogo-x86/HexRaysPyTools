@@ -1,6 +1,7 @@
 import idaapi
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
+# import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+from HexRaysPyTools.Cute import *
 import Core.Classes
 
 
@@ -26,7 +27,7 @@ class StructureBuilder(idaapi.PluginForm):
         self.parent = None
 
     def OnCreate(self, form):
-        self.parent = self.FormToPySideWidget(form)
+        self.parent = form_to_widget(form)
         self.init_ui()
 
     def init_ui(self):
@@ -65,7 +66,7 @@ class StructureBuilder(idaapi.PluginForm):
         struct_view.verticalHeader().setVisible(False)
         struct_view.verticalHeader().setDefaultSectionSize(24)
         struct_view.horizontalHeader().setStretchLastSection(True)
-        struct_view.horizontalHeader().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        struct_view.horizontalHeader().setSectionResizeMode(QtGui.QHeaderView.ResizeToContents)
 
         grid_box = QtGui.QGridLayout()
         grid_box.setSpacing(0)
@@ -148,7 +149,8 @@ class ClassViewer(idaapi.PluginForm):
         self.menu = QtGui.QMenu(self.parent)
 
     def OnCreate(self, form):
-        self.parent = self.FormToPySideWidget(form)
+        # self.parent = self.FormToPySideWidget(form)
+        self.parent = form_to_widget(form)
         self.init_ui()
 
     def init_ui(self):
@@ -166,7 +168,7 @@ class ClassViewer(idaapi.PluginForm):
         self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.class_tree.expandAll()
         self.class_tree.header().setStretchLastSection(True)
-        self.class_tree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.class_tree.header().setSectionResizeMode(QtGui.QHeaderView.ResizeToContents)
         self.class_tree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
         self.action_set_arg.triggered.connect(
