@@ -429,9 +429,8 @@ class SelectContainingStructure(idaapi.action_handler_t):
                 lvar_cmt = re.sub("```.*```", '', lvar.cmt)
                 hx_view.set_lvar_cmt(
                     lvar,
-                    lvar_cmt + "```{0}+{1}+{2}```".format(
+                    lvar_cmt + "```{0}+{1}```".format(
                         structures[selected_idx][3],
-                        structures[selected_idx][2],
                         structures[selected_idx][1])
                 )
                 hx_view.refresh_view(True)

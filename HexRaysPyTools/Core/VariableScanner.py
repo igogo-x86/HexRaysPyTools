@@ -24,13 +24,16 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         self.variables = {index: function.get_lvars()[index].type()}
         self.origin = origin
         self.expression_address = idaapi.BADADDR
-        self.candidates = [self.create_member(0, index)]
+        self.candidates = []
+        if not self.variables[index].equals_to(Const.PVOID_TINFO):
+            self.candidates.append(self.create_member(0, index, pvoid_applicable=True))
+
         self.protected_variables = {index}
         scanned_functions.add((function.entry_ea, index))
 
-    def create_member(self, offset, index, tinfo=None, ea=0):
+    def create_member(self, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
         return TemporaryStructure.create_member(
-            self.function, self.expression_address, self.origin, offset, index, tinfo, ea
+            self.function, self.expression_address, self.origin, offset, index, tinfo, ea, pvoid_applicable
         )
 
     def get_member(self, offset, index, **kwargs):
@@ -50,7 +53,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     return self.create_member(offset, index, nice_tinfo)
                 if SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
-                return self.create_member(offset, index)
+                return self.create_member(offset, index, pvoid_applicable=True)
             arg_type.remove_ptr_or_array()
             return self.create_member(offset, index, arg_type)
         except KeyError:

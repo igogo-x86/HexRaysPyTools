@@ -21,7 +21,7 @@ def parse_vtable_name(name):
     return name, True
 
 
-def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0):
+def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
     # Creates appropriate member (VTable, regular member, void *member) depending on input
     scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
     if ea:
@@ -30,9 +30,9 @@ def create_member(function, expression_address, origin, offset, index, tinfo=Non
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
         return Member(offset, tinfo, scanned_variable, origin)
     else:
-        # VoidMember shouldn't have ScannedVariable because after finalizing it can affect on normal functions
-        # like `memset`
-        scanned_variable.applicable = False
+        # VoidMember shouldn't have ScannedVariable because after finalizing it can mess up with normal functions
+        # like `memset` or operator delete
+        scanned_variable.applicable = pvoid_applicable
         return VoidMember(offset, scanned_variable, origin)
 
 
@@ -546,13 +546,10 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.modelReset.emit()
 
     def get_scanned_variables(self, origin=0):
-        return reduce(
-            lambda result, x: result | x,
-            map(
-                lambda x: x.scanned_variables,
-                filter(lambda x: x.origin == origin, self.items)
-            )
-        )
+        result = map(lambda x: x.scanned_variables, filter(lambda x: x.origin == origin, self.items))
+        if result:
+            return reduce(lambda summary, x: summary | x, result)
+        return set()
 
     def get_next_enabled(self, row):
         row += 1
@@ -692,7 +689,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         min_idx = max_idx = None
         if indices:
             min_idx, max_idx = min(indices), max(indices, key=lambda x: (x.row(), x.column()))
-            self.dataChanged.emit(min_idx, max_idx)
 
         if min_idx == max_idx:
             tinfo = self.get_recognized_shape()
@@ -715,8 +711,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 self.add_row(Member(base, tinfo, None))
 
     def activated(self, index):
-        self.dataChanged.emit(index, index)
-
         # Double click on offset, opens window with variables
         if index.column() == 0:
             item = self.items[index.row()]

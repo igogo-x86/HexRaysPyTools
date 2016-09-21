@@ -77,7 +77,11 @@ The place where all collected information about scanned variables can be viewed 
 
 * Types with _ITALIC_ font are got as `void *` arguments and are not used in shape recognition.
 
-* Field's names are editable by double click
+* Double click on Field's names to edit
+
+* Double click on offset opens window with every places where this type has been extracted. Click "Ok" button to open selected place in pseudocode window.
+
+![img][scanned_variables]
 
 __Finalize__ - opens window with editable C-like declaration and assigns new type to all scanned variabled.
 
@@ -131,7 +135,24 @@ Abbreviations:
 | `PVOID` | `function(... , (TYPE)var + x, ...)`| argument's type | `x` |
 | `PVOID` | `(TYPE *) ((char *)var + x)`| TYPE | `x` |
 
-### 6) Function signature manipulation
+### 6) Classes (Alt + F1)
+
+Also can be found at _View->Open Subview->Classes_. Helps to manage classes (structures with virtual tables). 
+
+
+![img][classes]
+
+##### !! Better to rename all functions before debugging because Ida can mess up with default names and information in virtual tables will be inconsistent
+Class, virtual table and functions names are editable. Also function's declaration can be edited. After edit, altered items change font to _italic_. Right click opens following menu options:
+
+* Refresh - clear all and rescan local types for information again
+* Rollback - undo changes
+* Commit - apply changes. Functions will be renamed and recasted both in virtual tables in Local Types and dissasmbly code.
+* Set First Argument type - allows to select first argument for function among all classes. If right click was used on class name, than it's type will be automatically applied to virtual table at offset 0
+
+
+
+### 7) Function signature manipulation
 
 1. Right click on first line -> "Remove Return" converts return type to void
 2. Right click on argument -> "Remove Argument" disposes of this argument
@@ -144,8 +165,10 @@ Abbreviations:
 [good_structures]: Img/good.JPG
 [builder]: Img/builder.JPG
 [virtual_functions]: Img/virtual_functions.JPG
+[scanned_variables]: Img/fields_xref.JPG
+[classes]: Img/classes.JPG
 
-### 7) Recasting (Shift+R, Shift+L)
+### 8) Recasting (Shift+R, Shift+L)
 
 Expressions from the table, can be quickly modified. Select cast item or variable and press hotkey or select from Right-Click Menu Recast Variable, Return or Argument.
 

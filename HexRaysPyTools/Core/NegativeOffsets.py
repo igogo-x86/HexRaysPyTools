@@ -4,16 +4,33 @@ import idaapi
 
 import idc
 
+
 def parse_lvar_comment(lvar):
     if lvar.type().is_ptr():
         m = re.search('```(.+)```', lvar.cmt)
         if m:
-            structure_name, member_name, offset = m.group(1).split('+')
+            structure_name, offset = m.group(1).split('+')
             offset = int(offset)
             parent_tinfo = idaapi.tinfo_t()
             if parent_tinfo.get_named_type(idaapi.cvar.idati, structure_name) and parent_tinfo.get_size() > offset:
-                return NegativeLocalInfo(lvar.type().get_pointed_object(), parent_tinfo, offset, member_name)
+                member_name = dict(find_deep_members(parent_tinfo, lvar.type().get_pointed_object())).get(offset, None)
+                if member_name:
+                    return NegativeLocalInfo(lvar.type().get_pointed_object(), parent_tinfo, offset, member_name)
     return None
+
+
+def find_deep_members(parent_tinfo, target_tinfo):
+    udt_data = idaapi.udt_type_data_t()
+    parent_tinfo.get_udt_details(udt_data)
+    result = []
+    for udt_member in udt_data:
+        if udt_member.type.equals_to(target_tinfo):
+            result.append((udt_member.offset / 8, udt_member.name))
+        elif udt_member.type.is_udt():
+            for offset, name in find_deep_members(udt_member.type, target_tinfo):
+                final_name = udt_member.name + '.' + name if udt_member.name else name
+                result.append((udt_member.offset / 8 + offset, final_name))
+    return result
 
 
 class NegativeLocalInfo:
@@ -58,19 +75,6 @@ class NegativeLocalCandidate:
             return udt_member.offset == offset * 8
         return False
 
-    def find_deep_members(self, parent_tinfo, target_tinfo):
-        udt_data = idaapi.udt_type_data_t()
-        parent_tinfo.get_udt_details(udt_data)
-        result = []
-        for udt_member in udt_data:
-            if udt_member.type.equals_to(target_tinfo):
-                result.append((udt_member.offset / 8, udt_member.name))
-            elif udt_member.type.is_udt():
-                for offset, name in self.find_deep_members(udt_member.type, target_tinfo):
-                    final_name = udt_member.name + '.' + name if udt_member.name else name
-                    result.append((udt_member.offset / 8 + offset, final_name))
-        return result
-
     def find_containing_structures(self, type_library):
         """
         Given the type library creates a list of structures from this library, that contains this structure and
@@ -97,7 +101,7 @@ class NegativeLocalCandidate:
         for ordinal in xrange(1, idaapi.get_ordinal_qty(type_library)):
             parent_tinfo.create_typedef(type_library, ordinal)
             if parent_tinfo.get_size() >= min_struct_size:
-                for offset, name in self.find_deep_members(parent_tinfo, target_tinfo):
+                for offset, name in find_deep_members(parent_tinfo, target_tinfo):
                     # print "[DEBUG] Found {0} at {1} in {2}".format(name, offset, parent_tinfo.dstr())
                     if offset + min_offset >= 0 and offset + max_offset <= parent_tinfo.get_size():
                         result.append((ordinal, offset, name, parent_tinfo.dstr()))
@@ -117,7 +121,7 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
             # print "ADD TYPE", expression.type.dstr()
             index = expression.x.v.idx
             if index in self.negative_lvars:
-                offset = expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
+                offset = expression.y.numval()
                 if offset >= self.negative_lvars[index].size:
                     self.create_containing_record(expression, index, offset)
         elif expression.op == idaapi.cot_sub and expression.x.op == idaapi.cot_var and expression.y.op == idaapi.cot_num:
@@ -211,13 +215,12 @@ class SearchVisitor(idaapi.ctree_parentee_t):
                         member_name = expression.a[2].helper
                         parent_tinfo = idaapi.tinfo_t()
                         if not parent_tinfo.get_named_type(idaapi.cvar.idati, parent_name):
-                            return None
+                            return 0
                         udt_data = idaapi.udt_type_data_t()
                         parent_tinfo.get_udt_details(udt_data)
                         udt_member = filter(lambda x: x.name == member_name, udt_data)
                         if udt_member:
                             tinfo = udt_member[0].type
-                            tinfo.create_ptr(tinfo)
                             self.result[idx] = NegativeLocalInfo(
                                 tinfo,
                                 parent_tinfo,
@@ -239,7 +242,7 @@ class AnalyseVisitor(idaapi.ctree_parentee_t):
         if expression.op == idaapi.cot_add and expression.y.op == idaapi.cot_num:
             if expression.x.op == idaapi.cot_var and expression.x.v.idx in self.candidates:
                 idx = expression.x.v.idx
-                number = expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
+                number = expression.y.numval()
                 if self.candidates[idx].get_size() <= number:
                     if idx in self.potential_negatives:
                         self.potential_negatives[idx].offsets.append(number)
@@ -248,7 +251,7 @@ class AnalyseVisitor(idaapi.ctree_parentee_t):
         elif expression.op == idaapi.cot_sub and expression.y.op == idaapi.cot_num:
             if expression.x.op == idaapi.cot_var and expression.x.v.idx in self.candidates:
                 idx = expression.x.v.idx
-                number = -expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
+                number = -expression.y.numval()
                 if idx in self.potential_negatives:
                     self.potential_negatives[idx].offsets.append(number)
                 else:

@@ -1,10 +1,8 @@
 import HexRaysPyTools.Actions as Actions
-import HexRaysPyTools.Core.Helper
 from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
-import HexRaysPyTools.Core.VariableScanner as VariableScanner
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
 
@@ -69,20 +67,26 @@ def hexrays_events_callback(*args):
             # After that remove pointer and get member name with the same offset
 
             if item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
-
                 vtable_tinfo = item.e.x.type.get_pointed_object()
                 method_offset = item.e.m
                 class_tinfo = item.e.x.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.x.m
+            elif item.e.x.op == idaapi.cot_memptr:
+                vtable_tinfo = item.e.x.type.get_pointed_object()
+                method_offset = item.e.m
+                class_tinfo = item.e.x.x.type.get_pointed_object()
+                vtable_offset = item.e.x.m
+            else:
+                return 0
 
-                udt_member = idaapi.udt_member_t()
-                udt_member.offset = method_offset * 8
-                vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+            udt_member = idaapi.udt_member_t()
+            udt_member.offset = method_offset * 8
+            vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
 
-                func_ea = Helper.get_virtual_func_address(class_tinfo, vtable_offset, udt_member.name)
-                if func_ea:
-                    idaapi.open_pseudocode(func_ea, 0)
-                    return 1
+            func_ea = Helper.get_virtual_func_address(class_tinfo, vtable_offset, udt_member.name)
+            if func_ea:
+                idaapi.open_pseudocode(func_ea, 0)
+                return 1
 
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]

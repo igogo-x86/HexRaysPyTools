@@ -31,7 +31,7 @@ class StructureBuilder(idaapi.PluginForm):
 
     def init_ui(self):
         self.parent.setStyleSheet(
-            "QTableView {background-color: transparent;}"
+            "QTableView {background-color: transparent; selection-background-color: #87bdd8;}"
             "QHeaderView::section {background-color: transparent; border: 0.5px solid;}"
             "QPushButton {width: 50px; height: 20px;}"
             # "QPushButton::pressed {background-color: #ccccff}"
