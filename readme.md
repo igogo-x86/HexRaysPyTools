@@ -150,10 +150,13 @@ Also can be found at _View->Open Subview->Classes_. Helps to manage classes (str
 ##### !! Better to rename all functions before debugging because Ida can mess up with default names and information in virtual tables will be inconsistent
 Class, virtual table and functions names are editable. Also function's declaration can be edited. After edit, altered items change font to _italic_. Right click opens following menu options:
 
+* Expand All / Collapse All
 * Refresh - clear all and rescan local types for information again
 * Rollback - undo changes
-* Commit - apply changes. Functions will be renamed and recasted both in virtual tables in Local Types and dissasmbly code.
+* Commit - apply changes. Functions will be renamed and recasted both in virtual tables in Local Types and dissasembly code.
 * Set First Argument type - allows to select first argument for function among all classes. If right click was used on class name, than it's type will be automatically applied to virtual table at offset 0
+
+You can also filter classes using Regexp either by class_name or by existence of specific functions. Just input expression in line edit for filtering by class_name or prepend it with "!" to filter by function name.
 
 
 

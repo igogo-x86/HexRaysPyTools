@@ -140,7 +140,10 @@ class ClassViewer(idaapi.PluginForm):
         super(ClassViewer, self).__init__()
         self.parent = None
         self.class_tree = QtGui.QTreeView()
+        self.line_edit_filter = QtGui.QLineEdit()
 
+        self.action_collapse = QtGui.QAction("Collapse all", self.class_tree)
+        self.action_expand = QtGui.QAction("Expand all", self.class_tree)
         self.action_set_arg = QtGui.QAction("Set First Argument Type", self.class_tree)
         self.action_rollback = QtGui.QAction("Rollback", self.class_tree)
         self.action_refresh = QtGui.QAction("Refresh", self.class_tree)
@@ -163,14 +166,25 @@ class ClassViewer(idaapi.PluginForm):
             "QHeaderView::section {background-color: transparent; border: 1px solid;}"
         )
 
+        hbox_layout = QtGui.QHBoxLayout()
+        label_filter = QtGui.QLabel("&Filter:")
+        label_filter.setBuddy(self.line_edit_filter)
+        hbox_layout.addWidget(label_filter)
+        hbox_layout.addWidget(self.line_edit_filter)
+
         class_model = Core.Classes.TreeModel()
-        self.class_tree.setModel(class_model)
+        proxy_model = Core.Classes.ProxyModel()
+        proxy_model.setSourceModel(class_model)
+        proxy_model.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        self.class_tree.setModel(proxy_model)
         self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.class_tree.expandAll()
         self.class_tree.header().setStretchLastSection(True)
         self.class_tree.header().setSectionResizeMode(QtGui.QHeaderView.ResizeToContents)
         self.class_tree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
+        self.action_collapse.triggered.connect(self.class_tree.collapseAll)
+        self.action_expand.triggered.connect(self.class_tree.expandAll)
         self.action_set_arg.triggered.connect(
             lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes())
         )
@@ -179,6 +193,8 @@ class ClassViewer(idaapi.PluginForm):
         self.action_commit.triggered.connect(lambda: class_model.commit())
         class_model.refreshed.connect(self.class_tree.expandAll)
 
+        self.menu.addAction(self.action_collapse)
+        self.menu.addAction(self.action_expand)
         self.menu.addAction(self.action_refresh)
         self.menu.addAction(self.action_set_arg)
         self.menu.addAction(self.action_rollback)
@@ -186,10 +202,13 @@ class ClassViewer(idaapi.PluginForm):
 
         vertical_box = QtGui.QVBoxLayout()
         vertical_box.addWidget(self.class_tree)
+        vertical_box.addLayout(hbox_layout)
         self.parent.setLayout(vertical_box)
 
         self.class_tree.activated[QtCore.QModelIndex].connect(class_model.open_function)
         self.class_tree.customContextMenuRequested[QtCore.QPoint].connect(self.show_menu)
+        self.line_edit_filter.textChanged[str].connect(proxy_model.set_regexp_filter)
+        # proxy_model.rowsInserted[object].connect(lambda: self.class_tree.setExpanded(object, True))
 
     def OnClose(self, form):
         pass

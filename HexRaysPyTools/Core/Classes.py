@@ -327,6 +327,12 @@ class Class(object):
         if 0 in self.vtables:
             self.vtables[0].set_first_argument_type(class_name)
 
+    def has_function(self, regexp):
+        for vtable in self.vtables.values():
+            if filter(lambda func: regexp.indexIn(func.name) >= 0, vtable.virtual_functions):
+                return True
+        return False
+
     def data(self, column):
         if column == 0:
             return self.name
@@ -504,3 +510,24 @@ class TreeModel(QtCore.QAbstractItemModel):
     def open_function(self, index):
         if index.column() == 2:
             index.internalPointer().item.open_function()
+
+
+class ProxyModel(QtGui.QSortFilterProxyModel):
+    def __init__(self):
+        super(ProxyModel, self).__init__()
+        self.filter_by_function = False
+
+    def set_regexp_filter(self, regexp):
+        if regexp and regexp[0] == '!':
+            self.filter_by_function = True
+            self.setFilterRegExp(regexp[1:])
+        else:
+            self.filter_by_function = False
+            self.setFilterRegExp(regexp)
+
+    def filterAcceptsRow(self, row, parent):
+        if not parent.isValid() and self.filterRegExp():
+            if self.filter_by_function:
+                return self.sourceModel().tree_data[row].item.has_function(self.filterRegExp())
+            return self.filterRegExp().indexIn(self.sourceModel().tree_data[row].item.class_name) >= 0
+        return True
