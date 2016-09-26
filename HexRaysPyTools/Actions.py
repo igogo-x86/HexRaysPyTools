@@ -518,7 +518,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                     child = child or expression.creturn.expr
                     if child.op == idaapi.cot_cast:
                         idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
-                        return RECAST_RETURN, child.x.type
+                        return RECAST_RETURN, child.x.type, None
                 elif expression.op == idaapi.cot_call:
                     if child and child.op == idaapi.cot_cast:
                         arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
@@ -544,7 +544,6 @@ class RecastItemLeft(idaapi.action_handler_t):
             elif result[0] == RECAST_ARGUMENT:
                 arg_index, func_tinfo, arg_tinfo, address = result[1:]
 
-                print func_tinfo.dstr()
                 func_data = idaapi.func_type_data_t()
                 func_tinfo.get_func_details(func_data)
                 func_data[arg_index].type = arg_tinfo
@@ -552,16 +551,22 @@ class RecastItemLeft(idaapi.action_handler_t):
                 new_func_tinfo.create_func(func_data)
                 if idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE):
                     hx_view.refresh_view(True)
+
             elif result[0] == RECAST_RETURN:
-                return_type = result[1]
+                return_type, func_address = result[1:]
+                try:
+                    cfunc = idaapi.decompile(func_address) if func_address else hx_view.cfunc
+                except idaapi.DecompilationFailure:
+                    print "[ERROR] Ida failed to decompile function"
+                    return
 
                 function_tinfo = idaapi.tinfo_t()
-                hx_view.cfunc.get_func_type(function_tinfo)
+                cfunc.get_func_type(function_tinfo)
                 func_data = idaapi.func_type_data_t()
                 function_tinfo.get_func_details(func_data)
                 func_data.rettype = return_type
                 function_tinfo.create_func(func_data)
-                if idaapi.apply_tinfo2(hx_view.cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
+                if idaapi.apply_tinfo2(cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
                     hx_view.refresh_view(True)
 
     def update(self, ctx):
@@ -583,16 +588,16 @@ class RecastItemRight(RecastItemLeft):
     def check(cfunc, ctree_item):
         if ctree_item.citype == idaapi.VDI_EXPR:
 
-            expression = ctree_item.e.cexpr
-            if expression.op == idaapi.cot_var:
-                parent = cfunc.body.find_parent_of(expression).cexpr
-                if parent.op == idaapi.cot_cast:
-                    variable = cfunc.get_lvars()[expression.v.idx]
-                    idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
-                    return RECAST_VARIABLE, parent.type, variable
-
-            elif expression.op == idaapi.cot_cast:
+            expression = ctree_item.it
+            while expression and expression.op != idaapi.cot_cast:
+                expression = expression.to_specific_type
+                expression = cfunc.body.find_parent_of(expression)
+            if expression:
+                expression = expression.to_specific_type
                 if expression.x.op == idaapi.cot_var:
                     variable = cfunc.get_lvars()[expression.x.v.idx]
                     idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
                     return RECAST_VARIABLE, expression.type, variable
+                elif expression.x.op == idaapi.cot_call:
+                    idaapi.update_action_label(RecastItemRight.name, "Recast Return")
+                    return RECAST_RETURN, expression.type, expression.x.x.obj_ea
