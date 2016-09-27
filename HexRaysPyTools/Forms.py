@@ -133,6 +133,7 @@ class StructureGraphViewer(idaapi.GraphViewer):
     def OnDblClick(self, node_id):
         self.graph.change_selected([self[node_id]])
         self.Refresh()
+        self.Select(0)
 
 
 class ClassViewer(idaapi.PluginForm):
