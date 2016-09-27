@@ -185,4 +185,5 @@ Expressions from the table, can be quickly modified. Select cast item or variabl
 | var = (TYPE) expr | var type -> TYPE  |  |
 | exp = (TYPE) var |  | var type -> TYPE |
 | function(..., (TYPE) var, ...) | functions' argument -> TYPE | var type -> TYPE |
+| (TYPE) function(...) | | functions' return type -> TYPE |
 | return (TYPE) var | functions' return type -> TYPE | var type -> TYPE |
