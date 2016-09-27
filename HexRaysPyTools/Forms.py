@@ -110,20 +110,22 @@ class StructureGraphViewer(idaapi.GraphViewer):
     def __init__(self, title, graph):
         idaapi.GraphViewer.__init__(self, title)
         self.graph = graph
+        self.nodes_id = {}
 
     def OnRefresh(self):
         self.Clear()
-        nodes_id = {}
+        self.nodes_id.clear()
         for node in self.graph.get_nodes():
-            nodes_id[node] = self.AddNode(node)
+            self.nodes_id[node] = self.AddNode(node)
         for first, second in self.graph.get_edges():
-            self.AddEdge(nodes_id[first], nodes_id[second])
+            self.AddEdge(self.nodes_id[first], self.nodes_id[second])
         return True
 
     def OnGetText(self, node_id):
         return self.graph.local_types[self[node_id]].name_and_color
 
     def OnHint(self, node_id):
+        """ Try-catch clause because IDA sometimes attempts to use old information to get hint """
         try:
             ordinal = self[node_id]
             return self.graph.local_types[ordinal].hint
@@ -131,9 +133,12 @@ class StructureGraphViewer(idaapi.GraphViewer):
             return
 
     def OnDblClick(self, node_id):
-        self.graph.change_selected([self[node_id]])
+        self.change_selected([self[node_id]])
+
+    def change_selected(self, ordinals):
+        self.graph.change_selected(ordinals)
         self.Refresh()
-        self.Select(0)
+        self.Select(self.nodes_id[ordinals[0]])
 
 
 class ClassViewer(idaapi.PluginForm):
