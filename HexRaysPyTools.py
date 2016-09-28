@@ -5,6 +5,7 @@ import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
+from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor
 
 # import Core.QtShim as QtShim
 
@@ -92,6 +93,7 @@ def hexrays_events_callback(*args):
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]
 
+
         if level_of_maturity == idaapi.CMAT_BUILT:
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
@@ -129,14 +131,13 @@ def hexrays_events_callback(*args):
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
-        elif level_of_maturity == 5:
-            pass
-
-        # elif level_of_maturity == idaapi.CMAT_TRANS1:
-        #     print '=' * 40
-        #     print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
-        #     print '=' * 40
-        #     print cfunc
+        elif level_of_maturity == idaapi.CMAT_TRANS2:
+            # print '=' * 40
+            # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
+            # print '=' * 40
+            # print cfunc
+            visitor = SpaghettiVisitor()
+            visitor.apply_to(cfunc.body, None)
     return 0
 
 

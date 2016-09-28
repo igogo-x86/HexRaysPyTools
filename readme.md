@@ -187,3 +187,32 @@ Expressions from the table, can be quickly modified. Select cast item or variabl
 | function(..., (TYPE) var, ...) | functions' argument -> TYPE | var type -> TYPE |
 | (TYPE) function(...) | | functions' return type -> TYPE |
 | return (TYPE) var | functions' return type -> TYPE | var type -> TYPE |
+
+### 9) Untangling 'if' statements
+
+Automatically applies following transformations:
+
+Before:
+
+```c
+...
+if (condition) {
+    statement_1;
+    statement_2;
+    ...
+    return another_value;
+}
+return value;
+```
+
+After:
+```c
+...
+if (opposite_condition) {
+    return value;
+}
+statement_1;
+statement_2;
+...
+return another_value;            // if 'then' branch have no return, than `return value;`
+```
