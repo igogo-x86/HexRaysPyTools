@@ -12,9 +12,10 @@ from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStruct
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 
-RECAST_VARIABLE = 0
-RECAST_ARGUMENT = 1
-RECAST_RETURN = 2
+RECAST_LOCAL_VARIABLE = 0
+RECAST_GLOBAL_VARIABLE = 1
+RECAST_ARGUMENT = 2
+RECAST_RETURN = 3
 
 
 def register(action, *args):
@@ -509,16 +510,21 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             if expression:
                 expression = expression.to_specific_type
-                if expression.op == idaapi.cot_asg and expression.x.op == idaapi.cot_var \
+                if expression.op == idaapi.cot_asg and expression.x.op in (idaapi.cot_var, idaapi.cot_obj) \
                         and expression.y.op == idaapi.cot_cast:
-                    variable = cfunc.get_lvars()[expression.x.v.idx]
-                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
-                    return RECAST_VARIABLE, expression.y.x.type, variable
+                    if expression.x.op == idaapi.cot_var:
+                        variable = cfunc.get_lvars()[expression.x.v.idx]
+                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
+                        return RECAST_LOCAL_VARIABLE, expression.y.x.type, variable
+                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Global')
+                    return RECAST_GLOBAL_VARIABLE, expression.y.x.type, expression.x.obj_ea
+
                 elif expression.op == idaapi.cit_return:
                     child = child or expression.creturn.expr
                     if child.op == idaapi.cot_cast:
                         idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
                         return RECAST_RETURN, child.x.type, None
+
                 elif expression.op == idaapi.cot_call:
                     if child and child.op == idaapi.cot_cast:
                         arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
@@ -536,9 +542,14 @@ class RecastItemLeft(idaapi.action_handler_t):
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
-            if result[0] == RECAST_VARIABLE:
+            if result[0] == RECAST_LOCAL_VARIABLE:
                 tinfo, lvar = result[1:]
                 if hx_view.set_lvar_type(lvar, tinfo):
+                    hx_view.refresh_view(True)
+
+            elif result[0] == RECAST_GLOBAL_VARIABLE:
+                tinfo, address = result[1:]
+                if idaapi.apply_tinfo2(address, tinfo, idaapi.TINFO_DEFINITE):
                     hx_view.refresh_view(True)
 
             elif result[0] == RECAST_ARGUMENT:
@@ -597,7 +608,12 @@ class RecastItemRight(RecastItemLeft):
                 if expression.x.op == idaapi.cot_var:
                     variable = cfunc.get_lvars()[expression.x.v.idx]
                     idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
-                    return RECAST_VARIABLE, expression.type, variable
+                    return RECAST_LOCAL_VARIABLE, expression.type, variable
+                
+                elif expression.x.op == idaapi.cot_obj:
+                    idaapi.update_action_label(RecastItemRight.name, 'Recast Global')
+                    return RECAST_GLOBAL_VARIABLE, expression.type, expression.x.obj_ea
+
                 elif expression.x.op == idaapi.cot_call:
                     idaapi.update_action_label(RecastItemRight.name, "Recast Return")
                     return RECAST_RETURN, expression.type, expression.x.x.obj_ea

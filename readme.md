@@ -1,6 +1,6 @@
 # About
 
-Plugin assist in creation classes/structures and detection virtual tables. Best to use with [Class Informer][0] plugin, because it helps to automatically get original classes names
+Plugin assists in creation classes/structures and detection virtual tables. Best to use with [Class Informer][0] plugin, because it helps to automatically get original classes names
 
 # Features
 
@@ -10,7 +10,7 @@ Shows relationship between structures.
 ![img][structure_graph]
 
 Also: dark green node is union, light green - enum.
- 
+
 Usage:
 
 1. Open Local Types
@@ -27,9 +27,9 @@ Usage:
 2. Select library in which find structures
 3. Select structure. Number will become `sizeof(Structure Name)` and type will be imported to Local Types
 
-### 3) Recogition of structures by shapes
+### 3) Recognition of structures by shapes
 
-Helps to find suitable structure by information gleaned from pseudocode after variable scanning. 
+Helps to find suitable structure by information gleaned from pseudocode after variable scanning.
 
 Usage:
 
@@ -41,7 +41,7 @@ Usage:
     1. Clear Structure Builder if it's currently used.
     2. Right click on variables supposed to be the same -> "Scan Variable".
     3. Edit types (will be implemented later), disable or remove uninteresting fields and click button "Recognize Shape".
-    4. You can selected several fields and try to recognize shpare for them. If found and selected, they will be replaced by new structure.
+    4. You can selected several fields and try to recognize shape for them. If found and selected, they will be replaced by new structure.
     5. After final structure selection, types of all scanned variables will be changed automatically.
 
 ### 4) Containing structures
@@ -63,7 +63,7 @@ If variable is a structure pointer and is used to address outside of its boundar
 1. Right click -> Select Containing Structure
 2. Select Type Library
 3. Select appropriate Structure and Offset
-4. If result is disapointing then Right Click -> Reset Containing Structure and go to step 1
+4. If result is disappointing then Right Click -> Reset Containing Structure and go to step 1
 
 ### 5) Structure Builder (Alt + F8)
 
@@ -72,15 +72,15 @@ The place where all collected information about scanned variables can be viewed 
 Two ways to collect information:
 
 * Right Click on variable -> Scan Variable. Recognizes fields usage in current function
-* Right Click on variable -> Deep Scan Variable. First recursively touches functions to make Ida recognize propper arguments (this happens only once for each function during session). Than recursively applies scanner to variables and functions that get our structure pointer as argument.
+* Right Click on variable -> Deep Scan Variable. First recursively touches functions to make Ida recognize proper arguments (this happens only once for each function during session). Than recursively applies scanner to variables and functions that get our structure pointer as argument.
 
 ![img][builder]
 
-* Types with __BOLD__ font are virtual tables. Double click opens list with all virtual functions that helps to visit them. Visited functions marked with cross and color.
+* Types with __BOLD__ font are virtual tables. Double click opens list with all virtual functions that helps to visit them. Visited functions are marked with cross and color.
 
 ![img][virtual_functions]
 
-* Types with _ITALIC_ font are got as `void *` arguments and are not used in shape recognition.
+* Types with _ITALIC_ font have been found as `void *` arguments and are not used in shape recognition.
 
 * Double click on Field's names to edit
 
@@ -88,9 +88,9 @@ Two ways to collect information:
 
 ![img][scanned_variables]
 
-__Finalize__ - opens window with editable C-like declaration and assigns new type to all scanned variabled.
+__Finalize__ - opens window with editable C-like declaration and assigns new type to all scanned variables.
 
-__Disable__, __Enable__ - used for collision resoliution.
+__Disable__, __Enable__ - are used for collision resolution.
 
 __Origin__ - switches base from which offset to produce new fields to structure (this value will be added to every offset of new scanned variable).
 
@@ -108,7 +108,7 @@ __Recognize Shape__ - looks for appropriate structure for selected fields.
 
 ### Currently recognized access to fields
 
-LEGAL_TYPES = { DWORD, QWORD, DWORD *, QWORD *, void * } - if variable's type is one of this types or derivated from them, then it can be scanned by Right-Click-> Scan Variable.
+LEGAL_TYPES = { DWORD, QWORD, DWORD *, QWORD *, void * } - if variable's type is one of this types or is derivate from them, then it can be scanned by Right-Click-> Scan Variable.
 
 Abbreviations:
 * var - variable
@@ -142,7 +142,7 @@ Abbreviations:
 
 ### 6) Classes (Alt + F1)
 
-Also can be found at _View->Open Subview->Classes_. Helps to manage classes (structures with virtual tables). 
+Also can be found at _View->Open Subview->Classes_. Helps to manage classes (structures with virtual tables).
 
 
 ![img][classes]
@@ -153,8 +153,8 @@ Class, virtual table and functions names are editable. Also function's declarati
 * Expand All / Collapse All
 * Refresh - clear all and rescan local types for information again
 * Rollback - undo changes
-* Commit - apply changes. Functions will be renamed and recasted both in virtual tables in Local Types and dissasembly code.
-* Set First Argument type - allows to select first argument for function among all classes. If right click was used on class name, than it's type will be automatically applied to virtual table at offset 0
+* Commit - apply changes. Functions will be renamed and recasted both in virtual tables in Local Types and disassembly code.
+* Set First Argument type - allows selecting first argument for function among all classes. If right click was used on class name, than its type will be automatically applied to virtual table at offset 0
 
 You can also filter classes using Regexp either by class_name or by existence of specific functions. Just input expression in line edit for filtering by class_name or prepend it with "!" to filter by function name.
 
@@ -178,7 +178,7 @@ You can also filter classes using Regexp either by class_name or by existence of
 
 ### 8) Recasting (Shift+R, Shift+L)
 
-Expressions from the table, can be quickly modified. Select cast item or variable and press hotkey or select from Right-Click Menu Recast Variable, Return or Argument.
+Expressions from the table can be quickly modified. Select cast item or variable and press hotkey or select from Right-Click Menu Recast Variable, Return or Argument. It can be applied to both local and global variables.
 
 | Original | Shift+L | Shift+R
 | --- | --- | --- |
