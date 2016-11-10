@@ -297,9 +297,14 @@ class DeepScanVariable(idaapi.action_handler_t):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
         if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            index = list(hx_view.cfunc.get_lvars()).index(variable)
+            definition_address = variable.defea
+            # index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
+
+            # Because index of the variable can be changed after touching, we would like to calculate it appropriately
+            lvars = hx_view.cfunc.get_lvars()
+            index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
             scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.process()
             for field in scanner.candidates:
@@ -609,7 +614,7 @@ class RecastItemRight(RecastItemLeft):
                     variable = cfunc.get_lvars()[expression.x.v.idx]
                     idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
                     return RECAST_LOCAL_VARIABLE, expression.type, variable
-                
+
                 elif expression.x.op == idaapi.cot_obj:
                     idaapi.update_action_label(RecastItemRight.name, 'Recast Global')
                     return RECAST_GLOBAL_VARIABLE, expression.type, expression.x.obj_ea

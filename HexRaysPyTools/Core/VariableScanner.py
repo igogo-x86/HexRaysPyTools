@@ -29,7 +29,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             self.candidates.append(self.create_member(0, index, pvoid_applicable=True))
 
         self.protected_variables = {index}
-        scanned_functions.add((function.entry_ea, index))
+        scanned_functions.add((function.entry_ea, index, self.origin))
 
     def create_member(self, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
         return TemporaryStructure.create_member(
@@ -340,10 +340,10 @@ class DeepSearchVisitor(ShallowSearchVisitor):
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
 
-        if (ea, arg_index) in scanned_functions:
+        if (ea, arg_index, self.origin + offset) in scanned_functions:
             return
         try:
-            scanned_functions.add((ea, arg_index))
+            scanned_functions.add((ea, arg_index, self.origin + offset))
             new_function = idaapi.decompile(ea)
             if new_function:
                 print "[Info] Scanning function {name} at 0x{ea:08X}, origin: 0x{origin:04X}".format(

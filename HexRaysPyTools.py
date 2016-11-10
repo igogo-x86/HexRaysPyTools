@@ -93,7 +93,6 @@ def hexrays_events_callback(*args):
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]
 
-
         if level_of_maturity == idaapi.CMAT_BUILT:
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
@@ -152,6 +151,7 @@ class MyPlugin(idaapi.plugin_t):
     @staticmethod
     def init():
         if not idaapi.init_hexrays_plugin():
+            print "[ERROR] Failed to initialize Hex-Rays SDK"
             return idaapi.PLUGIN_SKIP
 
         Helper.temporary_structure = TemporaryStructureModel()
