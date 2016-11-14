@@ -176,7 +176,7 @@ You can also filter classes using Regexp either by class_name or by existence of
 [scanned_variables]: Img/fields_xref.JPG
 [classes]: Img/classes.JPG
 
-### 8) Recasting (Shift+R, Shift+L)
+### 8) Recasting (Shift+R, Shift+L), Renaming (Shift+N, Ctrl+Shift+N)
 
 Expressions from the table can be quickly modified. Select cast item or variable and press hotkey or select from Right-Click Menu Recast Variable, Return or Argument. It can be applied to both local and global variables.
 
@@ -187,6 +187,10 @@ Expressions from the table can be quickly modified. Select cast item or variable
 | function(..., (TYPE) var, ...) | functions' argument -> TYPE | var type -> TYPE |
 | (TYPE) function(...) | | functions' return type -> TYPE |
 | return (TYPE) var | functions' return type -> TYPE | var type -> TYPE |
+
+When you have an expression like `function(..., some_good_name, ...)`, you can rename function argument.
+
+When you have an expression like `function(..., v12, ...)` and function has a nice name of the argument. You can quickly apply this name to the variable.
 
 ### 9) Untangling 'if' statements
 

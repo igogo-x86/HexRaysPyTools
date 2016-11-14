@@ -157,6 +157,8 @@ class ClassViewer(idaapi.PluginForm):
 
         self.menu = QtGui.QMenu(self.parent)
 
+        self.proxy_model = Core.Classes.ProxyModel()
+
     def OnCreate(self, form):
         # self.parent = self.FormToPySideWidget(form)
         self.parent = form_to_widget(form)
@@ -179,10 +181,9 @@ class ClassViewer(idaapi.PluginForm):
         hbox_layout.addWidget(self.line_edit_filter)
 
         class_model = Core.Classes.TreeModel()
-        proxy_model = Core.Classes.ProxyModel()
-        proxy_model.setSourceModel(class_model)
-        proxy_model.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        self.class_tree.setModel(proxy_model)
+        self.proxy_model.setSourceModel(class_model)
+        self.proxy_model.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        self.class_tree.setModel(self.proxy_model)
         self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.class_tree.expandAll()
         self.class_tree.header().setStretchLastSection(True)
@@ -192,7 +193,9 @@ class ClassViewer(idaapi.PluginForm):
         self.action_collapse.triggered.connect(self.class_tree.collapseAll)
         self.action_expand.triggered.connect(self.class_tree.expandAll)
         self.action_set_arg.triggered.connect(
-            lambda: class_model.set_first_argument_type(self.class_tree.selectedIndexes())
+            lambda: class_model.set_first_argument_type(
+                map(self.proxy_model.mapToSource, self.class_tree.selectedIndexes())
+            )
         )
         self.action_rollback.triggered.connect(lambda: class_model.rollback())
         self.action_refresh.triggered.connect(lambda: class_model.refresh())
@@ -211,9 +214,11 @@ class ClassViewer(idaapi.PluginForm):
         vertical_box.addLayout(hbox_layout)
         self.parent.setLayout(vertical_box)
 
-        self.class_tree.activated[QtCore.QModelIndex].connect(class_model.open_function)
+        self.class_tree.activated[QtCore.QModelIndex].connect(
+            lambda x: class_model.open_function(self.proxy_model.mapToSource(x))
+        )
         self.class_tree.customContextMenuRequested[QtCore.QPoint].connect(self.show_menu)
-        self.line_edit_filter.textChanged[str].connect(proxy_model.set_regexp_filter)
+        self.line_edit_filter.textChanged[str].connect(self.proxy_model.set_regexp_filter)
         # proxy_model.rowsInserted[object].connect(lambda: self.class_tree.setExpanded(object, True))
 
     def OnClose(self, form):
@@ -224,7 +229,10 @@ class ClassViewer(idaapi.PluginForm):
 
     def show_menu(self, point):
         self.action_set_arg.setEnabled(True)
-        indexes = filter(lambda x: x.column() == 0, self.class_tree.selectedIndexes())
+        indexes = map(
+            self.proxy_model.mapToSource,
+            filter(lambda x: x.column() == 0, self.class_tree.selectedIndexes())
+        )
         if len(indexes) > 1:
             if filter(lambda x: len(x.internalPointer().children) > 0, indexes):
                 self.action_set_arg.setEnabled(False)

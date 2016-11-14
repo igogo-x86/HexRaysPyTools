@@ -27,6 +27,12 @@ def hexrays_events_callback(*args):
         if Actions.RecastItemLeft.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
 
+        if Actions.RenameInside.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
+
+        if Actions.RenameOutside.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
+
         if hx_view.item.get_lvar() and filter(lambda x: x.equals_to(hx_view.item.get_lvar().type()), Const.LEGAL_TYPES):
             idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
@@ -35,7 +41,7 @@ def hexrays_events_callback(*args):
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                idaapi.attach_action_to_popup(form, popup, Actions.RemoveReturn.name, None)
+                idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
                 idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
@@ -156,12 +162,12 @@ class MyPlugin(idaapi.plugin_t):
 
         Helper.temporary_structure = TemporaryStructureModel()
 
-        Actions.register(Actions.CreateVtable)
+        # Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
         Actions.register(Actions.GetStructureBySize)
         Actions.register(Actions.RemoveArgument)
-        Actions.register(Actions.RemoveReturn)
+        Actions.register(Actions.AddRemoveReturn)
         Actions.register(Actions.ConvertToUsercall)
         Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
         Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
@@ -170,6 +176,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.ResetContainingStructure)
         Actions.register(Actions.RecastItemRight)
         Actions.register(Actions.RecastItemLeft)
+        Actions.register(Actions.RenameInside)
+        Actions.register(Actions.RenameOutside)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -190,12 +198,12 @@ class MyPlugin(idaapi.plugin_t):
     @staticmethod
     def term():
         Helper.temporary_structure.clear()
-        Actions.unregister(Actions.CreateVtable)
+        # Actions.unregister(Actions.CreateVtable)
         Actions.unregister(Actions.ShowGraph)
         Actions.unregister(Actions.ShowClasses)
         Actions.unregister(Actions.GetStructureBySize)
         Actions.unregister(Actions.RemoveArgument)
-        Actions.unregister(Actions.RemoveReturn)
+        Actions.unregister(Actions.AddRemoveReturn)
         Actions.unregister(Actions.ConvertToUsercall)
         Actions.unregister(Actions.ShallowScanVariable)
         Actions.unregister(Actions.DeepScanVariable)
@@ -204,6 +212,8 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.ResetContainingStructure)
         Actions.unregister(Actions.RecastItemRight)
         Actions.unregister(Actions.RecastItemLeft)
+        Actions.unregister(Actions.RenameInside)
+        Actions.unregister(Actions.RenameOutside)
         idaapi.term_hexrays_plugin()
 
 

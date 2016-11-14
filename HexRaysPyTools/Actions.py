@@ -127,10 +127,10 @@ class RemoveArgument(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-class RemoveReturn(idaapi.action_handler_t):
+class AddRemoveReturn(idaapi.action_handler_t):
 
     name = "my:RemoveReturn"
-    description = "Remove Return"
+    description = "Add/Remove Return"
     hotkey = None
 
     def __init__(self):
@@ -144,7 +144,10 @@ class RemoveReturn(idaapi.action_handler_t):
             return
         function_details = idaapi.func_type_data_t()
         function_tinfo.get_func_details(function_details)
-        function_details.rettype = idaapi.tinfo_t(idaapi.BT_VOID)
+        if function_details.rettype.equals_to(Const.VOID_TINFO):
+            function_details.rettype = idaapi.tinfo_t(Const.PVOID_TINFO)
+        else:
+            function_details.rettype = idaapi.tinfo_t(idaapi.BT_VOID)
         function_tinfo.create_func(function_details)
         idaapi.set_tinfo2(vu.cfunc.entry_ea, function_tinfo)
         vu.refresh_view(True)
@@ -376,8 +379,7 @@ class ShowGraph(idaapi.action_handler_t):
         if ctx.form_type == idaapi.BWN_LOCTYPS:
             idaapi.attach_action_to_popup(ctx.form, None, self.name)
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class ShowClasses(idaapi.action_handler_t):
@@ -424,8 +426,7 @@ class CreateVtable(idaapi.action_handler_t):
         if ctx.form_type == idaapi.BWN_DISASM:
             idaapi.attach_action_to_popup(ctx.form, None, self.name)
             return idaapi.AST_ENABLE_FOR_FORM
-        else:
-            return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class SelectContainingStructure(idaapi.action_handler_t):
@@ -622,3 +623,93 @@ class RecastItemRight(RecastItemLeft):
                 elif expression.x.op == idaapi.cot_call:
                     idaapi.update_action_label(RecastItemRight.name, "Recast Return")
                     return RECAST_RETURN, expression.type, expression.x.x.obj_ea
+
+
+class RenameInside(idaapi.action_handler_t):
+    name = "my:RenameInto"
+    description = "Rename inside argument"
+    hotkey = "Shift+N"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        expression = ctree_item.it.to_specific_type
+        if expression.op == idaapi.cot_var:
+            lvar = ctree_item.get_lvar()
+            # Check if it's either variable with user name or argument with not standard `aX` name
+            if lvar.has_user_name or lvar.is_arg_var and re.search("a\d*$", lvar.name) is None:
+                parent = cfunc.body.find_parent_of(expression).to_specific_type
+                if parent.op == idaapi.cot_call:
+                    arg_index, _ = Helper.get_func_argument_info(parent, expression)
+                    func_tinfo = parent.x.type.get_pointed_object()
+                    func_data = idaapi.func_type_data_t()
+                    func_tinfo.get_func_details(func_data)
+                    if arg_index < func_tinfo.get_nargs() and lvar.name != func_data[arg_index].name:
+                        return func_tinfo, parent.x.obj_ea, arg_index, lvar.name
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+
+        if result:
+            func_tinfo, address, arg_index, name = result
+
+            func_data = idaapi.func_type_data_t()
+            func_tinfo.get_func_details(func_data)
+            func_data[arg_index].name = name
+            new_func_tinfo = idaapi.tinfo_t()
+            new_func_tinfo.create_func(func_data)
+            idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class RenameOutside(idaapi.action_handler_t):
+    name = "my:RenameOutside"
+    description = "Take argument name"
+    hotkey = "Ctrl+Shift+N"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        expression = ctree_item.it.to_specific_type
+        if expression.op == idaapi.cot_var:
+            lvar = ctree_item.get_lvar()
+            parent = cfunc.body.find_parent_of(expression).to_specific_type
+
+            if parent.op == idaapi.cot_call:
+                arg_index, _ = Helper.get_func_argument_info(parent, expression)
+                func_tinfo = parent.x.type.get_pointed_object()
+                if func_tinfo.get_nargs() < arg_index:
+                    return
+                func_data = idaapi.func_type_data_t()
+                func_tinfo.get_func_details(func_data)
+                name = func_data[arg_index].name
+                if re.search("a\d*$", name) is None and name != 'this' and name != lvar.name:
+                    return name, lvar
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+
+        if result:
+            name, lvar = result
+            hx_view.rename_lvar(lvar, name, True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
