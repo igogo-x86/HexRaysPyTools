@@ -187,6 +187,8 @@ Expressions from the table can be quickly modified. Select cast item or variable
 | function(..., (TYPE) var, ...) | functions' argument -> TYPE | var type -> TYPE |
 | (TYPE) function(...) | | functions' return type -> TYPE |
 | return (TYPE) var | functions' return type -> TYPE | var type -> TYPE |
+| struct.field = (TYPE) var | type(field) -> TYPE
+| pstruct->field = (TYPE) var | type(field) -> TYPE
 
 When you have an expression like `function(..., some_good_name, ...)`, you can rename function argument.
 

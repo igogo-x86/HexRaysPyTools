@@ -16,6 +16,7 @@ RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
 RECAST_ARGUMENT = 2
 RECAST_RETURN = 3
+RECAST_STRUCTURE = 4
 
 
 def register(action, *args):
@@ -516,14 +517,22 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             if expression:
                 expression = expression.to_specific_type
-                if expression.op == idaapi.cot_asg and expression.x.op in (idaapi.cot_var, idaapi.cot_obj) \
+                if expression.op == idaapi.cot_asg and \
+                        expression.x.op in (idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref) \
                         and expression.y.op == idaapi.cot_cast:
                     if expression.x.op == idaapi.cot_var:
                         variable = cfunc.get_lvars()[expression.x.v.idx]
                         idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
                         return RECAST_LOCAL_VARIABLE, expression.y.x.type, variable
-                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Global')
-                    return RECAST_GLOBAL_VARIABLE, expression.y.x.type, expression.x.obj_ea
+                    elif expression.x.op == idaapi.cot_obj:
+                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Global')
+                        return RECAST_GLOBAL_VARIABLE, expression.y.x.type, expression.x.obj_ea
+                    elif expression.x.op == idaapi.cot_memptr:
+                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
+                        return RECAST_STRUCTURE, expression.x.x.type.get_pointed_object().dstr(), expression.x.m, expression.y.x.type
+                    elif expression.x.op == idaapi.cot_memref:
+                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
+                        return RECAST_STRUCTURE, expression.x.x.type.dstr(), expression.x.m, expression.y.x.type
 
                 elif expression.op == idaapi.cit_return:
                     child = child or expression.creturn.expr
@@ -533,6 +542,10 @@ class RecastItemLeft(idaapi.action_handler_t):
 
                 elif expression.op == idaapi.cot_call:
                     if child and child.op == idaapi.cot_cast:
+                        if child.cexpr.x.op == idaapi.cot_memptr:
+                            idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
+                            return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
+
                         arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
                         idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
                         return (
@@ -585,6 +598,29 @@ class RecastItemLeft(idaapi.action_handler_t):
                 function_tinfo.create_func(func_data)
                 if idaapi.apply_tinfo2(cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
                     hx_view.refresh_view(True)
+
+            elif result[0] == RECAST_STRUCTURE:
+                structure_name, field_offset, new_type = result[1:]
+                tinfo = idaapi.tinfo_t()
+                tinfo.get_named_type(idaapi.cvar.idati, structure_name)
+
+                ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
+
+                if ordinal:
+                    udt_member = idaapi.udt_member_t()
+                    udt_member.offset = field_offset * 8
+                    idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+                    if udt_member.offset != field_offset * 8:
+                        print "[Info] Can't handle with arrays yet"
+                    elif udt_member.type.get_size() != new_type.get_size():
+                        print "[Info] Can't recast different sizes yet"
+                    else:
+                        udt_data = idaapi.udt_type_data_t()
+                        tinfo.get_udt_details(udt_data)
+                        udt_data[idx].type = new_type
+                        tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+                        tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.NTF_REPLACE, structure_name)
+                        hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -698,7 +734,7 @@ class RenameOutside(idaapi.action_handler_t):
                 func_data = idaapi.func_type_data_t()
                 func_tinfo.get_func_details(func_data)
                 name = func_data[arg_index].name
-                if re.search("a\d*$", name) is None and name != 'this' and name != lvar.name:
+                if name and re.search("a\d*$", name) is None and name != 'this' and name != lvar.name:
                     return name, lvar
 
     def activate(self, ctx):
