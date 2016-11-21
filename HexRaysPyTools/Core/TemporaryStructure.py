@@ -11,15 +11,38 @@ import VariableScanner
 from HexRaysPyTools.Forms import MyChoose
 
 
-def parse_vtable_name(name):
-    if name[0:3] == 'off':
-        # off_XXXXXXXX case
-        return "Vtable" + name[3:], False
-    m = re.search(' (\w+)::', name)
-    if m:
-        # const class_name:`vftable' case
-        return "Vtable_" + m.group(1), True
-    return name, True
+def parse_vtable_name(address):
+    name = idaapi.get_short_name(address)
+    if idaapi.is_valid_typename(name):
+        if name[0:3] == 'off':
+            # off_XXXXXXXX case
+            return "Vtable" + name[3:], False
+    else:
+        # Attempt to make nice and valid name from demangled RTTI name
+        try:
+            name = re.sub("^const ", "", name)
+            sliced_names = name.split("::")
+            name, for_part = "::".join(sliced_names[:-1]), sliced_names[-1]
+            print name, for_part
+            templates = re.search("<(.*)>", name)
+            if templates:
+                templates = templates.group(1)
+                name = re.sub("<.*>", "", name)
+                templates = re.sub("[^a-zA-Z0-9_*]", "_", templates)
+                templates = re.sub("\*", "PTR", templates)
+                name += '_' + templates
+
+            for_part = re.search("\{for `(.*)'\}", for_part)
+            if for_part:
+                for_part = for_part.group(1)
+                name += '_' + for_part
+
+            return 'Vtable_' + name, True
+
+        except (AttributeError, IndexError):
+            print "[Warning] Unable to parse virtual table name - "
+
+        return "Vtable_{0:X}".format(address), False
 
 
 def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
@@ -111,6 +134,7 @@ class VirtualFunction:
         return self.address
 
     def get_ptr_tinfo(self):
+        # print self.tinfo.dstr()
         ptr_tinfo = idaapi.tinfo_t()
         ptr_tinfo.create_ptr(self.tinfo)
         return ptr_tinfo
@@ -140,6 +164,7 @@ class VirtualFunction:
         if decompiled_function:
             return idaapi.tinfo_t(decompiled_function.type)
         print "[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address)
+        return Const.DUMMY_FUNC
 
 
 class VirtualTable(AbstractMember):
@@ -148,7 +173,7 @@ class VirtualTable(AbstractMember):
         self.address = address
         self.virtual_functions = []
         self.name = "vtable" + ("_{0:X}".format(self.offset) if self.offset else '')
-        self.vtable_name, self.have_nice_name = parse_vtable_name(idaapi.get_short_name(address))
+        self.vtable_name, self.have_nice_name = parse_vtable_name(address)
         self.populate()
 
     def populate(self):
@@ -498,7 +523,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
         cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
                                    final_tinfo, self.structure_name, None)
-        cdecl = idaapi.asktext(0x10000, cdecl, "The following new type will be created")
+        cdecl = idaapi.asktext(0x10000, '#pragma pack(push, 1)\n' + cdecl, "The following new type will be created")
 
         if cdecl:
             structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
