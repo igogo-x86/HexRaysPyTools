@@ -2,6 +2,7 @@ import bisect
 import idc
 import idaapi
 import re
+import itertools
 # import PySide.QtCore as QtCore
 # import PySide.QtGui as QtGui
 from HexRaysPyTools.Cute import *
@@ -195,6 +196,15 @@ class VirtualTable(AbstractMember):
         udt_data = idaapi.udt_type_data_t()
         for function in self.virtual_functions:
             udt_data.push_back(function.get_udt_member())
+
+        for duplicates in Helper.search_duplicate_fields(udt_data):
+            first_entry_idx = duplicates.pop(0)
+            print "[Warning] Found duplicate virtual functions", udt_data[first_entry_idx].name
+            for num, dup in enumerate(duplicates):
+                udt_data[dup].name = "duplicate_{0}_{1}".format(first_entry_idx, num + 1)
+                tinfo = idaapi.tinfo_t()
+                tinfo.create_ptr(Const.DUMMY_FUNC)
+                udt_data[dup].type = tinfo
 
         final_tinfo = idaapi.tinfo_t()
         if final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT):
@@ -579,10 +589,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.modelReset.emit()
 
     def get_scanned_variables(self, origin=0):
-        result = map(lambda x: x.scanned_variables, filter(lambda x: x.origin == origin, self.items))
-        if result:
-            return reduce(lambda summary, x: summary | x, result)
-        return set()
+        return set(
+            itertools.chain.from_iterable(
+                [list(item.scanned_variables) for item in self.items if item.origin == origin]
+            )
+        )
 
     def get_next_enabled(self, row):
         row += 1

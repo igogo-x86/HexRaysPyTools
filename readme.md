@@ -2,7 +2,7 @@
 
 Plugin assists in creation classes/structures and detection virtual tables. Best to use with [Class Informer][0] plugin, because it helps to automatically get original classes names. Also see [slides][zeronights] from ZeroNights 2016.
 
-##### Installation
+### Installation
 
 Just copy `HexRaysPyTools.py` file and `HexRaysPyTools` directory to Ida plugins directory
 
