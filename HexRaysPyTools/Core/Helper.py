@@ -3,6 +3,8 @@ import idautils
 import idc
 import Const
 
+import collections
+
 temporary_structure = None
 demangled_names = {}
 
@@ -109,6 +111,15 @@ def get_fields_at_offset(tinfo, offset):
 
 def is_legal_type(tinfo):
     return bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))
+
+
+def search_duplicate_fields(udt_data):
+    # Returns list of lists with duplicate fields
+
+    default_dict = collections.defaultdict(list)
+    for idx, udt_member in enumerate(udt_data):
+        default_dict[udt_member.name].append(idx)
+    return [indices for indices in default_dict.values() if len(indices) > 1]
 
 
 touched_functions = set()
