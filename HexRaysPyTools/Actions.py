@@ -150,7 +150,7 @@ class AddRemoveReturn(idaapi.action_handler_t):
         else:
             function_details.rettype = idaapi.tinfo_t(idaapi.BT_VOID)
         function_tinfo.create_func(function_details)
-        idaapi.set_tinfo2(vu.cfunc.entry_ea, function_tinfo)
+        idaapi.apply_tinfo2(vu.cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE)
         vu.refresh_view(True)
 
     def update(self, ctx):
@@ -184,7 +184,7 @@ class ConvertToUsercall(idaapi.action_handler_t):
         else:
             return
         function_tinfo.create_func(function_details)
-        idaapi.set_tinfo2(vu.cfunc.entry_ea, function_tinfo)
+        idaapi.apply_tinfo2(vu.cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE)
         vu.refresh_view(True)
 
     def update(self, ctx):
@@ -701,6 +701,7 @@ class RenameInside(idaapi.action_handler_t):
             new_func_tinfo = idaapi.tinfo_t()
             new_func_tinfo.create_func(func_data)
             idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE)
+            hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":

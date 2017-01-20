@@ -139,7 +139,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                             index, self.expression_address
                         )
                         self.variables.pop(index)
-            return
+                        return
 
         # Assignment like v1 = (TYPE) v2 where TYPE is one the supported types
         elif parents_type[0:3] == ['cast', 'asg', 'expr']:
@@ -171,6 +171,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                         return self.get_member(
                             offset, index, object=parents[3].y, default=parents[1].type.get_pointed_object()
                         )
+                    # other_var = *(TYPE *)(var + x)
+                    if parents[3].x.op == idaapi.cot_var:
+                        return self.create_member(offset, index, parents[3].x.type)
                     return self.create_member(offset, index, parents[1].type.get_pointed_object())
 
                 elif parents_type[2] == 'call':
@@ -214,6 +217,11 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 elif parents_type[1] == 'asg':
                     if parents[1].y == parents[0] and parents[1].x.op == idaapi.cot_var:
                         self.scan_function(self.function.entry_ea, offset, parents[1].x.v.idx)
+
+            elif parents_type[0] == 'asg':
+                # var = (int)&Some_object
+                if parents[0].y.op == idaapi.cot_cast and parents[0].y.x.op == idaapi.cot_ref:
+                    return self.create_member(0, index, parents[0].y.x.type.get_pointed_object())
 
         # --------------------------------------------------------------------------------------------
         # When variable is void *, PVOID, DWORD *, QWORD * etc
