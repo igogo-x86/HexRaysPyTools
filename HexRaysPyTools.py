@@ -68,6 +68,7 @@ def hexrays_events_callback(*args):
                     idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
+
         hx_view = args[1]
         item = hx_view.item
         if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
@@ -91,7 +92,7 @@ def hexrays_events_callback(*args):
             udt_member.offset = method_offset * 8
             vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
 
-            func_ea = Helper.get_virtual_func_address(class_tinfo, vtable_offset, udt_member.name)
+            func_ea = Helper.get_virtual_func_address(udt_member.name, class_tinfo, vtable_offset)
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
@@ -197,7 +198,8 @@ class MyPlugin(idaapi.plugin_t):
 
     @staticmethod
     def term():
-        Helper.temporary_structure.clear()
+        if Helper.temporary_structure:
+            Helper.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
         Actions.unregister(Actions.ShowGraph)
         Actions.unregister(Actions.ShowClasses)

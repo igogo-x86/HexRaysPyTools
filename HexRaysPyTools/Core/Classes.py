@@ -18,8 +18,9 @@ class VirtualMethod(object):
         self.class_name = None
         self.name_modified = False
         self.parents = [parent]
-        self.base_address = idc.LocByName(name)
-        self.base_address = self.base_address - idaapi.get_imagebase() if self.base_address != idaapi.BADADDR else None
+        self.base_address = Helper.get_virtual_func_address(name)
+        if self.base_address:
+            self.base_address - idaapi.get_imagebase()
 
         self.rowcount = 0
         self.children = []

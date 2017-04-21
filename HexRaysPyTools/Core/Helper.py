@@ -4,6 +4,7 @@ import idc
 import Const
 
 import collections
+import re
 
 temporary_structure = None
 demangled_names = {}
@@ -19,20 +20,37 @@ def init_demangled_names(*args):
         short_name = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
         if short_name:
             demangled_names[short_name.split('(')[0]] = address - idaapi.get_imagebase()
+
+            # Names can have templates and should be transformed before creating local type
+            name = re.sub(r'[<>]', '_t_', name)
+
+            # Thunk functions with name like "[thunk]:CWarmupHostProvider::Release`adjustor{8}'"
+            result = re.search(r"(\[thunk\]:)?([^`]*)(.*\{(\d+)}.*)?", short_name)
+            name, adjustor = result.group(2), result.group(4)
+            if adjustor:
+                demangled_names[name + "_adj_" + adjustor] = address - idaapi.get_imagebase()
+
     print "[DEBUG] Demangled names have been initialized"
 
 
-def get_virtual_func_address(tinfo, offset, name):
+def get_virtual_func_address(name, tinfo=None, offset=None):
     """
+    :param name: method name
     :param tinfo: class tinfo
     :param offset: virtual table offset
-    :param name: method name
     :return: address of the method
     """
 
     address = idc.LocByName(name)
     if address != idaapi.BADADDR:
         return address
+
+    address = demangled_names.get(name, idaapi.BADADDR)
+    if address != idaapi.BADADDR:
+        return address + idaapi.get_imagebase()
+
+    if tinfo is None or offset is None:
+        return
 
     offset *= 8
     udt_member = idaapi.udt_member_t()
