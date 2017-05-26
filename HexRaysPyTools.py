@@ -27,6 +27,9 @@ def hexrays_events_callback(*args):
         if Actions.RecastItemLeft.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
 
+        if Actions.RenameOther.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RenameOther.name, None)
+
         if Actions.RenameInside.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
 
@@ -43,6 +46,7 @@ def hexrays_events_callback(*args):
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
                 idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
                 idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
+                idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
@@ -172,11 +176,13 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.ConvertToUsercall)
         Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
         Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
+        Actions.register(Actions.DeepScanReturn, Helper.temporary_structure)
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
         Actions.register(Actions.RecastItemRight)
         Actions.register(Actions.RecastItemLeft)
+        Actions.register(Actions.RenameOther)
         Actions.register(Actions.RenameInside)
         Actions.register(Actions.RenameOutside)
 
@@ -209,11 +215,13 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.ConvertToUsercall)
         Actions.unregister(Actions.ShallowScanVariable)
         Actions.unregister(Actions.DeepScanVariable)
+        Actions.unregister(Actions.DeepScanReturn)
         Actions.unregister(Actions.RecognizeShape)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)
         Actions.unregister(Actions.RecastItemRight)
         Actions.unregister(Actions.RecastItemLeft)
+        Actions.unregister(Actions.RenameOther)
         Actions.unregister(Actions.RenameInside)
         Actions.unregister(Actions.RenameOutside)
         idaapi.term_hexrays_plugin()

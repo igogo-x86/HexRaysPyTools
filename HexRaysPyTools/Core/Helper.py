@@ -160,9 +160,7 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
             try:
                 cfunc = idaapi.decompile(address)
                 if cfunc:
-                    touch_visitor = FunctionTouchVisitor(cfunc)
-                    touch_visitor.apply_to(cfunc.body, None)
-                    touch_visitor.touch_all()
+                    FunctionTouchVisitor(cfunc).process()
             except idaapi.DecompilationFailure:
                 print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=address)
         idaapi.decompile(self.cfunc.entry_ea)

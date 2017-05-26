@@ -115,6 +115,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 # Assignment like (v1 = v2) where v2 is scanned variable
                 if parents[0].x.op == idaapi.cot_var:
                     self.add_variable(parents[0].x.v.idx)
+                    return
             else:
                 # if expression is (var = something), we have to explore whether continue to scan this variable or not
                 if parents[0].y.op != idaapi.cot_num:
@@ -139,7 +140,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                             index, self.expression_address
                         )
                         self.variables.pop(index)
-                        return
+                    return
 
         # Assignment like v1 = (TYPE) v2 where TYPE is one the supported types
         elif parents_type[0:3] == ['cast', 'asg', 'expr']:
@@ -166,14 +167,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 offset = parents[0].theother(expression).numval()
 
                 if parents_type[2] == 'ptr':
-                    if parents_type[3] == 'asg' and parents[3].x == parents[2]:
-                        # *(TYPE *)(var + x) = ???
-                        return self.get_member(
-                            offset, index, object=parents[3].y, default=parents[1].type.get_pointed_object()
-                        )
-                    # other_var = *(TYPE *)(var + x)
-                    if parents[3].x.op == idaapi.cot_var:
-                        return self.create_member(offset, index, parents[3].x.type)
+                    if parents_type[3] == 'asg':
+                        if parents[3].x == parents[2]:
+                            # *(TYPE *)(var + x) = ???
+                            return self.get_member(
+                                offset, index, object=parents[3].y, default=parents[1].type.get_pointed_object()
+                            )
+                        if parents[3].x.op == idaapi.cot_var:
+                            # other_var = *(TYPE *)(var + x)
+                            return self.create_member(offset, index, parents[3].x.type)
                     return self.create_member(offset, index, parents[1].type.get_pointed_object())
 
                 elif parents_type[2] == 'call':
@@ -217,6 +219,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 elif parents_type[1] == 'asg':
                     if parents[1].y == parents[0] and parents[1].x.op == idaapi.cot_var:
                         self.scan_function(self.function.entry_ea, offset, parents[1].x.v.idx)
+                        return
 
             elif parents_type[0] == 'asg':
                 # var = (int)&Some_object
@@ -324,6 +327,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     # *var
                     return self.create_member(0, index, self.variables[index].get_pointed_object())
 
+                elif parents_type[0] == 'asg':
+                    return
+
         if 'return' not in parents_type[0:2] and parents_type[0] not in ('if', 'band', 'eq', 'ne', 'cast'):
             print "[DEBUG] Unhandled type", self.variables[index].dstr(), \
                 "Index:", index, \
@@ -338,6 +344,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         don't wind up in infinite recursion.
         """
         self.apply_to(self.function.body, None)
+
+    @staticmethod
+    def clear():
         scanned_functions.clear()
 
 
@@ -362,3 +371,26 @@ class DeepSearchVisitor(ShallowSearchVisitor):
                 self.candidates.extend(scanner.candidates)
         except idaapi.DecompilationFailure:
             print "[ERROR] Ida failed to decompile function"
+
+
+class VariableLookupVisitor(idaapi.ctree_parentee_t):
+    """ Helps to find all variables that are returned by some function placed at func_address """
+
+    def __init__(self, func_address):
+        super(VariableLookupVisitor, self).__init__()
+        self.func_address = func_address
+        self.result = []
+
+    def visit_expr(self, expression):
+        # We are looking for expressions like `var = func(...)` or `var = (TYPE) func(...)`
+        if expression.op == idaapi.cot_asg and expression.x.op == idaapi.cot_var:
+            if expression.y.op == idaapi.cot_call:
+                if self.__check_call(expression.y) or \
+                        expression.y.op == idaapi.cot_cast and expression.y.x.op == idaapi.cot_call:
+
+                    idx = expression.x.v.idx
+                    self.result.append(idx)
+        return 0
+
+    def __check_call(self, expression):
+        return expression.x.obj_ea == self.func_address
