@@ -128,6 +128,8 @@ def get_fields_at_offset(tinfo, offset):
 
 
 def is_legal_type(tinfo):
+    if tinfo.is_ptr() and tinfo.get_pointed_object().is_forward_decl():
+        return tinfo.get_pointed_object().get_size() == idaapi.BADSIZE
     return bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))
 
 

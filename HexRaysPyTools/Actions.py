@@ -275,7 +275,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+        if variable and Helper.is_legal_type(variable.type()):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             scanner = ShallowSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.process()
@@ -305,15 +305,25 @@ class DeepScanVariable(idaapi.action_handler_t):
         self.scan(hx_view, variable)
 
     def scan(self, hx_view, variable):
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            definition_address = variable.defea
+        if variable and Helper.is_legal_type(variable.type()):
+
+            definition_address = None if variable.is_arg_var else variable.defea
+            index = list(hx_view.cfunc.get_lvars()).index(variable)
+
             # index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
 
             # Because index of the variable can be changed after touching, we would like to calculate it appropriately
+
+            for idx, lvar in enumerate(hx_view.cfunc.get_lvars()):
+                print idx, hex(int(lvar.defea))
+
             lvars = hx_view.cfunc.get_lvars()
-            index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
+
+            if definition_address:
+                index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
+
             scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.process()
             for field in scanner.candidates:
@@ -656,6 +666,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             elif result[0] == RECAST_ARGUMENT:
                 arg_index, func_tinfo, arg_tinfo, address = result[1:]
+                if arg_tinfo.is_array():
+                    arg_tinfo.convert_array_to_ptr()
 
                 func_data = idaapi.func_type_data_t()
                 func_tinfo.get_func_details(func_data)
