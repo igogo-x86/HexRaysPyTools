@@ -315,10 +315,6 @@ class DeepScanVariable(idaapi.action_handler_t):
                 hx_view.refresh_view(True)
 
             # Because index of the variable can be changed after touching, we would like to calculate it appropriately
-
-            for idx, lvar in enumerate(hx_view.cfunc.get_lvars()):
-                print idx, hex(int(lvar.defea))
-
             lvars = hx_view.cfunc.get_lvars()
 
             if definition_address:
@@ -624,7 +620,6 @@ class RecastItemLeft(idaapi.action_handler_t):
                     cfunc.get_func_type(func_tinfo)
                     rettype = func_tinfo.get_rettype()
 
-                    print func_tinfo.get_rettype().dstr(), child.type.dstr()
                     if func_tinfo.get_rettype().dstr() != child.type.dstr():
                         return RECAST_RETURN, child.type, None
 

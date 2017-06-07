@@ -18,6 +18,10 @@ def parse_vtable_name(address):
         if name[0:3] == 'off':
             # off_XXXXXXXX case
             return "Vtable" + name[3:], False
+        elif "table" in name:
+            return name, True
+        print "[Warning] Weird virtual table name -", name
+        return "Vtable_" + name
     else:
         # Attempt to make nice and valid name from demangled RTTI name
         try:
@@ -159,7 +163,7 @@ class VirtualFunction:
         name, adjuster = result.group(2), result.group(4)
         if adjuster:
             name += "_adj_" + adjuster
-        name = name.translate(None, "`'").replace(' ', '_')
+        name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_')
         name = re.sub(r'[<>]', '_t_', name)
         return name
 
@@ -747,6 +751,23 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 offset = self.items[start].offset
                 self.items = self.items[0:start] + self.items[stop:]
                 self.add_row(Member(offset, tinfo, None))
+
+    def unpack_substructure(self, indices):
+
+        if indices is None or len(indices) != 1:
+            return
+
+        item = self.items[indices[0].row()]
+        if item.tinfo is not None and item.tinfo.is_udt():
+
+            self.remove_items(indices)
+            offset = item.offset
+            udt_data = idaapi.udt_type_data_t()
+            if item.tinfo.get_udt_details(udt_data):
+                for udt_item in udt_data:
+                    member = Member(offset + udt_item.offset / 8, udt_item.type, None)
+                    member.name = udt_item.name
+                    self.add_row(member)
 
     def remove_items(self, indices):
         rows = map(lambda x: x.row(), indices)
