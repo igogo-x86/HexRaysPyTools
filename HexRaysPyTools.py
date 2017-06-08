@@ -1,54 +1,69 @@
 import HexRaysPyTools.Actions as Actions
 from HexRaysPyTools.Core.TemporaryStructure import *
+from HexRaysPyTools.Config import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor
-
+from HexRaysPyTools.Config import hex_pytools_config, Config
+from HexRaysPyTools.Core.Helper import potential_negatives
 # import Core.QtShim as QtShim
-
-potential_negatives = {}
+fDebug = False
+if fDebug:
+    import pydevd
 
 
 def hexrays_events_callback(*args):
-    global potential_negatives
-
     hexrays_event = args[0]
-
+    from HexRaysPyTools.Config import hex_pytools_config
     if hexrays_event == idaapi.hxe_populating_popup:
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
+        if Actions.SimpleCreateStruct.check(hx_view.cfunc,item):
+            if hex_pytools_config[Actions.SimpleCreateStruct.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.SimpleCreateStruct.name, None)
+
         if Actions.RecastItemRight.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
+            if hex_pytools_config[Actions.RecastItemRight.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
 
         if Actions.RecastItemLeft.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
+            if hex_pytools_config[Actions.RecastItemLeft.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
 
         if Actions.RenameInside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
+            if hex_pytools_config[Actions.RenameInside.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
 
         if Actions.RenameOutside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
+            if hex_pytools_config[Actions.RenameOutside.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
 
         if hx_view.item.get_lvar() and filter(lambda x: x.equals_to(hx_view.item.get_lvar().type()), Const.LEGAL_TYPES):
-            idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
-            idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
-            idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
+            if hex_pytools_config[Actions.ShallowScanVariable.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
+            if hex_pytools_config[Actions.DeepScanVariable.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
+            if hex_pytools_config[Actions.RecognizeShape.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
-                idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
+                if hex_pytools_config[Actions.AddRemoveReturn.name]:
+                    idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
+                if hex_pytools_config[Actions.ConvertToUsercall.name]:
+                    idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
             local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
             if local_variable.is_arg_var:
-                idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
+                if hex_pytools_config[Actions.RemoveArgument.name]:
+                    idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
 
         elif item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
@@ -58,14 +73,17 @@ def hexrays_events_callback(*args):
                 #     number_format.type_name,
                 #     number_format.opnum
                 # )
-                idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
+                if hex_pytools_config[Actions.GetStructureBySize.name]:
+                    idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
             elif item.e.op == idaapi.cot_var:
                 # Check if we clicked on variable that is a pointer to a structure that is potentially part of
                 # containing structure
                 if item.e.v.idx in potential_negatives:
-                    idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
+                    if hex_pytools_config[Actions.SelectContainingStructure.name]:
+                        idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
                 if Actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
-                    idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
+                    if hex_pytools_config[Actions.ResetContainingStructure.name]:
+                        idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
 
@@ -157,28 +175,33 @@ class MyPlugin(idaapi.plugin_t):
 
     @staticmethod
     def init():
+        if fDebug:
+            pydevd.settrace('localhost', port=31337, stdoutToServer=True, stderrToServer=True,suspend=True)
         if not idaapi.init_hexrays_plugin():
             print "[ERROR] Failed to initialize Hex-Rays SDK"
             return idaapi.PLUGIN_SKIP
 
         Helper.temporary_structure = TemporaryStructureModel()
-
+        hex_pytools_config = Config()
+        for ac in hex_pytools_config.actions:
+            if hex_pytools_config.actions[ac]:
+                Actions.register(hex_pytools_config.actions_refs[ac])
         # Actions.register(Actions.CreateVtable)
-        Actions.register(Actions.ShowGraph)
-        Actions.register(Actions.ShowClasses)
-        Actions.register(Actions.GetStructureBySize)
-        Actions.register(Actions.RemoveArgument)
-        Actions.register(Actions.AddRemoveReturn)
-        Actions.register(Actions.ConvertToUsercall)
-        Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
-        Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
-        Actions.register(Actions.RecognizeShape)
-        Actions.register(Actions.SelectContainingStructure, potential_negatives)
-        Actions.register(Actions.ResetContainingStructure)
-        Actions.register(Actions.RecastItemRight)
-        Actions.register(Actions.RecastItemLeft)
-        Actions.register(Actions.RenameInside)
-        Actions.register(Actions.RenameOutside)
+        # Actions.register(Actions.ShowGraph)
+        # Actions.register(Actions.ShowClasses)
+        # Actions.register(Actions.GetStructureBySize)
+        # Actions.register(Actions.RemoveArgument)
+        # Actions.register(Actions.AddRemoveReturn)
+        # Actions.register(Actions.ConvertToUsercall)
+        # Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
+        # Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
+        # Actions.register(Actions.RecognizeShape)
+        # Actions.register(Actions.SelectContainingStructure, potential_negatives)
+        # Actions.register(Actions.ResetContainingStructure)
+        # Actions.register(Actions.RecastItemRight)
+        # Actions.register(Actions.RecastItemLeft)
+        # Actions.register(Actions.RenameInside)
+        # Actions.register(Actions.RenameOutside)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -220,5 +243,6 @@ class MyPlugin(idaapi.plugin_t):
 
 
 def PLUGIN_ENTRY():
+    print "HexRaysPyTools PLUGIN_ENTRY"
     idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_demangled_names)
     return MyPlugin()

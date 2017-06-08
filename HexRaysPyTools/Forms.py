@@ -2,7 +2,40 @@ import idaapi
 # import PySide.QtGui as QtGui
 # import PySide.QtCore as QtCore
 from HexRaysPyTools.Cute import *
+
+fDebug = False
+if fDebug:
+    import pydevd
+
 import Core.Classes
+
+
+class ConfigFeatures(idaapi.Form):
+    def __init__(self,config):
+        if fDebug == True:
+            pydevd.settrace('127.0.0.1', port=31337, stdoutToServer=True, stderrToServer=True, suspend=True)
+        self.config = config
+        self.elements = ()
+        self.form_fmt = r'''HexRaysPyTools features config
+
+Features:
+'''
+        for ac in self.config.actions.keys():
+            self.form_fmt += '<%s:{%s}>\n'%(ac,"r"+ac)
+            self.elements += ("r"+ac,)
+        self.form_fmt = self.form_fmt.rstrip('\n') + '{cChkGrpFeatures}>'
+        idaapi.Form.__init__(self,self.form_fmt,{"cChkGrpFeatures":idaapi.Form.ChkGroupControl(self.elements)})
+
+
+    def Do(self):
+        self.Compile()
+        for ac in self.config.actions:
+            getattr(self,"r"+ac).checked = self.config.actions[ac]
+        if self.Execute() == 1:
+            for ac in self.config.actions:
+                self.config.actions[ac] = getattr(self, "r" + ac).checked
+            self.config.write_config()
+
 
 
 class MyChoose(idaapi.Choose2):
@@ -31,6 +64,7 @@ class StructureBuilder(idaapi.PluginForm):
         self.init_ui()
 
     def init_ui(self):
+        from HexRaysPyTools.Config import hex_pytools_config
         self.parent.setStyleSheet(
             "QTableView {background-color: transparent; selection-background-color: #87bdd8;}"
             "QHeaderView::section {background-color: transparent; border: 0.5px solid;}"
@@ -49,7 +83,9 @@ class StructureBuilder(idaapi.PluginForm):
         btn_remove = QtGui.QPushButton("&Remove")
         btn_clear = QtGui.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
         btn_recognize = QtGui.QPushButton("Recognize Shape")
+        btn_config = QtGui.QPushButton("Configure features")
         btn_recognize.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
+        btn_config.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
 
         btn_finalize.setShortcut("f")
         btn_disable.setShortcut("d")
@@ -81,6 +117,7 @@ class StructureBuilder(idaapi.PluginForm):
         grid_box.addWidget(btn_clear, 1, 3)
         grid_box.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Expanding), 1, 4)
         grid_box.addWidget(btn_recognize, 1, 5, 1, 6)
+        grid_box.addWidget(btn_config, 0, 5, 1, 6)
 
         vertical_box = QtGui.QVBoxLayout()
         vertical_box.addWidget(struct_view)
@@ -88,6 +125,7 @@ class StructureBuilder(idaapi.PluginForm):
         self.parent.setLayout(vertical_box)
 
         btn_finalize.clicked.connect(lambda: self.structure_model.finalize())
+        btn_config.clicked.connect(lambda: hex_pytools_config.modify())
         btn_disable.clicked.connect(lambda: self.structure_model.disable_rows(struct_view.selectedIndexes()))
         btn_enable.clicked.connect(lambda: self.structure_model.enable_rows(struct_view.selectedIndexes()))
         btn_origin.clicked.connect(lambda: self.structure_model.set_origin(struct_view.selectedIndexes()))

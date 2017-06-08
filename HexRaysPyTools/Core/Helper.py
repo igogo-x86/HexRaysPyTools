@@ -8,6 +8,7 @@ import re
 
 temporary_structure = None
 demangled_names = {}
+potential_negatives = {}
 
 
 def init_demangled_names(*args):

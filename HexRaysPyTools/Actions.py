@@ -1,8 +1,9 @@
 import ctypes
 import sys
 import re
+import struct
 
-import idaapi
+import idaapi, idc
 
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
@@ -11,6 +12,7 @@ from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
+from HexRaysPyTools.Core.Helper import potential_negatives
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -267,8 +269,8 @@ class ShallowScanVariable(idaapi.action_handler_t):
     description = "Scan Variable"
     hotkey = "F"
 
-    def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
+    def __init__(self):
+        self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):
@@ -293,8 +295,8 @@ class DeepScanVariable(idaapi.action_handler_t):
     description = "Deep Scan Variable"
     hotkey = "shift+F"
 
-    def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
+    def __init__(self):
+        self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):
@@ -408,26 +410,26 @@ class ShowClasses(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-class CreateVtable(idaapi.action_handler_t):
-
-    name = "my:CreateVtable"
-    description = "Create Virtual Table"
-    hotkey = "V"
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-
-    def activate(self, ctx):
-        ea = ctx.cur_ea
-        if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
-            vtable = VirtualTable(0, ea)
-            vtable.import_to_structures(True)
-
-    def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_DISASM:
-            idaapi.attach_action_to_popup(ctx.form, None, self.name)
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+# class CreateVtable(idaapi.action_handler_t):
+#
+#     name = "my:CreateVtable"
+#     description = "Create Virtual Table"
+#     hotkey = "V"
+#
+#     def __init__(self):
+#         idaapi.action_handler_t.__init__(self)
+#
+#     def activate(self, ctx):
+#         ea = ctx.cur_ea
+#         if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
+#             vtable = VirtualTable(0, ea)
+#             vtable.import_to_structures(True)
+#
+#     def update(self, ctx):
+#         if ctx.form_type == idaapi.BWN_DISASM:
+#             idaapi.attach_action_to_popup(ctx.form, None, self.name)
+#             return idaapi.AST_ENABLE_FOR_FORM
+#         return idaapi.AST_DISABLE_FOR_FORM
 
 
 class SelectContainingStructure(idaapi.action_handler_t):
@@ -436,7 +438,7 @@ class SelectContainingStructure(idaapi.action_handler_t):
     description = "Select Containing Structure"
     hotkey = None
 
-    def __init__(self, potential_negatives):
+    def __init__(self):
         idaapi.action_handler_t.__init__(self)
         self.potential_negative = potential_negatives
 
@@ -777,6 +779,199 @@ class RenameOutside(idaapi.action_handler_t):
         if result:
             name, lvar = result
             hx_view.rename_lvar(lvar, name, True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class SimpleCreateStruct(idaapi.action_handler_t):
+    name = "my:CreateStruct"
+    description = "Create simple struct"
+    hotkey = "Shift+C"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+        idaname = "ida64" if Const.EA64 else "ida"
+        if sys.platform == "win32":
+            self.g_dll = ctypes.windll[idaname + ".wll"]
+        elif sys.platform == "linux2":
+            self.g_dll = ctypes.cdll["lib" + idaname + ".so"]
+        elif sys.platform == "darwin":
+            self.g_dll = ctypes.cdll["lib" + idaname + ".dylib"]
+
+        self.set_numbered_type = self.g_dll.set_numbered_type
+        self.set_numbered_type.argtypes = [
+            ctypes.c_void_p,                                    #til_t *ti,
+            ctypes.c_int,                                       #uint32 ordinal,
+            ctypes.c_int,                                       #int ntf_flags,
+            ctypes.c_char_p,                                    #const char *name,
+            ctypes.c_char_p,     #const type_t *type,
+            ctypes.c_char_p,     #const p_list *fields=NULL,
+            ctypes.c_char_p,     #const char *cmt=NULL,
+            ctypes.c_char_p,     #const p_list *fldcmts=NULL,
+            ctypes.POINTER(ctypes.c_ulong),                     #const sclass_t *sclass=NULL
+        ]
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        return True
+
+    def create_struct_type(self, struc_size, name, field_size=4, fAllign=True):
+        my_til = ctypes.c_void_p.in_dll(self.g_dll, 'idati')
+        my_ti = idaapi.cvar.idati
+
+        def make_field_str(field_num, fsize, pad=0):
+            ret = ""
+            for i in range(0, field_num):
+                ret += struct.pack(">B", len("field_%X" % (i * fsize)) + 1) + "field_%X" % (i * fsize)
+            k = 1
+            while pad > 0:
+                ret += struct.pack(">B", len("field_%X" % (i * fsize + k)) + 1) + "field_%X" % (i * fsize + k)
+                pad -= 1
+                k += 1
+            return ret
+
+        def encode_size(num):
+            enc = 0
+            if num > 0xF:
+                t, pad = divmod(num, 0x10)
+                if t < 0x100:
+                    enc = 0x8100 | (pad << 11) | t
+                    return struct.pack(">BB", enc >> 8, enc & 0xFF)
+                else:
+                    t1, t2, t3 = (0, 0, 0)
+                    t1, pad = divmod(num, 0x400)
+                    t3 = pad
+                    if pad > 7:
+                        t2, t3 = divmod(pad, 8)
+                    return "\xFF\xFF" + struct.pack(">BBB", t1 | 0x80, t2 | 0x80, t3 << 3 | 0x40)
+            else:
+                return struct.pack(">B", num << 3 | 1)
+
+        def decode_size(size_str):
+            l = 0
+            if size_str[:2] == "\xFF\xFF":
+                l += 2
+                size_str = size_str[2:]
+            b1 = ord(size_str[0])
+            l += 1
+            if b1 & 0x80:
+                b2 = ord(size_str[1])
+                l += 1
+                if b2 & 0x80:
+                    b3 = ord(size_str[2])
+                    l += 1
+                    if b3 & 0x40:
+                        t1 = (b1 & 0x7f) * 0x400
+                        t2 = (b2 & 0x7f) * 8
+                        t3 = (b3 & 0x3f) >> 3
+                        return (l, t1 + t2 + t3)
+                    else:
+                        return None
+                t1 = b2 * 0x10
+                t2 = (b1 & 0x7f) >> 3
+                return (l, t1 + t2)
+            return (l, b1 >> 3)
+
+        def make_type_string(field_num, fsize, pad=0):
+            ret = "\x0d" + encode_size(field_num + pad)
+            if fsize == 1:
+                t = "\x32"
+            elif fsize == 2:
+                t = "\x03"
+            elif fsize == 8:
+                t = "\x05"
+            else:
+                t = "\x07"
+            ret += t * field_num
+            if pad > 0:
+                ret += "\x32" * pad
+            return ret
+
+        struct_id = idc.GetStrucIdByName(name)
+        if struct_id != idaapi.BADADDR:
+            answer = idc.AskYN(0, "A structure for %s already exists. Are you sure you want to remake it?" % name)
+            if answer == 1:
+                idc.DelStruc(struct_id)
+            else:
+                return
+        fields_num, pad = divmod(struc_size, field_size)
+        if fAllign and pad:
+            fields_num += 1
+            pad = 0
+        typ_type = ctypes.c_char_p(make_type_string(fields_num, field_size, pad))
+        typ_fields = ctypes.c_char_p(make_field_str(fields_num, field_size, pad))
+        typ_cmt = ctypes.c_char_p("")
+        typ_fieldcmts = ctypes.c_char_p("")
+        sclass = ctypes.c_ulong(0)
+        idaapi.compact_til(my_ti)
+        idx = idaapi.alloc_type_ordinal(my_ti)
+        ret = self.set_numbered_type(
+            my_til,
+            idx,
+            0x1,
+            ctypes.c_char_p(name),
+            typ_type,
+            typ_fields,
+            typ_cmt,
+            typ_fieldcmts,
+            ctypes.byref(sclass)
+        )
+        if ret != 0:
+            idc.Til2Idb(-1, name)
+        else:
+            Warning("set_numbered_type error")
+
+    def activate(self, ctx):
+        vdui = idaapi.get_tform_vdui(ctx.form)
+        vdui.get_current_item(idaapi.USE_KEYBOARD)
+        struc_size = 0
+        if vdui.item.is_citem() and vdui.item.it.is_expr():
+            target_item = vdui.item.e
+            if target_item.opname == "num":
+                s = idaapi.tag_remove(target_item.cexpr.print1(None)).rstrip("u")
+                if s.startswith("0x"):
+                    struc_size = int(s,16)
+                else:
+                    struc_size = int(s,10)
+
+        class SimpleCreateStructForm(idaapi.Form):
+            def __init__(self):
+                idaapi.Form.__init__(self, r"""STARTITEM 0
+        Create struct
+
+        <Struct name:{cStrArg}><Struct size:{numSize}>
+        <Field size :{numFieldSize}>                                        <Align:{ckAlign}>{gAlign}>
+
+        """, {
+                    'cStrArg': idaapi.Form.StringInput(),
+                    'numSize': idaapi.Form.StringInput(swidth=10),
+                    'numFieldSize': idaapi.Form.DropdownListControl(
+                        items=["1", "2", "4", "8"],
+                        readonly=False,
+                        selval="8" if  Const.EA64 else "4"),
+                    'gAlign': idaapi.Form.ChkGroupControl(("ckAlign",)),
+                })
+
+            def Go(self,size = 0):
+                self.Compile()
+                self.ckAlign.checked = True
+                # f.numFieldSize.value = 4
+                self.numSize.value = str(size)
+                ok = self.Execute()
+                # print "Ok = %d"%ok
+                if ok == 1:
+                    # print sel
+                    # print len(sel)
+                    return (int(self.numSize.value,16) if self.numSize.value.startswith("0x") else int(self.numSize.value,10), self.cStrArg.value, int(self.numFieldSize.value),
+                    self.ckAlign.checked)
+                return None
+        ret = SimpleCreateStructForm().Go(struc_size)
+        if ret is not None:
+            self.create_struct_type(*ret)
+        return 1
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
