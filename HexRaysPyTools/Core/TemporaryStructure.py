@@ -156,9 +156,9 @@ class VirtualFunction:
         name = idaapi.get_short_name(self.address)
         name = name.split('(')[0]
         result = re.search(r"(\[thunk\]:)?([^`]*)(.*\{(\d+)}.*)?", name)
-        name, adjustor = result.group(2), result.group(4)
-        if adjustor:
-            name += "_adj_" + adjustor
+        name, adjuster = result.group(2), result.group(4)
+        if adjuster:
+            name += "_adj_" + adjuster
         name = name.translate(None, "`'").replace(' ', '_')
         name = re.sub(r'[<>]', '_t_', name)
         return name

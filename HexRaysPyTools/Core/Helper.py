@@ -129,6 +129,8 @@ def get_fields_at_offset(tinfo, offset):
 
 
 def is_legal_type(tinfo):
+    if tinfo.is_ptr() and tinfo.get_pointed_object().is_forward_decl():
+        return tinfo.get_pointed_object().get_size() == idaapi.BADSIZE
     return bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))
 
 
@@ -161,9 +163,7 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
             try:
                 cfunc = idaapi.decompile(address)
                 if cfunc:
-                    touch_visitor = FunctionTouchVisitor(cfunc)
-                    touch_visitor.apply_to(cfunc.body, None)
-                    touch_visitor.touch_all()
+                    FunctionTouchVisitor(cfunc).process()
             except idaapi.DecompilationFailure:
                 print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=address)
         idaapi.decompile(self.cfunc.entry_ea)

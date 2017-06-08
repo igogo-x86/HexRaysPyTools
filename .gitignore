@@ -6,6 +6,7 @@
 *.user
 *.sln.docstates
 *.coati*
+*.pyc
 
 # Build results
 [Dd]ebug/

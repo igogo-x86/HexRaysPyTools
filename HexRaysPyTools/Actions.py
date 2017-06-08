@@ -3,14 +3,15 @@ import sys
 import re
 import struct
 
-import idaapi, idc
+import idaapi
+import idc
 
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor
+from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.Helper import potential_negatives
 
@@ -85,7 +86,7 @@ class TypeLibrary:
         if library_num != -1:
             selected_library = list_type_library[library_num][0]
             max_ordinal = idaapi.get_ordinal_qty(selected_library)
-            if max_ordinal == idaapi.BADNODE:
+            if max_ordinal == idaapi.BADORD:
                 TypeLibrary.enable_library_ordinals(library_num - 1)
                 max_ordinal = idaapi.get_ordinal_qty(selected_library)
             print "[DEBUG] Maximal ordinal of lib {0} = {1}".format(selected_library.name, max_ordinal)
@@ -97,7 +98,7 @@ class TypeLibrary:
         if library.name != idaapi.cvar.idati.name:
             last_ordinal = idaapi.get_ordinal_qty(idaapi.cvar.idati)
             type_id = idaapi.import_type(library, -1, name)  # tid_t
-            if type_id != idaapi.BADNODE:
+            if type_id != idaapi.BADORD:
                 return last_ordinal
         return None
 
@@ -276,12 +277,13 @@ class ShallowScanVariable(idaapi.action_handler_t):
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+        if variable and Helper.is_legal_type(variable.type()):
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             scanner = ShallowSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.process()
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
+            scanner.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -302,19 +304,87 @@ class DeepScanVariable(idaapi.action_handler_t):
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
-            definition_address = variable.defea
+        self.scan(hx_view, variable)
+
+    def scan(self, hx_view, variable):
+        if variable and Helper.is_legal_type(variable.type()):
+
+            definition_address = None if variable.is_arg_var else variable.defea
+            index = list(hx_view.cfunc.get_lvars()).index(variable)
+
             # index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
 
             # Because index of the variable can be changed after touching, we would like to calculate it appropriately
+
+            for idx, lvar in enumerate(hx_view.cfunc.get_lvars()):
+                print idx, hex(int(lvar.defea))
+
             lvars = hx_view.cfunc.get_lvars()
-            index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
+
+            if definition_address:
+                index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
+
             scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
             scanner.process()
             for field in scanner.candidates:
                 self.temporary_structure.add_row(field)
+            scanner.clear()
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class DeepScanReturn(idaapi.action_handler_t):
+
+    name = "my:DeepScanReturn"
+    description = "Deep Scan Returned Variables"
+    hotkey = None
+
+    def __init__(self, temporary_structure):
+        self.temporary_structure = temporary_structure
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        return hx_view.cfunc.get_rettype().equals_to(Const.VOID_TINFO)
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        address = hx_view.cfunc.entry_ea
+
+        xref_ea = idaapi.get_first_cref_to(address)
+        xrefs = set()
+        while xref_ea != idaapi.BADADDR:
+            xref_func_ea = idc.GetFunctionAttr(xref_ea, idc.FUNCATTR_START)
+            if xref_func_ea != idaapi.BADADDR:
+                xrefs.add(xref_func_ea)
+            else:
+                print "[Warning] Function not found at 0x{0:08X}".format(xref_ea)
+            xref_ea = idaapi.get_next_cref_to(address, xref_ea)
+
+        for func_ea in xrefs:
+            visitor = VariableLookupVisitor(address)
+
+            try:
+                cfunc = idaapi.decompile(func_ea)
+                if cfunc:
+                    FunctionTouchVisitor(cfunc).process()
+                    visitor.apply_to(cfunc.body, None)
+                    for idx in visitor.result:
+                        scanner = DeepSearchVisitor(cfunc, 0, idx)
+                        scanner.process()
+                        for field in scanner.candidates:
+                            self.temporary_structure.add_row(field)
+
+            except idaapi.DecompilationFailure:
+                print "[Warning] Failed to decompile function at 0x{0:08X}".format(xref_ea)
+
+        DeepSearchVisitor.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -598,6 +668,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             elif result[0] == RECAST_ARGUMENT:
                 arg_index, func_tinfo, arg_tinfo, address = result[1:]
+                if arg_tinfo.is_array():
+                    arg_tinfo.convert_array_to_ptr()
 
                 func_data = idaapi.func_type_data_t()
                 func_tinfo.get_func_details(func_data)
@@ -695,6 +767,51 @@ class RecastItemRight(RecastItemLeft):
                     return RECAST_RETURN, new_type, expression.x.x.obj_ea
 
 
+class RenameOther(idaapi.action_handler_t):
+    name = "my:RenameOther"
+    description = "Take other name"
+    hotkey = "Ctrl+N"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+
+        expression = ctree_item.it.to_specific_type
+        if expression.op != idaapi.cot_var:
+            return
+
+        parent = cfunc.body.find_parent_of(expression).to_specific_type
+        if parent.op != idaapi.cot_asg:
+            return
+
+        other = parent.theother(expression)
+        if other.op != idaapi.cot_var:
+            return
+
+        this_lvar = ctree_item.get_lvar()
+        other_lvar = cfunc.get_lvars()[other.v.idx]
+        if (other_lvar.has_user_name or other_lvar.is_arg_var and re.search("a\d*$", other_lvar.name) is None) \
+                and this_lvar.name.lstrip('_') != other_lvar.name.lstrip('_'):
+            return '_' + other_lvar.name, this_lvar
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+
+        if result:
+            name, lvar = result
+            hx_view.rename_lvar(lvar, name, True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
 class RenameInside(idaapi.action_handler_t):
     name = "my:RenameInto"
     description = "Rename inside argument"
@@ -719,8 +836,8 @@ class RenameInside(idaapi.action_handler_t):
                     func_tinfo = parent.x.type.get_pointed_object()
                     func_data = idaapi.func_type_data_t()
                     func_tinfo.get_func_details(func_data)
-                    if arg_index < func_tinfo.get_nargs() and lvar.name != func_data[arg_index].name:
-                        return func_tinfo, parent.x.obj_ea, arg_index, lvar.name
+                    if arg_index < func_tinfo.get_nargs() and lvar.name.lstrip('_') != func_data[arg_index].name:
+                        return func_tinfo, parent.x.obj_ea, arg_index, lvar.name.lstrip('_')
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
