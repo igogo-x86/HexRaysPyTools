@@ -57,6 +57,7 @@ def create_member(function, expression_address, origin, offset, index, tinfo=Non
         if VirtualTable.check_address(ea):
             return VirtualTable(offset, ea, scanned_variable, origin)
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
+        tinfo.clr_const()
         return Member(offset, tinfo, scanned_variable, origin)
     else:
         # VoidMember shouldn't have ScannedVariable because after finalizing it can mess up with normal functions
@@ -103,7 +104,8 @@ class AbstractMember:
 
     @property
     def size(self):
-        return self.tinfo.get_size()
+        size = self.tinfo.get_size()
+        return size if size != idaapi.BADSIZE else 1
 
     @property
     def font(self):
@@ -163,7 +165,7 @@ class VirtualFunction:
         name, adjuster = result.group(2), result.group(4)
         if adjuster:
             name += "_adj_" + adjuster
-        name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_')
+        name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_').replace('~', 'DESTR__')
         name = re.sub(r'[<>]', '_t_', name)
         return name
 

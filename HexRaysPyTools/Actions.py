@@ -12,6 +12,8 @@ from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
+from HexRaysPyTools.Core.SpaghettiCode import *
+
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -889,6 +891,41 @@ class RenameOutside(idaapi.action_handler_t):
         if result:
             name, lvar = result
             hx_view.rename_lvar(lvar, name, True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class SwapThenElse(idaapi.action_handler_t):
+    name = "my:SwapIfElse"
+    description = "Swap then/else"
+    hotkey = "Shift+S"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        insn = ctree_item.it.to_specific_type
+
+        if insn.op != idaapi.cit_if or insn.cif.ielse is None:
+            return False
+
+        return insn.op == idaapi.cit_if and insn.cif.ielse
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        if self.check(hx_view.cfunc, hx_view.item):
+            insn = hx_view.item.it.to_specific_type
+            inverse_if(insn.cif)
+            hx_view.refresh_ctext()
+
+            InversionInfo(hx_view.cfunc.entry_ea).switch_inverted(insn.ea)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":

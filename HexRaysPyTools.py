@@ -5,7 +5,7 @@ import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
-from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor
+from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 
 # import Core.QtShim as QtShim
 
@@ -35,6 +35,9 @@ def hexrays_events_callback(*args):
 
         if Actions.RenameOutside.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
+
+        if Actions.SwapThenElse.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
 
         if hx_view.item.get_lvar() and Helper.is_legal_type(hx_view.item.get_lvar().type()):
             idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
@@ -141,6 +144,11 @@ def hexrays_events_callback(*args):
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
+        elif level_of_maturity == idaapi.CMAT_TRANS1:
+
+            visitor = SwapThenElseVisitor(cfunc.entry_ea)
+            visitor.apply_to(cfunc.body, None)
+
         elif level_of_maturity == idaapi.CMAT_TRANS2:
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
@@ -185,6 +193,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RenameOther)
         Actions.register(Actions.RenameInside)
         Actions.register(Actions.RenameOutside)
+        Actions.register(Actions.SwapThenElse)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -224,6 +233,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RenameOther)
         Actions.unregister(Actions.RenameInside)
         Actions.unregister(Actions.RenameOutside)
+        Actions.unregister(Actions.SwapThenElse)
         idaapi.term_hexrays_plugin()
 
 

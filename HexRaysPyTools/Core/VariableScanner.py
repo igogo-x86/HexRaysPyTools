@@ -281,6 +281,13 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                         # call(..., (TYPE)var + offset, ...)
                         return self.get_member(offset, index, call=parents[2], arg=parents[1])
                     elif parents_type[2] == 'cast' and parents[2].type.is_ptr():
+                        if parents_type[3] == 'call':
+                            # call(..., (TYPE *) ((TYPE *)var + x), ...)
+                            # Where argument type is not the same as cast type. Ida has a bug here choosing sometimes
+                            # wrong pointer type
+                            idx, tinfo = Helper.get_func_argument_info(parents[3], parents[2])
+                            return self.create_member(offset, index, tinfo.get_pointed_object())
+
                         # (TYPE *) ((TYPE *)var + x)
                         return self.create_member(offset, index, parents[2].type.get_pointed_object())
 
