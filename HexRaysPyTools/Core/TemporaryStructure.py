@@ -52,7 +52,10 @@ def parse_vtable_name(address):
 
 def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
     # Creates appropriate member (VTable, regular member, void *member) depending on input
-    scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
+    if isinstance(index, str):
+        scanned_variable = ScannedVariable(function, None, expression_address, origin, False, index)
+    else:
+        scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
     if ea:
         if VirtualTable.check_address(ea):
             return VirtualTable(offset, ea, scanned_variable, origin)
@@ -401,7 +404,7 @@ class VoidMember(Member):
 
 
 class ScannedVariable:
-    def __init__(self, function, variable, expression_address, origin, applicable=True):
+    def __init__(self, function, variable, expression_address, origin, applicable=True, global_variable=None):
         """
         Class for storing variable and it's function that have been scanned previously.
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
@@ -410,10 +413,23 @@ class ScannedVariable:
         :param variable: idaapi.vdui_t
         """
         self.function = function
-        self.lvar = variable
+        if global_variable is not None:
+            self.gvar = global_variable
+            self.lvar = None
+            self.applicable = False
+        else:
+            self.gvar = None
+            self.lvar = variable
+
         self.expression_address = expression_address
         self.origin = origin
         self.applicable = applicable
+
+    @property
+    def name(self):
+        if self.gvar is not None:
+            return self.gvar
+        return self.lvar.name
 
     @property
     def function_name(self):
@@ -442,7 +458,7 @@ class ScannedVariable:
         return [
             "0x{0:04X}".format(self.origin),
             self.function_name,
-            self.lvar.name,
+            self.name,
             "0x{0:08X}".format(self.expression_address)
         ]
 
@@ -450,7 +466,7 @@ class ScannedVariable:
         return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
 
     def __hash__(self):
-        return hash((self.function.entry_ea, self.lvar.name))
+        return hash((self.function.entry_ea, self.name))
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):

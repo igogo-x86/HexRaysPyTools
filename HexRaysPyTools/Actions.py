@@ -274,16 +274,39 @@ class ShallowScanVariable(idaapi.action_handler_t):
         self.temporary_structure = temporary_structure
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(ctree_item):
+        lvar = ctree_item.get_lvar()
+        if lvar is not None:
+            return "LOCAL" if Helper.is_legal_type(lvar.type()) else None
+
+        gvar = ctree_item.it.to_specific_type
+        if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type):
+            return "GLOBAL"
+
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and Helper.is_legal_type(variable.type()):
+        origin = self.temporary_structure.main_offset
+
+        var_type = self.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
-            scanner = ShallowSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
-            scanner.process()
-            for field in scanner.candidates:
-                self.temporary_structure.add_row(field)
-            scanner.clear()
+            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, index)
+
+        elif var_type == "GLOBAL":
+            gvar = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(gvar.obj_ea)
+            tinfo = gvar.type
+            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        for field in scanner.candidates:
+            self.temporary_structure.add_row(field)
+        scanner.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -303,14 +326,13 @@ class DeepScanVariable(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        self.scan(hx_view, variable)
+        origin = self.temporary_structure.main_offset
 
-    def scan(self, hx_view, variable):
-        if variable and Helper.is_legal_type(variable.type()):
-
-            definition_address = None if variable.is_arg_var else variable.defea
+        var_type = ShallowScanVariable.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
+            definition_address = None if variable.is_arg_var else variable.defea
 
             # index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
@@ -322,11 +344,25 @@ class DeepScanVariable(idaapi.action_handler_t):
             if definition_address:
                 index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
 
-            scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
-            scanner.process()
-            for field in scanner.candidates:
-                self.temporary_structure.add_row(field)
-            scanner.clear()
+            scanner = DeepSearchVisitor(hx_view.cfunc, origin, index=index)
+
+        elif var_type == "GLOBAL":
+            gvar = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(gvar.obj_ea)
+            tinfo = gvar.type
+
+            if FunctionTouchVisitor(hx_view.cfunc).process():
+                hx_view.refresh_view(True)
+
+            scanner = DeepSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        for field in scanner.candidates:
+            self.temporary_structure.add_row(field)
+        scanner.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -399,19 +435,34 @@ class RecognizeShape(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+
+        var_type = ShallowScanVariable.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             scanner = ShallowSearchVisitor(hx_view.cfunc, 0, index)
-            scanner.process()
-            structure = TemporaryStructureModel()
-            for field in scanner.candidates:
-                structure.add_row(field)
-            tinfo = structure.get_recognized_shape()
-            if tinfo:
-                tinfo.create_ptr(tinfo)
+
+        elif var_type == "GLOBAL":
+            variable = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(variable.obj_ea)
+            tinfo = variable.type
+            scanner = ShallowSearchVisitor(hx_view.cfunc, 0, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        structure = TemporaryStructureModel()
+        for field in scanner.candidates:
+            structure.add_row(field)
+        tinfo = structure.get_recognized_shape()
+        if tinfo:
+            tinfo.create_ptr(tinfo)
+            if var_type == "LOCAL":
                 hx_view.set_lvar_type(variable, tinfo)
-                hx_view.refresh_view(True)
+            elif var_type == "GLOBAL":
+                idaapi.apply_tinfo2(variable.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
+            hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":

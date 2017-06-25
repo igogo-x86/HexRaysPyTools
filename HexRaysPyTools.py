@@ -39,7 +39,7 @@ def hexrays_events_callback(*args):
         if Actions.SwapThenElse.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
 
-        if hx_view.item.get_lvar() and Helper.is_legal_type(hx_view.item.get_lvar().type()):
+        if Actions.ShallowScanVariable.check(item):
             idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
