@@ -24,9 +24,9 @@ def find_deep_members(parent_tinfo, target_tinfo):
     parent_tinfo.get_udt_details(udt_data)
     result = []
     for udt_member in udt_data:
-        if udt_member.type.equals_to(target_tinfo):
-            result.append((udt_member.offset / 8, udt_member.name))
-        elif udt_member.type.is_udt():
+        #if udt_member.type.equals_to(target_tinfo):
+        result.append((udt_member.offset / 8, udt_member.name))
+        if udt_member.type.is_udt():
             for offset, name in find_deep_members(udt_member.type, target_tinfo):
                 final_name = udt_member.name + '.' + name if udt_member.name else name
                 result.append((udt_member.offset / 8 + offset, final_name))
@@ -95,14 +95,14 @@ class NegativeLocalCandidate:
         parent_tinfo = idaapi.tinfo_t()
         udt_data = idaapi.udt_type_data_t()
         target_tinfo = idaapi.tinfo_t()
-        if not target_tinfo.get_named_type(type_library, self.tinfo.dstr()):
-            print "[Warning] Such type doesn't exist in '{0}' library".format(type_library.name)
-            return result
+        #if not target_tinfo.get_named_type(type_library, self.tinfo.dstr()):
+        #    print "[Warning] Such type doesn't exist in '{0}' library".format(type_library.name)
+        #    return result
         for ordinal in xrange(1, idaapi.get_ordinal_qty(type_library)):
             parent_tinfo.create_typedef(type_library, ordinal)
             if parent_tinfo.get_size() >= min_struct_size:
                 for offset, name in find_deep_members(parent_tinfo, target_tinfo):
-                    # print "[DEBUG] Found {0} at {1} in {2}".format(name, offset, parent_tinfo.dstr())
+                    print "[DEBUG] Found {0} at {1} in {2}".format(name, offset, parent_tinfo.dstr())
                     if offset + min_offset >= 0 and offset + max_offset <= parent_tinfo.get_size():
                         result.append((ordinal, offset, name, parent_tinfo.dstr()))
         return result
