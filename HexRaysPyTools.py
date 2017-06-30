@@ -44,6 +44,9 @@ def hexrays_events_callback(*args):
             idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
 
+        if Actions.CreateNewField.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
+
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
@@ -186,6 +189,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
         Actions.register(Actions.DeepScanReturn, Helper.temporary_structure)
         Actions.register(Actions.RecognizeShape)
+        Actions.register(Actions.CreateNewField)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
         Actions.register(Actions.ResetContainingStructure)
         Actions.register(Actions.RecastItemRight)
@@ -226,6 +230,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.DeepScanVariable)
         Actions.unregister(Actions.DeepScanReturn)
         Actions.unregister(Actions.RecognizeShape)
+        Actions.unregister(Actions.CreateNewField)
         Actions.unregister(Actions.SelectContainingStructure)
         Actions.unregister(Actions.ResetContainingStructure)
         Actions.unregister(Actions.RecastItemRight)

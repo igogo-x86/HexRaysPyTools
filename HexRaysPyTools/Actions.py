@@ -14,7 +14,6 @@ from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearch
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
 
-
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
 RECAST_ARGUMENT = 2
@@ -470,8 +469,121 @@ class RecognizeShape(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class ShowGraph(idaapi.action_handler_t):
+class CreateNewField(idaapi.action_handler_t):
+    name = "my:CreateNewField"
+    description = "Create New Field"
+    hotkey = None
 
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        item = ctree_item.it.to_specific_type
+        if item.op != idaapi.cot_memptr:
+            return
+
+        parent = cfunc.body.find_parent_of(ctree_item.it).to_specific_type
+        if parent.op != idaapi.cot_idx or parent.y.op != idaapi.cot_num:
+            return
+        idx = parent.y.n._value
+
+        struct_type = item.x.type.get_pointed_object()
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = item.m * 8
+        struct_type.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        if udt_member.name[0:3] != "gap":
+            return
+
+        return struct_type, udt_member.offset // 8, idx
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+        if result is None:
+            return
+
+        struct_tinfo, offset, idx = result
+        ordinal = struct_tinfo.get_ordinal()
+        struct_name = struct_tinfo.dstr()
+
+        if (offset + idx) % 2:
+            default_field_type = "_BYTE"
+        elif (offset + idx) % 4:
+            default_field_type = "_WORD"
+        else:
+            default_field_type = "_DWORD"
+
+        declaration = idaapi.asktext(
+            0x10000, "{0} field_{1:X}".format(default_field_type, offset + idx), "Enter new structure member:"
+        )
+        if declaration is None:
+            return
+
+        result = self.__parse_declaration(declaration)
+        if result is None:
+            return
+
+        field_tinfo, field_name = result
+        field_size = field_tinfo.get_size()
+        udt_data = idaapi.udt_type_data_t()
+        udt_member = idaapi.udt_member_t()
+
+        struct_tinfo.get_udt_details(udt_data)
+        udt_member.offset = offset * 8
+        struct_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        gap_size = udt_member.size // 8
+
+        gap_leftover = gap_size - idx - field_size
+
+        if gap_leftover < 0:
+            print "[ERROR] Too big size for the field. Type with maximum {0} bytes can be used".format(gap_size - idx)
+            return
+
+        iterator = udt_data.find(udt_member)
+        iterator = udt_data.erase(iterator)
+
+        if gap_leftover > 0:
+            udt_data.insert(iterator, TemporaryStructureModel.get_padding_member(offset + idx + field_size, gap_leftover))
+
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = offset * 8 + idx
+        udt_member.name = field_name
+        udt_member.type = field_tinfo
+        udt_member.size = field_size
+
+        iterator = udt_data.insert(iterator, udt_member)
+
+        if idx > 0:
+            udt_data.insert(iterator, TemporaryStructureModel.get_padding_member(offset, idx))
+
+        struct_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+        struct_tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.BTF_STRUCT, struct_name)
+        hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+    @staticmethod
+    def __parse_declaration(declaration):
+        m = re.search(r"^(\w+[ *]+)(\w+)$", declaration)
+        if m is None:
+            return
+
+        type_name, field_name = m.groups()
+        if field_name[0].isdigit():
+            print "[ERROR] Bad field name"
+            return
+
+        tinfo = idaapi.tinfo_t()
+        _, tp, fld = idc.ParseType(type_name, 0)
+        tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
+        return tinfo, field_name
+
+
+class ShowGraph(idaapi.action_handler_t):
     name = "my:ShowGraph"
     description = "Show graph"
     hotkey = "G"
@@ -636,8 +748,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             if expression:
                 expression = expression.to_specific_type
-                if expression.op == idaapi.cot_asg and \
-                        expression.x.op in (idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref):
+                if expression.op == idaapi.cot_asg and expression.x.op in (
+                        idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref):
 
                     right_expr = expression.y
                     right_tinfo = right_expr.x.type if right_expr.op == idaapi.cot_cast else right_expr.type
