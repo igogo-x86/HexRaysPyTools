@@ -169,6 +169,8 @@ class VirtualFunction:
         if adjuster:
             name += "_adj_" + adjuster
         name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_').replace('~', 'DESTR__')
+        name = name.replace("==", "__eq__")
+        name = name.replace("=", "__asg__")
         name = re.sub(r'[<>]', '_t_', name)
         return name
 
