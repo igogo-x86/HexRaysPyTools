@@ -279,9 +279,10 @@ class ShallowScanVariable(idaapi.action_handler_t):
         if lvar is not None:
             return "LOCAL" if Helper.is_legal_type(lvar.type()) else None
 
-        gvar = ctree_item.it.to_specific_type
-        if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type):
-            return "GLOBAL"
+        if ctree_item.citype == idaapi.VDI_EXPR:
+            gvar = ctree_item.it.to_specific_type
+            if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type):
+                return "GLOBAL"
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -479,6 +480,9 @@ class CreateNewField(idaapi.action_handler_t):
 
     @staticmethod
     def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+
         item = ctree_item.it.to_specific_type
         if item.op != idaapi.cot_memptr:
             return
