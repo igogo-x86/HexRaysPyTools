@@ -6,6 +6,7 @@ import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
+from HexRaysPyTools.Core.StructXrefs import *
 
 # import Core.QtShim as QtShim
 
@@ -46,6 +47,9 @@ def hexrays_events_callback(*args):
 
         if Actions.CreateNewField.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
+
+        if Actions.FindFieldXrefs.check(item):
+            idaapi.attach_action_to_popup(form, popup, Actions.FindFieldXrefs.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
@@ -159,6 +163,10 @@ def hexrays_events_callback(*args):
             # print cfunc
             visitor = SpaghettiVisitor()
             visitor.apply_to(cfunc.body, None)
+
+        elif level_of_maturity == idaapi.CMAT_FINAL:
+            StructXrefVisitor(cfunc).process()
+
     return 0
 
 
@@ -198,12 +206,14 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RenameInside)
         Actions.register(Actions.RenameOutside)
         Actions.register(Actions.SwapThenElse)
+        Actions.register(Actions.FindFieldXrefs)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
         Helper.touched_functions.clear()
         Const.init()
+        XrefStorage().open()
 
         return idaapi.PLUGIN_KEEP
 
@@ -239,7 +249,9 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RenameInside)
         Actions.unregister(Actions.RenameOutside)
         Actions.unregister(Actions.SwapThenElse)
+        Actions.unregister(Actions.FindFieldXrefs)
         idaapi.term_hexrays_plugin()
+        XrefStorage().close()
 
 
 def PLUGIN_ENTRY():

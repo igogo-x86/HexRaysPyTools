@@ -144,6 +144,13 @@ def search_duplicate_fields(udt_data):
     return [indices for indices in default_dict.values() if len(indices) > 1]
 
 
+def get_member_name(tinfo, offset):
+    udt_member = idaapi.udt_member_t()
+    udt_member.offset = offset * 8
+    tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+    return udt_member.name
+
+
 touched_functions = set()
 
 
