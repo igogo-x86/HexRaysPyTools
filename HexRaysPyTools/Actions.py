@@ -424,6 +424,45 @@ class DeepScanReturn(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
+class DeepScanFunctions(idaapi.action_handler_t):
+
+    name = "my:DeepScanFunctions"
+    description = "Scan First Argument"
+    hotkey = None
+
+    def __init__(self, temporary_structure):
+        self.temporary_structure = temporary_structure
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        for idx in ctx.chooser_selection:
+            func_ea = idaapi.getn_func(idx - 1).startEA
+            try:
+                cfunc = idaapi.decompile(func_ea)
+                if cfunc is None:
+                    continue
+
+                FunctionTouchVisitor(cfunc).process()
+
+                lvars = cfunc.get_lvars()
+                if not (lvars and lvars[0].is_arg_var and Helper.is_legal_type(lvars[0].type())):
+                    continue
+
+                scanner = DeepSearchVisitor(cfunc, 0, 0)
+                scanner.process()
+                for field in scanner.candidates:
+                    self.temporary_structure.add_row(field)
+
+            except idaapi.DecompilationFailure:
+                print "[Warning] Failed to decompile function at 0x{0:08X}".format(func_ea)
+
+    def update(self, ctx):
+        if ctx.form_type == idaapi.BWN_FUNCS:
+            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
 class RecognizeShape(idaapi.action_handler_t):
 
     name = "my:RecognizeShape"
@@ -850,7 +889,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                 try:
                     cfunc = idaapi.decompile(func_address) if func_address else hx_view.cfunc
                 except idaapi.DecompilationFailure:
-                    print "[ERROR] Ida failed to decompile function"
+                    print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(func_address)
                     return
 
                 function_tinfo = idaapi.tinfo_t()

@@ -386,7 +386,7 @@ class DeepSearchVisitor(ShallowSearchVisitor):
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
         except idaapi.DecompilationFailure:
-            print "[ERROR] Ida failed to decompile function"
+            print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(ea)
 
 
 class VariableLookupVisitor(idaapi.ctree_parentee_t):
