@@ -385,6 +385,17 @@ class Member(AbstractMember):
         udt_member.size = self.size
         return udt_member
 
+    def activate(self):
+        new_type_declaration = idaapi.askstr(0x100, self.type_name, "Enter type:")
+        result = idc.ParseType(new_type_declaration, 0)
+        if result is None:
+            return
+        _, tp, fld = result
+        tinfo = idaapi.tinfo_t()
+        tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
+        self.tinfo = tinfo
+        self.is_array = False
+
 
 class VoidMember(Member):
     def __init__(self, offset, scanned_variable, origin=0):
