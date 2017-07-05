@@ -581,8 +581,12 @@ class CreateNewField(idaapi.action_handler_t):
             print "[ERROR] Bad field name"
             return
 
+        result = idc.ParseType(type_name, 0)
+        if result is None:
+            return
+
+        _, tp, fld = result
         tinfo = idaapi.tinfo_t()
-        _, tp, fld = idc.ParseType(type_name, 0)
         tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
         return tinfo, field_name
 
