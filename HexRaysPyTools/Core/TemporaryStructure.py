@@ -176,6 +176,9 @@ class VirtualFunction:
 
     @property
     def tinfo(self):
+        if Helper.is_imported_ea(self.address):
+            print "[INFO] Ignoring import function at 0x{0:08X}".format(self.address)
+            return Const.DUMMY_FUNC
         try:
             decompiled_function = idaapi.decompile(self.address)
             if decompiled_function:
@@ -195,6 +198,7 @@ class VirtualTable(AbstractMember):
         self.name = "vtable" + ("_{0:X}".format(self.offset) if self.offset else '')
         self.vtable_name, self.have_nice_name = parse_vtable_name(address)
         self.populate()
+        self.scan_virtual_functions()
 
     def populate(self):
         address = self.address
@@ -204,7 +208,7 @@ class VirtualTable(AbstractMember):
             else:
                 func_address = idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
-            if idaapi.isCode(flags):
+            if idaapi.isCode(flags) or Helper.is_imported_ea(func_address):
                 self.virtual_functions.append(VirtualFunction(func_address, address - self.address))
                 address += Const.EA_SIZE
             else:
@@ -285,6 +289,9 @@ class VirtualTable(AbstractMember):
             idaapi.open_pseudocode(int(self.virtual_functions[idx]), 1)
 
     def scan_virtual_function(self, index):
+        if Helper.is_imported_ea(self.virtual_functions[index].address):
+            print "[INFO] Ignoring import function at 0x{0:08X}".format(self.address)
+            return
         try:
             function = idaapi.decompile(self.virtual_functions[index].address)
         except idaapi.DecompilationFailure:
@@ -339,7 +346,7 @@ class VirtualTable(AbstractMember):
             func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
             flags = idaapi.getFlags(func_address)  # flags_t
             # print "[INFO] Address 0x{0:08X}".format(func_address)
-            if idaapi.isCode(flags):
+            if idaapi.isCode(flags) or Helper.is_imported_ea(func_address):
                 functions_count += 1
                 address += Const.EA_SIZE
             else:
