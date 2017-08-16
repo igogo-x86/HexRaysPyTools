@@ -72,7 +72,7 @@ def hexrays_events_callback(*args):
             elif item.e.op == idaapi.cot_var:
                 # Check if we clicked on variable that is a pointer to a structure that is potentially part of
                 # containing structure
-                if item.e.v.idx:
+                if item.e.v.idx in potential_negatives:
                     idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
                 if Actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
                     idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
@@ -136,8 +136,8 @@ def hexrays_events_callback(*args):
             for idx in set(range(len(lvars))) - set(negative_lvars.keys()):
                 if lvars[idx].type().is_ptr():
                     pointed_tinfo = lvars[idx].type().get_pointed_object()
-                    #if pointed_tinfo.is_udt():
-                    structure_pointer_variables[idx] = pointed_tinfo
+                    if pointed_tinfo.is_udt():
+                        structure_pointer_variables[idx] = pointed_tinfo
 
             if structure_pointer_variables:
                 visitor = NegativeOffsets.AnalyseVisitor(structure_pointer_variables, potential_negatives)
@@ -177,7 +177,7 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         Helper.temporary_structure = TemporaryStructureModel()
-
+        Helper.init_imported_ea()
         # Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
