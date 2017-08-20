@@ -433,8 +433,8 @@ class DeepScanFunctions(idaapi.action_handler_t):
     description = "Scan First Argument"
     hotkey = None
 
-    def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
+    def __init__(self):
+        self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):

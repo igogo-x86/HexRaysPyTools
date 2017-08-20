@@ -248,9 +248,10 @@ class MyPlugin(idaapi.plugin_t):
         if Helper.temporary_structure:
             Helper.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
-        for ac in hex_pytools_config.actions:
-            if hex_pytools_config.actions[ac]:
-                Actions.unregister(hex_pytools_config.actions_refs[ac])
+        if hex_pytools_config:
+            for ac in hex_pytools_config.actions:
+                if hex_pytools_config.actions[ac]:
+                    Actions.unregister(hex_pytools_config.actions_refs[ac])
         # Actions.unregister(Actions.ShowGraph)
         # Actions.unregister(Actions.ShowClasses)
         # Actions.unregister(Actions.GetStructureBySize)
