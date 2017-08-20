@@ -16,11 +16,17 @@ if fDebug:
 
 
 def hexrays_events_callback(*args):
+    if fDebug:
+        pydevd.settrace('localhost', port=31337, stdoutToServer=True, stderrToServer=True, suspend=False)
     hexrays_event = args[0]
     from HexRaysPyTools.Config import hex_pytools_config
     if hexrays_event == idaapi.hxe_populating_popup:
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
+
+        if Actions.RecastStructMember.check(hx_view.cfunc,item):
+            if hex_pytools_config[Actions.RecastStructMember.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.RecastStructMember.name, None)
 
         if Actions.SimpleCreateStruct.check(hx_view.cfunc,item):
             if hex_pytools_config[Actions.SimpleCreateStruct.name]:
@@ -182,7 +188,7 @@ class MyPlugin(idaapi.plugin_t):
     @staticmethod
     def init():
         if fDebug:
-            pydevd.settrace('localhost', port=31337, stdoutToServer=True, stderrToServer=True,suspend=True)
+            pydevd.settrace('localhost', port=31337, stdoutToServer=True, stderrToServer=True,suspend=False)
         if not idaapi.init_hexrays_plugin():
             print "[ERROR] Failed to initialize Hex-Rays SDK"
             return idaapi.PLUGIN_SKIP

@@ -15,6 +15,7 @@ from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearch
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.Helper import potential_negatives
 
+
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
 RECAST_ARGUMENT = 2
@@ -1089,6 +1090,54 @@ class SimpleCreateStruct(idaapi.action_handler_t):
         if ret is not None:
             self.create_struct_type(*ret)
         return 1
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+class RecastStructMember(idaapi.action_handler_t):
+
+    name = "my:RecastStructMember"
+    description = "Recast Struct Member"
+    hotkey = "Shift+L"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.it.op in [idaapi.cot_memptr, idaapi.cot_memref]:
+            parent = cfunc.body.find_parent_of(ctree_item.it)
+            if parent and parent.op == idaapi.cot_call and parent.to_specific_type.x.op == idaapi.cot_helper:
+                cast_helper = parent.to_specific_type.x.helper
+                helpers = ["HIBYTE", "LOBYTE", "BYTE", "HIWORD", "LOWORD"]
+                for h in helpers:
+                    if cast_helper.startswith(h):
+                        return ("%s"%ctree_item.it.to_specific_type.x.type).strip(" *"), ctree_item.it.to_specific_type.m, cast_helper
+        return False
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+
+        if result:
+            struct_name, member_offset, cast_helper = result
+            sid = idaapi.get_struc_id(struct_name)
+            if sid != idaapi.BADADDR:
+                sptr = idaapi.get_struc(sid)
+                mptr = idaapi.get_member(sptr,member_offset)
+                member_name = idaapi.get_member_name(mptr.id)
+                member_size = idaapi.get_member_size(mptr)
+                if cast_helper.startswith("BYTE") or cast_helper in ("HIBYTE", "LOBYTE"):
+                    idaapi.del_struc_member(sptr, member_offset)
+                    for i in range(member_size):
+                        idc.AddStrucMember(sptr.id,member_name if i == 0 else "field_%X"%(member_offset + i), member_offset+i, idaapi.FF_DATA|idaapi.FF_BYTE,idaapi.BADADDR, 1)
+                if cast_helper in ("LOWORD","HIWORD"):
+                    for i in range(0,member_size,2):
+                        idc.AddStrucMember(sptr.id,member_name if i == 0 else "field_%X"%(member_offset + i), member_offset+i, idaapi.FF_DATA|idaapi.FF_WORD,idaapi.BADADDR, 2)
+                hx_view.refresh_view(True)
+
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
