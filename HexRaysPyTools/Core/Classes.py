@@ -20,7 +20,7 @@ class VirtualMethod(object):
         self.parents = [parent]
         self.base_address = Helper.get_virtual_func_address(name)
         if self.base_address:
-            self.base_address - idaapi.get_imagebase()
+            self.base_address -= idaapi.get_imagebase()
 
         self.rowcount = 0
         self.children = []

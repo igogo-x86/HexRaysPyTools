@@ -1,4 +1,49 @@
 import idaapi
+import idc
+
+
+def inverse_if(cif):
+    idaapi.qswap(cif.ithen, cif.ielse)
+    cit_if_condition = cif.expr
+
+    if cit_if_condition.op == idaapi.cot_lnot:
+        new_if_condition = idaapi.cexpr_t(cit_if_condition.x)
+    else:
+        new_if_condition = idaapi.cexpr_t(idaapi.lnot(cit_if_condition))
+
+    new_if_condition.thisown = False
+    cif.expr = new_if_condition
+    del cit_if_condition
+
+
+class InversionInfo(object):
+    ARRAY_NAME = "$HexRaysPyTools:IfThenElse:"
+
+    def __init__(self, func_ea):
+        self.__name = InversionInfo.ARRAY_NAME + hex(int(func_ea))
+        self.__id = idc.GetArrayId(self.__name)
+
+    def get_inverted(self):
+        if self.__id != -1:
+            array = idc.GetArrayElement(idc.AR_STR, self.__id, 0)
+            return set(map(int, array.split()))
+        return set()
+
+    def switch_inverted(self, address):
+        if self.__id == -1:
+            self.__id = idc.CreateArray(self.__name)
+            idc.SetArrayString(self.__id, 0, str(address))
+        else:
+            inverted = self.get_inverted()
+            try:
+                inverted.remove(address)
+                if not inverted:
+                    idc.DeleteArray(self.__id)
+
+            except KeyError:
+                inverted.add(address)
+
+            idc.SetArrayString(self.__id, 0, " ".join(map(str, inverted)))
 
 
 class SpaghettiVisitor(idaapi.ctree_parentee_t):
@@ -54,3 +99,23 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
                         continue
                 break
         return 0
+
+
+class SwapThenElseVisitor(idaapi.ctree_parentee_t):
+    def __init__(self, func_ea):
+        super(SwapThenElseVisitor, self).__init__()
+        self.__inversion_info = InversionInfo(func_ea)
+        self.__inverted = self.__inversion_info.get_inverted()
+
+    def visit_insn(self, insn):
+        if insn.op != idaapi.cit_if or insn.cif.ielse is None:
+            return 0
+
+        if insn.ea in self.__inverted:
+            inverse_if(insn.cif)
+
+        return 0
+
+    def apply_to(self, *args):
+        if self.__inverted:
+            super(SwapThenElseVisitor, self).apply_to(*args)

@@ -6,7 +6,7 @@ import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
-from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor
+from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 from HexRaysPyTools.Config import hex_pytools_config, Config
 from HexRaysPyTools.Core.Helper import potential_negatives
 # import Core.QtShim as QtShim
@@ -52,13 +52,20 @@ def hexrays_events_callback(*args):
             if hex_pytools_config[Actions.RenameOutside.name]:
                 idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
 
-        if hx_view.item.get_lvar() and Helper.is_legal_type(hx_view.item.get_lvar().type()):
+        if Actions.SwapThenElse.check(hx_view.cfunc, item):
+            if hex_pytools_config[Actions.SwapThenElse.name]:
+                idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
+
+        if Actions.ShallowScanVariable.check(item):
             if hex_pytools_config[Actions.ShallowScanVariable.name]:
                 idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
             if hex_pytools_config[Actions.DeepScanVariable.name]:
                 idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
             if hex_pytools_config[Actions.RecognizeShape.name]:
                 idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
+
+        if Actions.CreateNewField.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
@@ -167,6 +174,11 @@ def hexrays_events_callback(*args):
                 visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
+        elif level_of_maturity == idaapi.CMAT_TRANS1:
+
+            visitor = SwapThenElseVisitor(cfunc.entry_ea)
+            visitor.apply_to(cfunc.body, None)
+
         elif level_of_maturity == idaapi.CMAT_TRANS2:
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
@@ -236,26 +248,26 @@ class MyPlugin(idaapi.plugin_t):
         if Helper.temporary_structure:
             Helper.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
-        try:
-            Actions.unregister(Actions.ShowGraph)
-            Actions.unregister(Actions.ShowClasses)
-            Actions.unregister(Actions.GetStructureBySize)
-            Actions.unregister(Actions.RemoveArgument)
-            Actions.unregister(Actions.AddRemoveReturn)
-            Actions.unregister(Actions.ConvertToUsercall)
-            Actions.unregister(Actions.ShallowScanVariable)
-            Actions.unregister(Actions.DeepScanVariable)
-            Actions.unregister(Actions.DeepScanReturn)
-            Actions.unregister(Actions.RecognizeShape)
-            Actions.unregister(Actions.SelectContainingStructure)
-            Actions.unregister(Actions.ResetContainingStructure)
-            Actions.unregister(Actions.RecastItemRight)
-            Actions.unregister(Actions.RecastItemLeft)
-            Actions.unregister(Actions.RenameOther)
-            Actions.unregister(Actions.RenameInside)
-            Actions.unregister(Actions.RenameOutside)
-        except:
-            print "[term()]: Except in Actions.unregisters"
+        for ac in hex_pytools_config.actions:
+            if hex_pytools_config.actions[ac]:
+                Actions.unregister(hex_pytools_config.actions_refs[ac])
+        # Actions.unregister(Actions.ShowGraph)
+        # Actions.unregister(Actions.ShowClasses)
+        # Actions.unregister(Actions.GetStructureBySize)
+        # Actions.unregister(Actions.RemoveArgument)
+        # Actions.unregister(Actions.AddRemoveReturn)
+        # Actions.unregister(Actions.ConvertToUsercall)
+        # Actions.unregister(Actions.ShallowScanVariable)
+        # Actions.unregister(Actions.DeepScanVariable)
+        # Actions.unregister(Actions.DeepScanReturn)
+        # Actions.unregister(Actions.RecognizeShape)
+        # Actions.unregister(Actions.SelectContainingStructure)
+        # Actions.unregister(Actions.ResetContainingStructure)
+        # Actions.unregister(Actions.RecastItemRight)
+        # Actions.unregister(Actions.RecastItemLeft)
+        # Actions.unregister(Actions.RenameOther)
+        # Actions.unregister(Actions.RenameInside)
+        # Actions.unregister(Actions.RenameOutside)
         idaapi.term_hexrays_plugin()
 
 

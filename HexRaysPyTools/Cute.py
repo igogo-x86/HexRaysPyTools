@@ -44,6 +44,7 @@ try:
         QtGui.QAction = QtWidgets.QAction
         QtGui.QMenu = QtWidgets.QMenu
         QtGui.QLabel = QtWidgets.QLabel
+        QtGui.QMessageBox = QtWidgets.QMessageBox
 
         QtGui.QHeaderView = QtWidgets.QHeaderView
         QtGui.QAbstractItemView = QtWidgets.QAbstractItemView

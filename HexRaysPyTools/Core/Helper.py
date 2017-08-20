@@ -43,6 +43,7 @@ def get_virtual_func_address(name, tinfo=None, offset=None):
     """
 
     address = idc.LocByName(name)
+
     if address != idaapi.BADADDR:
         return address
 
@@ -129,6 +130,7 @@ def get_fields_at_offset(tinfo, offset):
 
 
 def is_legal_type(tinfo):
+    tinfo.clr_const()
     if tinfo.is_ptr() and tinfo.get_pointed_object().is_forward_decl():
         return tinfo.get_pointed_object().get_size() == idaapi.BADSIZE
     return bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))

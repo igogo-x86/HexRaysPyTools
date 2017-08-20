@@ -1,4 +1,5 @@
 import idaapi
+import idc
 import Const
 import Helper
 import TemporaryStructure
@@ -8,7 +9,7 @@ scanned_functions = set()
 
 
 class ShallowSearchVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, function, origin, index):
+    def __init__(self, function, origin, index=None, global_variable=None):
         """
         This Class is idaapi.ctree_visitor_t and used for for finding candidates on class members.
         Usage: CtreeVisitor.apply_to() and then CtreeVisitor.candidates
@@ -19,9 +20,13 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         """
         super(ShallowSearchVisitor, self).__init__()
         self.function = function
-        # Dictionary {variable name => tinfo_t} of variables that are being scanned
+        # Dictionary {variable name (global) or index (local) => tinfo_t} of variables that are being scanned
 
-        self.variables = {index: function.get_lvars()[index].type()}
+        if global_variable:
+            index, tinfo = global_variable
+            self.variables = {index: tinfo}
+        else:
+            self.variables = {index: function.get_lvars()[index].type()}
         self.origin = origin
         self.expression_address = idaapi.BADADDR
         self.candidates = []
@@ -83,10 +88,14 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
-            if index in self.variables:
-                result = self.check_member_assignment(expression, index)
-                if result:
-                    self.candidates.append(result)
+        elif expression.op == idaapi.cot_obj:
+            index = idc.GetTrueName(expression.obj_ea)
+        else:
+            return 0
+        if index in self.variables:
+            result = self.check_member_assignment(expression, index)
+            if result:
+                self.candidates.append(result)
         return 0
 
     def check_member_assignment(self, expression, index):
@@ -281,6 +290,13 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                         # call(..., (TYPE)var + offset, ...)
                         return self.get_member(offset, index, call=parents[2], arg=parents[1])
                     elif parents_type[2] == 'cast' and parents[2].type.is_ptr():
+                        if parents_type[3] == 'call':
+                            # call(..., (TYPE *) ((TYPE *)var + x), ...)
+                            # Where argument type is not the same as cast type. Ida has a bug here choosing sometimes
+                            # wrong pointer type
+                            idx, tinfo = Helper.get_func_argument_info(parents[3], parents[2])
+                            return self.create_member(offset, index, tinfo.get_pointed_object())
+
                         # (TYPE *) ((TYPE *)var + x)
                         return self.create_member(offset, index, parents[2].type.get_pointed_object())
 
@@ -351,8 +367,8 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
 
 class DeepSearchVisitor(ShallowSearchVisitor):
-    def __init__(self, function, origin, index):
-        super(DeepSearchVisitor, self).__init__(function, origin, index)
+    def __init__(self, function, origin, index=None, global_variable=None):
+        super(DeepSearchVisitor, self).__init__(function, origin, index, global_variable)
 
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
@@ -370,7 +386,7 @@ class DeepSearchVisitor(ShallowSearchVisitor):
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
         except idaapi.DecompilationFailure:
-            print "[ERROR] Ida failed to decompile function"
+            print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(ea)
 
 
 class VariableLookupVisitor(idaapi.ctree_parentee_t):

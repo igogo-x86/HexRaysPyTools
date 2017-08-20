@@ -18,6 +18,10 @@ def parse_vtable_name(address):
         if name[0:3] == 'off':
             # off_XXXXXXXX case
             return "Vtable" + name[3:], False
+        elif "table" in name:
+            return name, True
+        print "[Warning] Weird virtual table name -", name
+        return "Vtable_" + name
     else:
         # Attempt to make nice and valid name from demangled RTTI name
         try:
@@ -48,11 +52,15 @@ def parse_vtable_name(address):
 
 def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
     # Creates appropriate member (VTable, regular member, void *member) depending on input
-    scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
+    if isinstance(index, str):
+        scanned_variable = ScannedVariable(function, None, expression_address, origin, False, index)
+    else:
+        scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
     if ea:
         if VirtualTable.check_address(ea):
             return VirtualTable(offset, ea, scanned_variable, origin)
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
+        tinfo.clr_const()
         return Member(offset, tinfo, scanned_variable, origin)
     else:
         # VoidMember shouldn't have ScannedVariable because after finalizing it can mess up with normal functions
@@ -99,7 +107,8 @@ class AbstractMember:
 
     @property
     def size(self):
-        return self.tinfo.get_size()
+        size = self.tinfo.get_size()
+        return size if size != idaapi.BADSIZE else 1
 
     @property
     def font(self):
@@ -159,7 +168,9 @@ class VirtualFunction:
         name, adjuster = result.group(2), result.group(4)
         if adjuster:
             name += "_adj_" + adjuster
-        name = name.translate(None, "`'").replace(' ', '_')
+        name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_').replace('~', 'DESTR__')
+        name = name.replace("==", "__eq__")
+        name = name.replace("=", "__asg__")
         name = re.sub(r'[<>]', '_t_', name)
         return name
 
@@ -374,6 +385,17 @@ class Member(AbstractMember):
         udt_member.size = self.size
         return udt_member
 
+    def activate(self):
+        new_type_declaration = idaapi.askstr(0x100, self.type_name, "Enter type:")
+        result = idc.ParseType(new_type_declaration, 0)
+        if result is None:
+            return
+        _, tp, fld = result
+        tinfo = idaapi.tinfo_t()
+        tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
+        self.tinfo = tinfo
+        self.is_array = False
+
 
 class VoidMember(Member):
     def __init__(self, offset, scanned_variable, origin=0):
@@ -395,7 +417,7 @@ class VoidMember(Member):
 
 
 class ScannedVariable:
-    def __init__(self, function, variable, expression_address, origin, applicable=True):
+    def __init__(self, function, variable, expression_address, origin, applicable=True, global_variable=None):
         """
         Class for storing variable and it's function that have been scanned previously.
         Need to think whether it's better to store address and index, or cfunc_t and lvar_t
@@ -404,10 +426,23 @@ class ScannedVariable:
         :param variable: idaapi.vdui_t
         """
         self.function = function
-        self.lvar = variable
+        if global_variable is not None:
+            self.gvar = global_variable
+            self.lvar = None
+            self.applicable = False
+        else:
+            self.gvar = None
+            self.lvar = variable
+
         self.expression_address = expression_address
         self.origin = origin
         self.applicable = applicable
+
+    @property
+    def name(self):
+        if self.gvar is not None:
+            return self.gvar
+        return self.lvar.name
 
     @property
     def function_name(self):
@@ -436,7 +471,7 @@ class ScannedVariable:
         return [
             "0x{0:04X}".format(self.origin),
             self.function_name,
-            self.lvar.name,
+            self.name,
             "0x{0:08X}".format(self.expression_address)
         ]
 
@@ -444,7 +479,7 @@ class ScannedVariable:
         return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
 
     def __hash__(self):
-        return hash((self.function.entry_ea, self.lvar.name))
+        return hash((self.function.entry_ea, self.name))
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
@@ -747,6 +782,23 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 offset = self.items[start].offset
                 self.items = self.items[0:start] + self.items[stop:]
                 self.add_row(Member(offset, tinfo, None))
+
+    def unpack_substructure(self, indices):
+
+        if indices is None or len(indices) != 1:
+            return
+
+        item = self.items[indices[0].row()]
+        if item.tinfo is not None and item.tinfo.is_udt():
+
+            self.remove_items(indices)
+            offset = item.offset
+            udt_data = idaapi.udt_type_data_t()
+            if item.tinfo.get_udt_details(udt_data):
+                for udt_item in udt_data:
+                    member = Member(offset + udt_item.offset / 8, udt_item.type, None)
+                    member.name = udt_item.name
+                    self.add_row(member)
 
     def remove_items(self, indices):
         rows = map(lambda x: x.row(), indices)

@@ -15,6 +15,7 @@ from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearch
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.Helper import potential_negatives
 
+from HexRaysPyTools.Core.SpaghettiCode import *
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -275,16 +276,40 @@ class ShallowScanVariable(idaapi.action_handler_t):
         self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(ctree_item):
+        lvar = ctree_item.get_lvar()
+        if lvar is not None:
+            return "LOCAL" if Helper.is_legal_type(lvar.type()) else None
+
+        if ctree_item.citype == idaapi.VDI_EXPR:
+            gvar = ctree_item.it.to_specific_type
+            if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type):
+                return "GLOBAL"
+
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and Helper.is_legal_type(variable.type()):
+        origin = self.temporary_structure.main_offset
+
+        var_type = self.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
-            scanner = ShallowSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
-            scanner.process()
-            for field in scanner.candidates:
-                self.temporary_structure.add_row(field)
-            scanner.clear()
+            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, index)
+
+        elif var_type == "GLOBAL":
+            gvar = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(gvar.obj_ea)
+            tinfo = gvar.type
+            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        for field in scanner.candidates:
+            self.temporary_structure.add_row(field)
+        scanner.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -304,34 +329,43 @@ class DeepScanVariable(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        self.scan(hx_view, variable)
+        origin = self.temporary_structure.main_offset
 
-    def scan(self, hx_view, variable):
-        if variable and Helper.is_legal_type(variable.type()):
-
-            definition_address = None if variable.is_arg_var else variable.defea
+        var_type = ShallowScanVariable.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
+            definition_address = None if variable.is_arg_var else variable.defea
 
             # index = list(hx_view.cfunc.get_lvars()).index(variable)
             if FunctionTouchVisitor(hx_view.cfunc).process():
                 hx_view.refresh_view(True)
 
             # Because index of the variable can be changed after touching, we would like to calculate it appropriately
-
-            for idx, lvar in enumerate(hx_view.cfunc.get_lvars()):
-                print idx, hex(int(lvar.defea))
-
             lvars = hx_view.cfunc.get_lvars()
 
             if definition_address:
                 index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
 
-            scanner = DeepSearchVisitor(hx_view.cfunc, self.temporary_structure.main_offset, index)
-            scanner.process()
-            for field in scanner.candidates:
-                self.temporary_structure.add_row(field)
-            scanner.clear()
+            scanner = DeepSearchVisitor(hx_view.cfunc, origin, index=index)
+
+        elif var_type == "GLOBAL":
+            gvar = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(gvar.obj_ea)
+            tinfo = gvar.type
+
+            if FunctionTouchVisitor(hx_view.cfunc).process():
+                hx_view.refresh_view(True)
+
+            scanner = DeepSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        for field in scanner.candidates:
+            self.temporary_structure.add_row(field)
+        scanner.clear()
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -393,6 +427,45 @@ class DeepScanReturn(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
+class DeepScanFunctions(idaapi.action_handler_t):
+
+    name = "my:DeepScanFunctions"
+    description = "Scan First Argument"
+    hotkey = None
+
+    def __init__(self, temporary_structure):
+        self.temporary_structure = temporary_structure
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        for idx in ctx.chooser_selection:
+            func_ea = idaapi.getn_func(idx - 1).startEA
+            try:
+                cfunc = idaapi.decompile(func_ea)
+                if cfunc is None:
+                    continue
+
+                FunctionTouchVisitor(cfunc).process()
+
+                lvars = cfunc.get_lvars()
+                if not (lvars and lvars[0].is_arg_var and Helper.is_legal_type(lvars[0].type())):
+                    continue
+
+                scanner = DeepSearchVisitor(cfunc, 0, 0)
+                scanner.process()
+                for field in scanner.candidates:
+                    self.temporary_structure.add_row(field)
+
+            except idaapi.DecompilationFailure:
+                print "[Warning] Failed to decompile function at 0x{0:08X}".format(func_ea)
+
+    def update(self, ctx):
+        if ctx.form_type == idaapi.BWN_FUNCS:
+            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
 class RecognizeShape(idaapi.action_handler_t):
 
     name = "my:RecognizeShape"
@@ -404,19 +477,34 @@ class RecognizeShape(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
-        variable = hx_view.item.get_lvar()  # lvar_t
-        if variable and filter(lambda x: x.equals_to(variable.type()), Const.LEGAL_TYPES):
+
+        var_type = ShallowScanVariable.check(hx_view.item)
+        if var_type == "LOCAL":
+            variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
             scanner = ShallowSearchVisitor(hx_view.cfunc, 0, index)
-            scanner.process()
-            structure = TemporaryStructureModel()
-            for field in scanner.candidates:
-                structure.add_row(field)
-            tinfo = structure.get_recognized_shape()
-            if tinfo:
-                tinfo.create_ptr(tinfo)
+
+        elif var_type == "GLOBAL":
+            variable = hx_view.item.it.to_specific_type
+            name = idc.GetTrueName(variable.obj_ea)
+            tinfo = variable.type
+            scanner = ShallowSearchVisitor(hx_view.cfunc, 0, global_variable=(name, tinfo))
+
+        else:
+            return
+
+        scanner.process()
+        structure = TemporaryStructureModel()
+        for field in scanner.candidates:
+            structure.add_row(field)
+        tinfo = structure.get_recognized_shape()
+        if tinfo:
+            tinfo.create_ptr(tinfo)
+            if var_type == "LOCAL":
                 hx_view.set_lvar_type(variable, tinfo)
-                hx_view.refresh_view(True)
+            elif var_type == "GLOBAL":
+                idaapi.apply_tinfo2(variable.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
+            hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
@@ -424,8 +512,128 @@ class RecognizeShape(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class ShowGraph(idaapi.action_handler_t):
+class CreateNewField(idaapi.action_handler_t):
+    name = "my:CreateNewField"
+    description = "Create New Field"
+    hotkey = None
 
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+
+        item = ctree_item.it.to_specific_type
+        if item.op != idaapi.cot_memptr:
+            return
+
+        parent = cfunc.body.find_parent_of(ctree_item.it).to_specific_type
+        if parent.op != idaapi.cot_idx or parent.y.op != idaapi.cot_num:
+            return
+        idx = parent.y.n._value
+
+        struct_type = item.x.type.get_pointed_object()
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = item.m * 8
+        struct_type.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        if udt_member.name[0:3] != "gap":
+            return
+
+        return struct_type, udt_member.offset // 8, idx
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        result = self.check(hx_view.cfunc, hx_view.item)
+        if result is None:
+            return
+
+        struct_tinfo, offset, idx = result
+        ordinal = struct_tinfo.get_ordinal()
+        struct_name = struct_tinfo.dstr()
+
+        if (offset + idx) % 2:
+            default_field_type = "_BYTE"
+        elif (offset + idx) % 4:
+            default_field_type = "_WORD"
+        else:
+            default_field_type = "_DWORD"
+
+        declaration = idaapi.asktext(
+            0x10000, "{0} field_{1:X}".format(default_field_type, offset + idx), "Enter new structure member:"
+        )
+        if declaration is None:
+            return
+
+        result = self.__parse_declaration(declaration)
+        if result is None:
+            return
+
+        field_tinfo, field_name = result
+        field_size = field_tinfo.get_size()
+        udt_data = idaapi.udt_type_data_t()
+        udt_member = idaapi.udt_member_t()
+
+        struct_tinfo.get_udt_details(udt_data)
+        udt_member.offset = offset * 8
+        struct_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        gap_size = udt_member.size // 8
+
+        gap_leftover = gap_size - idx - field_size
+
+        if gap_leftover < 0:
+            print "[ERROR] Too big size for the field. Type with maximum {0} bytes can be used".format(gap_size - idx)
+            return
+
+        iterator = udt_data.find(udt_member)
+        iterator = udt_data.erase(iterator)
+
+        if gap_leftover > 0:
+            udt_data.insert(iterator, TemporaryStructureModel.get_padding_member(offset + idx + field_size, gap_leftover))
+
+        udt_member = idaapi.udt_member_t()
+        udt_member.offset = offset * 8 + idx
+        udt_member.name = field_name
+        udt_member.type = field_tinfo
+        udt_member.size = field_size
+
+        iterator = udt_data.insert(iterator, udt_member)
+
+        if idx > 0:
+            udt_data.insert(iterator, TemporaryStructureModel.get_padding_member(offset, idx))
+
+        struct_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+        struct_tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.BTF_STRUCT, struct_name)
+        hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+    @staticmethod
+    def __parse_declaration(declaration):
+        m = re.search(r"^(\w+[ *]+)(\w+)$", declaration)
+        if m is None:
+            return
+
+        type_name, field_name = m.groups()
+        if field_name[0].isdigit():
+            print "[ERROR] Bad field name"
+            return
+
+        result = idc.ParseType(type_name, 0)
+        if result is None:
+            return
+
+        _, tp, fld = result
+        tinfo = idaapi.tinfo_t()
+        tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
+        return tinfo, field_name
+
+
+class ShowGraph(idaapi.action_handler_t):
     name = "my:ShowGraph"
     description = "Show graph"
     hotkey = "G"
@@ -481,26 +689,26 @@ class ShowClasses(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-# class CreateVtable(idaapi.action_handler_t):
-#
-#     name = "my:CreateVtable"
-#     description = "Create Virtual Table"
-#     hotkey = "V"
-#
-#     def __init__(self):
-#         idaapi.action_handler_t.__init__(self)
-#
-#     def activate(self, ctx):
-#         ea = ctx.cur_ea
-#         if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
-#             vtable = VirtualTable(0, ea)
-#             vtable.import_to_structures(True)
-#
-#     def update(self, ctx):
-#         if ctx.form_type == idaapi.BWN_DISASM:
-#             idaapi.attach_action_to_popup(ctx.form, None, self.name)
-#             return idaapi.AST_ENABLE_FOR_FORM
-#         return idaapi.AST_DISABLE_FOR_FORM
+class CreateVtable(idaapi.action_handler_t):
+
+    name = "my:CreateVtable"
+    description = "Create Virtual Table"
+    hotkey = "V"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        ea = ctx.cur_ea
+        if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
+            vtable = VirtualTable(0, ea)
+            vtable.import_to_structures(True)
+
+    def update(self, ctx):
+        if ctx.form_type == idaapi.BWN_DISASM:
+            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class SelectContainingStructure(idaapi.action_handler_t):
@@ -590,8 +798,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
             if expression:
                 expression = expression.to_specific_type
-                if expression.op == idaapi.cot_asg and \
-                        expression.x.op in (idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref):
+                if expression.op == idaapi.cot_asg and expression.x.op in (
+                        idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref):
 
                     right_expr = expression.y
                     right_tinfo = right_expr.x.type if right_expr.op == idaapi.cot_cast else right_expr.type
@@ -627,7 +835,6 @@ class RecastItemLeft(idaapi.action_handler_t):
                     cfunc.get_func_type(func_tinfo)
                     rettype = func_tinfo.get_rettype()
 
-                    print func_tinfo.get_rettype().dstr(), child.type.dstr()
                     if func_tinfo.get_rettype().dstr() != child.type.dstr():
                         return RECAST_RETURN, child.type, None
 
@@ -685,7 +892,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                 try:
                     cfunc = idaapi.decompile(func_address) if func_address else hx_view.cfunc
                 except idaapi.DecompilationFailure:
-                    print "[ERROR] Ida failed to decompile function"
+                    print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(func_address)
                     return
 
                 function_tinfo = idaapi.tinfo_t()
@@ -1138,6 +1345,41 @@ class RecastStructMember(idaapi.action_handler_t):
                         idc.AddStrucMember(sptr.id,member_name if i == 0 else "field_%X"%(member_offset + i), member_offset+i, idaapi.FF_DATA|idaapi.FF_WORD,idaapi.BADADDR, 2)
                 hx_view.refresh_view(True)
 
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class SwapThenElse(idaapi.action_handler_t):
+    name = "my:SwapIfElse"
+    description = "Swap then/else"
+    hotkey = "Shift+S"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        insn = ctree_item.it.to_specific_type
+
+        if insn.op != idaapi.cit_if or insn.cif.ielse is None:
+            return False
+
+        return insn.op == idaapi.cit_if and insn.cif.ielse
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        if self.check(hx_view.cfunc, hx_view.item):
+            insn = hx_view.item.it.to_specific_type
+            inverse_if(insn.cif)
+            hx_view.refresh_ctext()
+
+            InversionInfo(hx_view.cfunc.entry_ea).switch_inverted(insn.ea)
 
     def update(self, ctx):
         if ctx.form_title[0:10] == "Pseudocode":
