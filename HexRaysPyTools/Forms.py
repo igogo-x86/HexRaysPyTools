@@ -12,19 +12,21 @@ import Core.Classes
 
 class ConfigFeatures(idaapi.Form):
     def __init__(self,config):
-        if fDebug == True:
+        if fDebug:
             pydevd.settrace('127.0.0.1', port=31337, stdoutToServer=True, stderrToServer=True, suspend=True)
         self.config = config
         self.elements = ()
+        self.groups = {}
         self.form_fmt = r'''HexRaysPyTools features config
 
 Features:
 '''
         for ac in self.config.actions.keys():
-            self.form_fmt += '<%s:{%s}>\n'%(ac,"r"+ac)
+            self.form_fmt += '<%s:{%s}>'%(ac,"r"+ac)
             self.elements += ("r"+ac,)
-        self.form_fmt = self.form_fmt.rstrip('\n') + '{cChkGrpFeatures}>'
-        idaapi.Form.__init__(self,self.form_fmt,{"cChkGrpFeatures":idaapi.Form.ChkGroupControl(self.elements)})
+            self.form_fmt = self.form_fmt + '{cChkGrpFeatures_%s}>\n'%ac
+            self.groups['cChkGrpFeatures_%s'%ac] = idaapi.Form.ChkGroupControl(("r"+ac,))
+        idaapi.Form.__init__(self,self.form_fmt,self.groups)
 
 
     def Do(self):
