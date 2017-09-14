@@ -12,12 +12,19 @@ class Config(object):
     def __init__(self):
         global hex_pytools_config
         self.section = "HexRaysPyTools features"
-        self.file_path = idc.GetIdaDirectory() + "\cfg\HexRaysPyTools.cfg"
+        self.file_path = os.path.join(idc.GetIdaDirectory(),"cfg", "HexRaysPyTools.cfg")
         self.reader = ConfigParser.SafeConfigParser()
         self.reader.optionxform = str
         self.actions, self.action_names = self.GetDefActions()
         self.actions_refs = self.GetActionsRefs()
         hex_pytools_config = self
+        try:
+            f = open(self.file_path, "w+b")
+            f.close()
+        except:
+            self.file_path = os.path.join(os.environ["APPDATA"],"IDA Pro","cfg", "HexRaysPyTools.cfg")
+            f = open(self.file_path, "w+b")
+            f.close()
         try:
             f = open(self.file_path, "w+b")
             self.reader.read(f)

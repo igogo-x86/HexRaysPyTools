@@ -10,34 +10,91 @@ if fDebug:
 import Core.Classes
 
 
+# class ConfigFeatures(idaapi.Form):
+#     def __init__(self,config):
+#         if fDebug:
+#             pydevd.settrace('127.0.0.1', port=31337, stdoutToServer=True, stderrToServer=True, suspend=True)
+#         self.config = config
+#         self.elements = ()
+#         self.groups = {}
+#         self.form_fmt = r'''HexRaysPyTools features config
+#
+# Features:
+# '''
+#         for ac in self.config.actions.keys():
+#             self.form_fmt += '<%s:{%s}>'%(ac,"r"+ac)
+#             self.elements += ("r"+ac,)
+#             self.form_fmt = self.form_fmt + '{cChkGrpFeatures_%s}>\n'%ac
+#             self.groups['cChkGrpFeatures_%s'%ac] = idaapi.Form.ChkGroupControl(("r"+ac,))
+#         idaapi.Form.__init__(self,self.form_fmt,self.groups)
+#
+#
+#     def Do(self):
+#         self.Compile()
+#         for ac in self.config.actions:
+#             getattr(self,"r"+ac).checked = self.config.actions[ac]
+#         if self.Execute() == 1:
+#             for ac in self.config.actions:
+#                 self.config.actions[ac] = getattr(self, "r" + ac).checked
+#             self.config.write_config()
+
+class ConfigFeaturesChooser(idaapi.Choose2):
+
+    def __init__(self,items,obj):
+        self.obj = obj
+        idaapi.Choose2.__init__(self,"Features",[["Feature name",40],["Status",10]],embedded=True,width=100)
+        self.n = 0
+        self.items = []
+        self.make_items(items)
+
+    def make_items(self,items):
+        for name in items:
+            self.items.append([name,"Enabled" if items[name] else "Disabled"])
+
+    def OnClose(self):
+        pass
+
+    def OnGetLine(self, n):
+        return self.items[n]
+
+    def OnGetSize(self):
+        n = len(self.items)
+        return n
+
+    def OnSelectLine(self, n):
+        name, status = self.items.pop(n)
+        self.items.insert(n,[name,"Enabled" if status == "Disabled" else "Disabled"])
+        self.obj.RefreshField(self.obj.cEChooser)
+
+    def GetItems(self):
+        ret = {}
+        for name, status in self.items:
+            ret[name] = True if status == "Enabled" else False
+        return ret
+
 class ConfigFeatures(idaapi.Form):
-    def __init__(self,config):
+
+    def __init__(self, config):
         if fDebug:
             pydevd.settrace('127.0.0.1', port=31337, stdoutToServer=True, stderrToServer=True, suspend=True)
         self.config = config
-        self.elements = ()
-        self.groups = {}
-        self.form_fmt = r'''HexRaysPyTools features config
+        self.EChooser = ConfigFeaturesChooser(self.config.actions,self)
+        idaapi.Form.__init__(self,
+r"""HexRaysPyTools features config
+Double click for switch feature.
 
-Features:
-'''
-        for ac in self.config.actions.keys():
-            self.form_fmt += '<%s:{%s}>'%(ac,"r"+ac)
-            self.elements += ("r"+ac,)
-            self.form_fmt = self.form_fmt + '{cChkGrpFeatures_%s}>\n'%ac
-            self.groups['cChkGrpFeatures_%s'%ac] = idaapi.Form.ChkGroupControl(("r"+ac,))
-        idaapi.Form.__init__(self,self.form_fmt,self.groups)
-
+<Embedded chooser:{cEChooser}>
+""", {'cEChooser' : idaapi.Form.EmbeddedChooserControl(self.EChooser)})
 
     def Do(self):
         self.Compile()
-        for ac in self.config.actions:
-            getattr(self,"r"+ac).checked = self.config.actions[ac]
-        if self.Execute() == 1:
-            for ac in self.config.actions:
-                self.config.actions[ac] = getattr(self, "r" + ac).checked
+        ok = self.Execute()
+        #print "Ok = %d"%ok
+        if ok == 1:
+            #print sel
+            #print len(sel)
+            self.config.actions = self.EChooser.GetItems()
             self.config.write_config()
-
 
 
 class MyChoose(idaapi.Choose2):

@@ -9,7 +9,11 @@ import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 from HexRaysPyTools.Config import hex_pytools_config, Config
 from HexRaysPyTools.Core.Helper import potential_negatives
-# import Core.QtShim as QtShim
+
+#If I forget to add kudos in README
+#Big thanks williballenthin for plugin. https://github.com/williballenthin/ida-netnode
+from HexRaysPyTools.netnode import Netnode
+
 fDebug = False
 if fDebug:
     import pydevd
@@ -24,85 +28,77 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if Actions.RecastStructMember.check(hx_view.cfunc,item):
-            if hex_pytools_config[Actions.RecastStructMember.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RecastStructMember.name, None)
+        for ac in hex_pytools_config.actions_refs.values():
+            if ac.ForPopup and hex_pytools_config[ac.name] and ac.check(hx_view.cfunc,item):
+                idaapi.attach_action_to_popup(form, popup, ac.name, None)
 
-        if Actions.SimpleCreateStruct.check(hx_view.cfunc,item):
-            if hex_pytools_config[Actions.SimpleCreateStruct.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.SimpleCreateStruct.name, None)
-
-        if Actions.RecastItemRight.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.RecastItemRight.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
-
-        if Actions.RecastItemLeft.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.RecastItemLeft.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
-
-        if Actions.RenameOther.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.RenameOther.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RenameOther.name, None)
-
-        if Actions.RenameInside.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.RenameInside.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
-
-        if Actions.RenameOutside.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.RenameOutside.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
-
-        if Actions.SwapThenElse.check(hx_view.cfunc, item):
-            if hex_pytools_config[Actions.SwapThenElse.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
-
-        if Actions.ShallowScanVariable.check(item):
-            if hex_pytools_config[Actions.ShallowScanVariable.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
-            if hex_pytools_config[Actions.DeepScanVariable.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
-            if hex_pytools_config[Actions.RecognizeShape.name]:
-                idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
-
-        if Actions.CreateNewField.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
-
-        if item.citype == idaapi.VDI_FUNC:
-            # If we clicked on function
-            if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                if hex_pytools_config[Actions.AddRemoveReturn.name]:
-                    idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
-                if hex_pytools_config[Actions.ConvertToUsercall.name]:
-                    idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
-                if hex_pytools_config[Actions.DeepScanReturn.name]:
-                    idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
-
-        elif item.citype == idaapi.VDI_LVAR:
-            # If we clicked on argument
-            local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
-            if local_variable.is_arg_var:
-                if hex_pytools_config[Actions.RemoveArgument.name]:
-                    idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
-
-        elif item.citype == idaapi.VDI_EXPR:
-            if item.e.op == idaapi.cot_num:
-                # number_format = item.e.n.nf                       # idaapi.number_format_t
-                # print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
-                #     number_format.flags,
-                #     number_format.type_name,
-                #     number_format.opnum
-                # )
-                if hex_pytools_config[Actions.GetStructureBySize.name]:
-                    idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
-            elif item.e.op == idaapi.cot_var:
-                # Check if we clicked on variable that is a pointer to a structure that is potentially part of
-                # containing structure
-                if item.e.v.idx in potential_negatives:
-                    if hex_pytools_config[Actions.SelectContainingStructure.name]:
-                        idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
-                if Actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
-                    if hex_pytools_config[Actions.ResetContainingStructure.name]:
-                        idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
+        # if Actions.RecastStructMember.check(hx_view.cfunc,item):
+        #     if hex_pytools_config[Actions.RecastStructMember.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RecastStructMember.name, None)
+        #
+        # if Actions.SimpleCreateStruct.check(hx_view.cfunc,item):
+        #     if hex_pytools_config[Actions.SimpleCreateStruct.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.SimpleCreateStruct.name, None)
+        #
+        # if Actions.RecastItemRight.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.RecastItemRight.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
+        #
+        # if Actions.RecastItemLeft.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.RecastItemLeft.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
+        #
+        # if Actions.RenameOther.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.RenameOther.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RenameOther.name, None)
+        #
+        # if Actions.RenameInside.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.RenameInside.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
+        #
+        # if Actions.RenameOutside.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.RenameOutside.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
+        #
+        # if Actions.SwapThenElse.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.SwapThenElse.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
+        #
+        # if Actions.ShallowScanVariable.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.ShallowScanVariable.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
+        #     if hex_pytools_config[Actions.DeepScanVariable.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
+        #     if hex_pytools_config[Actions.RecognizeShape.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
+        #
+        # if Actions.CreateNewField.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.CreateNewField.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
+        #
+        # if Actions.CreateVtable.check(hx_view.cfunc, item):
+        #     if hex_pytools_config[Actions.CreateVtable.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.CreateVtable.name, None)
+        #
+        # if Actions.AddRemoveReturn.check(hx_view.cfunc, item) and hex_pytools_config[Actions.AddRemoveReturn.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
+        # if Actions.ConvertToUsercall.check(hx_view.cfunc, item) and hex_pytools_config[Actions.ConvertToUsercall.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
+        # if Actions.DeepScanReturn.check(hx_view.cfunc, item) and hex_pytools_config[Actions.DeepScanReturn.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
+        #
+        # if Actions.RemoveArgument.check(hx_view.cfunc,item) and hex_pytools_config[Actions.RemoveArgument.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
+        #
+        # if Actions.GetStructureBySize.check(hx_view.cfunc,item) and hex_pytools_config[Actions.GetStructureBySize.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
+        #
+        # if Actions.SelectContainingStructure.check(hx_view.cfunc,item) and hex_pytools_config[Actions.SelectContainingStructure.name]:
+        #     idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
+        #
+        # if Actions.ResetContainingStructure.check(hx_view.cfunc,item):
+        #     if hex_pytools_config[Actions.ResetContainingStructure.name]:
+        #         idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
 
@@ -124,7 +120,8 @@ def hexrays_events_callback(*args):
                 vtable_offset = item.e.x.m
             else:
                 return 0
-
+            #print vtable_tinfo.get_type_name()
+            #print method_offset
             udt_member = idaapi.udt_member_t()
             udt_member.offset = method_offset * 8
             vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
@@ -133,6 +130,21 @@ def hexrays_events_callback(*args):
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
+            n = Netnode("$ VTables")
+            vt_name = vtable_tinfo.get_type_name()
+            if vt_name in n:
+                l = n[vt_name]
+                #print l
+                info = idaapi.get_inf_structure()
+                if info.is_32bit():
+                    ptr_size = 4
+                elif info.is_64bit():
+                    ptr_size = 8
+                else:
+                    ptr_size = 2
+                if method_offset%ptr_size == 0 and method_offset/ptr_size < len(l):
+                    idaapi.open_pseudocode(l[method_offset/ptr_size] + idaapi.get_imagebase(), 0)
+
 
     elif hexrays_event == idaapi.hxe_maturity:
         cfunc, level_of_maturity = args[1:]

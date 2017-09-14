@@ -5,6 +5,7 @@ import struct
 
 import idaapi
 import idc
+import idautils
 
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
@@ -14,8 +15,16 @@ from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStruct
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.Helper import potential_negatives
+#If I forget to add kudos in README
+#Big thanks williballenthin for plugin. https://github.com/williballenthin/ida-netnode
+from HexRaysPyTools.netnode import Netnode
+
 
 from HexRaysPyTools.Core.SpaghettiCode import *
+
+fDebug = False
+if fDebug:
+    import pydevd
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -110,9 +119,19 @@ class RemoveArgument(idaapi.action_handler_t):
     name = "my:RemoveArgument"
     description = "Remove Argument"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_LVAR:
+            # If we clicked on argument
+            local_variable = ctree_item.get_lvar()  # idaapi.lvar_t
+            if local_variable.is_arg_var:
+                return True
+        return False
 
     def activate(self, ctx):
         vu = idaapi.get_tform_vdui(ctx.form)
@@ -138,9 +157,18 @@ class AddRemoveReturn(idaapi.action_handler_t):
     name = "my:RemoveReturn"
     description = "Add/Remove Return"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc,ctree_item):
+        if ctree_item.citype == idaapi.VDI_FUNC:
+            # If we clicked on function
+            if not cfunc.entry_ea == idaapi.BADADDR:
+                return True
+        return False
 
     def activate(self, ctx):
         # ctx - action_activation_ctx_t
@@ -167,9 +195,18 @@ class ConvertToUsercall(idaapi.action_handler_t):
     name = "my:ConvertToUsercall"
     description = "Convert to __usercall"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc,ctree_item):
+        if ctree_item.citype == idaapi.VDI_FUNC:
+            # If we clicked on function
+            if not cfunc.entry_ea == idaapi.BADADDR:
+                return True
+        return False
 
     def activate(self, ctx):
         # ctx - action_activation_ctx_t
@@ -202,9 +239,23 @@ class GetStructureBySize(idaapi.action_handler_t):
     name = "my:WhichStructHaveThisSize"
     description = "Structures with this size"
     hotkey = "W"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_EXPR:
+            if ctree_item.e.op == idaapi.cot_num:
+                # number_format = item.e.n.nf                       # idaapi.number_format_t
+                # print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
+                #     number_format.flags,
+                #     number_format.type_name,
+                #     number_format.opnum
+                # )
+                return True
+        return False
 
     @staticmethod
     def select_structure_by_size(size):
@@ -271,13 +322,14 @@ class ShallowScanVariable(idaapi.action_handler_t):
     name = "my:ShallowScanVariable"
     description = "Scan Variable"
     hotkey = "F"
+    ForPopup = True
 
     def __init__(self):
         self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(ctree_item):
+    def check(cfunc, ctree_item):
         lvar = ctree_item.get_lvar()
         if lvar is not None:
             return "LOCAL" if Helper.is_legal_type(lvar.type()) else None
@@ -291,7 +343,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         origin = self.temporary_structure.main_offset
 
-        var_type = self.check(hx_view.item)
+        var_type = self.check(hx_view.cfunc,hx_view.item)
         if var_type == "LOCAL":
             variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
@@ -322,16 +374,21 @@ class DeepScanVariable(idaapi.action_handler_t):
     name = "my:DeepScanVariable"
     description = "Deep Scan Variable"
     hotkey = "shift+F"
+    ForPopup = True
 
     def __init__(self):
         self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(cfunc, ctree_item):
+        return ShallowScanVariable.check(cfunc, ctree_item)
+
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
         origin = self.temporary_structure.main_offset
 
-        var_type = ShallowScanVariable.check(hx_view.item)
+        var_type = ShallowScanVariable.check(hx_view.cfunc,hx_view.item)
         if var_type == "LOCAL":
             variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
@@ -378,15 +435,19 @@ class DeepScanReturn(idaapi.action_handler_t):
     name = "my:DeepScanReturn"
     description = "Deep Scan Returned Variables"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         self.temporary_structure = Helper.temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
-        return hx_view.cfunc.get_rettype().equals_to(Const.VOID_TINFO)
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_FUNC:
+            # If we clicked on function
+            if not cfunc.entry_ea == idaapi.BADADDR and cfunc.get_rettype().equals_to(Const.VOID_TINFO):
+                return True
+        return False
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -432,6 +493,7 @@ class DeepScanFunctions(idaapi.action_handler_t):
     name = "my:DeepScanFunctions"
     description = "Scan First Argument"
     hotkey = None
+    ForPopup = False
 
     def __init__(self):
         self.temporary_structure = Helper.temporary_structure
@@ -471,14 +533,19 @@ class RecognizeShape(idaapi.action_handler_t):
     name = "my:RecognizeShape"
     description = "Recognize Shape"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(cfunc, ctree_item):
+        return ShallowScanVariable.check(cfunc, ctree_item)
+
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
 
-        var_type = ShallowScanVariable.check(hx_view.item)
+        var_type = ShallowScanVariable.check(hx_view.cfunc, hx_view.item)
         if var_type == "LOCAL":
             variable = hx_view.item.get_lvar()  # lvar_t
             index = list(hx_view.cfunc.get_lvars()).index(variable)
@@ -516,6 +583,7 @@ class CreateNewField(idaapi.action_handler_t):
     name = "my:CreateNewField"
     description = "Create New Field"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -637,6 +705,7 @@ class ShowGraph(idaapi.action_handler_t):
     name = "my:ShowGraph"
     description = "Show graph"
     hotkey = "G"
+    ForPopup = False
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -669,6 +738,7 @@ class ShowClasses(idaapi.action_handler_t):
     name = "my:ShowClasses"
     description = "Classes"
     hotkey = "Alt+F1"
+    ForPopup = False
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -688,27 +758,159 @@ class ShowClasses(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
-
 class CreateVtable(idaapi.action_handler_t):
-
     name = "my:CreateVtable"
-    description = "Create Virtual Table"
-    hotkey = "V"
+    description = "Create Vtable"
+    hotkey = "shift+V"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.is_citem() and ctree_item.it.is_expr():
+            item = ctree_item.e
+            if item.opname == "obj" and idaapi.isData(idaapi.getFlags(item.obj_ea)):
+                return True
+        return False
+
     def activate(self, ctx):
-        ea = ctx.cur_ea
-        if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
-            vtable = VirtualTable(0, ea)
-            vtable.import_to_structures(True)
+        if fDebug:
+            pydevd.settrace('localhost', port=2255, stdoutToServer=True, stderrToServer=True)
+        my_ti = idaapi.cvar.idati
+        vdui = idaapi.get_tform_vdui(ctx.form)
+        vdui.get_current_item(idaapi.USE_KEYBOARD)
+        if vdui.item.is_citem() and vdui.item.it.is_expr():
+            target_item = vdui.item.e
+            name = self.create_vtable(target_item.obj_ea)
+            if name is not None:
+                cfunc = vdui.cfunc
+                it_parent = cfunc.body.find_parent_of(target_item)
+                while it_parent or it_parent.op != idaapi.cit_block:
+                    if it_parent.is_expr() and it_parent.op == idaapi.cot_asg:
+                        operand = it_parent.cexpr.x
+                        if operand.op == idaapi.cot_memptr:
+                            off = operand.cexpr.m
+                            it_obj = operand.cexpr.x
+                            obj_name = ("%s"%it_obj.cexpr.type).strip(" *")
+                            sid = idc.GetStrucIdByName(obj_name)
+                            if sid == idaapi.BADADDR:
+                                break
+                            sptr = idaapi.get_struc(sid)
+                            mptr = idaapi.get_best_fit_member(sptr,off)
+                            tif = idaapi.tinfo_t()
+                            idaapi.parse_decl2(my_ti,name + " *;",tif,0)
+                            idaapi.set_member_tinfo2(sptr,mptr,0,tif,0)
+                            break
+                    it_parent = cfunc.body.find_parent_of(it_parent)
+            vdui.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_DISASM:
-            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+        #print "Update"
+        vdui = idaapi.get_tform_vdui(ctx.form)
+        if vdui:
             return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+        else:
+            return idaapi.AST_DISABLE_FOR_FORM
+
+    def GetXrefCnt(self, ea):
+        i = 0
+        for xref in idautils.XrefsTo(ea, 0):
+            i += 1
+        return i
+
+    def create_vtable(self, addr):
+
+        def isMangled(n):
+            if n.startswith("_ZN"): return True
+            return False
+
+        # print "addr = 0x%08X" % addr
+        name = idc.AskStr("", "Please enter the class name")
+        if name is None:
+            return
+        struct_id = idc.GetStrucIdByName(name + "_vtbl")
+        # print struct_id
+        if struct_id != idaapi.BADADDR:
+            i = idc.AskYN(0, "A vtable structure for %s already exists. Are you sure you want to remake it?" % name)
+            if i == idaapi.BADADDR:
+                return
+            if i == 1:
+                idc.DelStruc(struct_id)
+                struct_id = idc.AddStrucEx(idaapi.BADADDR, name + "_vtbl", 0)
+        else:
+            struct_id = idc.AddStrucEx(idaapi.BADADDR, name + "_vtbl", 0)
+        if struct_id == idaapi.BADADDR:
+            Warning("Could not create the vtable structure!.\nPlease check the entered class name.")
+            return
+
+        # bNameMethods = AskYN(0,"Would you like to assign auto names to the virtual methods (%s_virtXX)?"%name)
+        i = 0
+        n = Netnode("$ VTables")
+        n[name + "_vtbl"] = []
+        while (idaapi.isFunc(idaapi.getFlags(idc.Dword(addr))) and (self.GetXrefCnt(addr) == 0 or i == 0)) is True:
+            c = idc.Dword(addr)
+            methName = ""
+            # print "c = 0x%08X" % c
+            # print "i = %d" % i
+            if c != 0:
+                if idc.hasName(c) or idc.Name(c) != "":
+                    methName = idc.Name(c)
+                    if isMangled(methName):
+                        methName = idc.Demangle(methName, 0)[:idc.Demangle(methName, 0).find("(")]
+                        methName = methName.replace("~", "dtor_").replace("==", "_equal")
+                else:
+                    methName = name + "__" + "virt_%X" % c
+            else:
+                methName = "field_%02X" % (i * 4)
+            # print methName
+            e = idc.AddStrucMember(struct_id, methName, i * 4, idaapi.FF_0OFF | idaapi.FF_DWRD | idaapi.FF_DATA, idaapi.BADADDR, 4)
+            # print "e = %d" % e
+            if e != 0:
+                if e == -1:
+                    l = 0
+                    while e == -1:
+                        e = idc.AddStrucMember(struct_id, (methName + "_%d"%l), i * 4, idaapi.FF_0OFF | idaapi.FF_DWRD | idaapi.FF_DATA,
+                                               idaapi.BADADDR, 4)
+                        l = l + 1
+                elif e != -2 and e != idaapi.BADADDR:
+                    Warning("Error adding a vtable entry!")
+                    return
+                else:
+                    Warning("Unknown error! Err = %d"%e)
+                    return
+            idc.SetMemberComment(struct_id, i * 4, "-> %08X, args: 0x%X" % (c, idc.GetFrameArgsSize(c)), 1)
+            l = n[name + "_vtbl"]
+            l.append((c - idaapi.get_imagebase()) if c else idaapi.BADADDR)
+            n[name + "_vtbl"] = l
+
+            i = i + 1
+            addr = addr + 4
+        return name + "_vtbl"
+
+
+
+# class CreateVtable(idaapi.action_handler_t):
+#
+#     name = "my:CreateVtable"
+#     description = "Create Virtual Table"
+#     hotkey = "V"
+#
+#     def __init__(self):
+#         idaapi.action_handler_t.__init__(self)
+#
+#     def activate(self, ctx):
+#         ea = ctx.cur_ea
+#         if ea != idaapi.BADADDR and VirtualTable.check_address(ea):
+#             vtable = VirtualTable(0, ea)
+#             vtable.import_to_structures(True)
+#
+#     def update(self, ctx):
+#         if ctx.form_type == idaapi.BWN_DISASM:
+#             idaapi.attach_action_to_popup(ctx.form, None, self.name)
+#             return idaapi.AST_ENABLE_FOR_FORM
+#         return idaapi.AST_DISABLE_FOR_FORM
 
 
 class SelectContainingStructure(idaapi.action_handler_t):
@@ -716,10 +918,19 @@ class SelectContainingStructure(idaapi.action_handler_t):
     name = "my:SelectContainingStructure"
     description = "Select Containing Structure"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
         self.potential_negative = potential_negatives
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        # Check if we clicked on variable that is a pointer to a structure that is potentially part of
+        # containing structure
+        if ctree_item.citype == idaapi.VDI_EXPR and ctree_item.e.op == idaapi.cot_var and ctree_item.e.v.idx in potential_negatives:
+            return True
+        return False
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -759,13 +970,16 @@ class ResetContainingStructure(idaapi.action_handler_t):
     name = "my:ResetContainingStructure"
     description = "Reset Containing Structure"
     hotkey = None
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(lvar):
-        return True if re.search("```.*```", lvar.cmt) else False
+    def check(cfunc, ctree_item):
+        if ctree_item.citype == idaapi.VDI_EXPR and ctree_item.e.op == idaapi.cot_var:
+            return True if re.search("```.*```", cfunc.get_lvars()[ctree_item.e.v.idx].cmt) else False
+        return False
 
     def activate(self, ctx):
         hx_view = idaapi.get_tform_vdui(ctx.form)
@@ -782,6 +996,7 @@ class RecastItemLeft(idaapi.action_handler_t):
     name = "my:RecastItemLeft"
     description = "Recast Item"
     hotkey = "Shift+L"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -938,6 +1153,7 @@ class RecastItemRight(RecastItemLeft):
     name = "my:RecastItemRight"
     description = "Recast Item"
     hotkey = "Shift+R"
+    ForPopup = True
 
     def __init__(self):
         RecastItemLeft.__init__(self)
@@ -979,6 +1195,7 @@ class RenameOther(idaapi.action_handler_t):
     name = "my:RenameOther"
     description = "Take other name"
     hotkey = "Ctrl+N"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1024,6 +1241,7 @@ class RenameInside(idaapi.action_handler_t):
     name = "my:RenameInto"
     description = "Rename inside argument"
     hotkey = "Shift+N"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1072,6 +1290,7 @@ class RenameOutside(idaapi.action_handler_t):
     name = "my:RenameOutside"
     description = "Take argument name"
     hotkey = "Ctrl+Shift+N"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1115,6 +1334,7 @@ class SimpleCreateStruct(idaapi.action_handler_t):
     name = "my:CreateStruct"
     description = "Create simple struct"
     hotkey = "Shift+C"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1308,6 +1528,7 @@ class RecastStructMember(idaapi.action_handler_t):
     name = "my:RecastStructMember"
     description = "Recast Struct Member"
     hotkey = "Shift+L"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1341,6 +1562,7 @@ class RecastStructMember(idaapi.action_handler_t):
                     for i in range(member_size):
                         idc.AddStrucMember(sptr.id,member_name if i == 0 else "field_%X"%(member_offset + i), member_offset+i, idaapi.FF_DATA|idaapi.FF_BYTE,idaapi.BADADDR, 1)
                 if cast_helper in ("LOWORD","HIWORD"):
+                    idaapi.del_struc_member(sptr, member_offset)
                     for i in range(0,member_size,2):
                         idc.AddStrucMember(sptr.id,member_name if i == 0 else "field_%X"%(member_offset + i), member_offset+i, idaapi.FF_DATA|idaapi.FF_WORD,idaapi.BADADDR, 2)
                 hx_view.refresh_view(True)
@@ -1356,6 +1578,7 @@ class SwapThenElse(idaapi.action_handler_t):
     name = "my:SwapIfElse"
     description = "Swap then/else"
     hotkey = "Shift+S"
+    ForPopup = True
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
