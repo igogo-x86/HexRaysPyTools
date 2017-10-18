@@ -445,7 +445,9 @@ class DeepScanReturn(idaapi.action_handler_t):
     def check(cfunc, ctree_item):
         if ctree_item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
-            if not cfunc.entry_ea == idaapi.BADADDR and cfunc.get_rettype().equals_to(Const.VOID_TINFO):
+            tp = idaapi.tinfo_t()
+            cfunc.get_func_type(tp)
+            if not cfunc.entry_ea == idaapi.BADADDR and tp.get_rettype().equals_to(Const.VOID_TINFO):
                 return True
         return False
 
