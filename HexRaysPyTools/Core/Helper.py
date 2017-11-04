@@ -14,8 +14,6 @@ imported_ea = set()
 def init_imported_ea(*args):
 
     def imp_cb(ea, name, ord):
-        global imported_ea
-
         imported_ea.add(ea)
         # True -> Continue enumeration
         # False -> Stop enumeration
