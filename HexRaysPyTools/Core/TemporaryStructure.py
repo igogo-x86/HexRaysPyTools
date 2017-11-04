@@ -198,7 +198,6 @@ class VirtualTable(AbstractMember):
         self.name = "vtable" + ("_{0:X}".format(self.offset) if self.offset else '')
         self.vtable_name, self.have_nice_name = parse_vtable_name(address)
         self.populate()
-        self.scan_virtual_functions()
 
     def populate(self):
         address = self.address
