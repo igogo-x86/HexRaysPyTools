@@ -140,9 +140,6 @@ class VirtualFunction:
         self.offset = offset
         self.visited = False
 
-    def __int__(self):
-        return self.address
-
     def get_ptr_tinfo(self):
         # print self.tinfo.dstr()
         ptr_tinfo = idaapi.tinfo_t()
@@ -176,9 +173,6 @@ class VirtualFunction:
 
     @property
     def tinfo(self):
-        if Helper.is_imported_ea(self.address):
-            print "[INFO] Ignoring import function at 0x{0:08X}".format(self.address)
-            return Const.DUMMY_FUNC
         try:
             decompiled_function = idaapi.decompile(self.address)
             if decompiled_function:
@@ -188,6 +182,25 @@ class VirtualFunction:
             pass
         print "[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address)
         return Const.DUMMY_FUNC
+
+    def show_location(self):
+        idaapi.open_pseudocode(self.address, 1)
+
+
+class ImportedVirtualFunction(VirtualFunction):
+    def __init__(self, address, offset):
+        VirtualFunction.__init__(self, address, offset)
+
+    @property
+    def tinfo(self):
+        print "[INFO] Ignoring import function at 0x{0:08X}".format(self.address)
+        tinfo = idaapi.tinfo_t()
+        if idaapi.guess_tinfo2(self.address, tinfo):
+            return tinfo
+        return Const.DUMMY_FUNC
+
+    def show_location(self):
+        idaapi.jumpto(self.address)
 
 
 class VirtualTable(AbstractMember):
@@ -206,12 +219,15 @@ class VirtualTable(AbstractMember):
                 func_address = idaapi.get_64bit(address)
             else:
                 func_address = idaapi.get_32bit(address)
-            flags = idaapi.getFlags(func_address)  # flags_t
-            if idaapi.isCode(flags) or Helper.is_imported_ea(func_address):
+
+            if Helper.is_code_ea(func_address):
                 self.virtual_functions.append(VirtualFunction(func_address, address - self.address))
-                address += Const.EA_SIZE
+            elif Helper.is_imported_ea(func_address):
+                self.virtual_functions.append(ImportedVirtualFunction(func_address, address - self.address))
             else:
                 break
+            address += Const.EA_SIZE
+
             if idaapi.get_first_dref_to(address) != idaapi.BADADDR:
                 break
 
@@ -284,8 +300,9 @@ class VirtualTable(AbstractMember):
 
         idx = function_chooser.Show(True)
         if idx != -1:
-            self.virtual_functions[idx].visited = True
-            idaapi.open_pseudocode(int(self.virtual_functions[idx]), 1)
+            virtual_function = self.virtual_functions[idx]
+            virtual_function.visited = True
+            virtual_function.show_location()
 
     def scan_virtual_function(self, index):
         if Helper.is_imported_ea(self.virtual_functions[index].address):
@@ -343,9 +360,8 @@ class VirtualTable(AbstractMember):
         functions_count = 0
         while True:
             func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
-            flags = idaapi.getFlags(func_address)  # flags_t
             # print "[INFO] Address 0x{0:08X}".format(func_address)
-            if idaapi.isCode(flags) or Helper.is_imported_ea(func_address):
+            if Helper.is_code_ea(func_address) or Helper.is_imported_ea(func_address):
                 functions_count += 1
                 address += Const.EA_SIZE
             else:

@@ -40,6 +40,11 @@ def is_imported_ea(ea):
     return ea in imported_ea
 
 
+def is_code_ea(ea):
+    flags = idaapi.getFlags(ea)  # flags_t
+    return idaapi.isCode(flags)
+
+
 def init_demangled_names(*args):
     """
     Creates dictionary of demangled names => address, that will be used further at double click on methods got from
