@@ -81,7 +81,8 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         ordinal = struct_type.get_ordinal()
         if ordinal == 0:
             t = idaapi.tinfo_t()
-            t.get_named_type(idaapi.cvar.idati, struct_type.dstr())
+            struct_name = struct_type.dstr().split()[-1]        # "Get rid of `struct` prefix or something else
+            t.get_named_type(idaapi.cvar.idati, struct_name)
             ordinal = t.get_ordinal()
 
         field_offset = expression.m
