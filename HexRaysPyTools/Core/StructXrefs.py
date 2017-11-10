@@ -2,7 +2,7 @@ import idaapi
 import time
 from collections import namedtuple
 
-XrefInfo = namedtuple('XrefInfo', ['func_ea', 'offset', 'line'])
+XrefInfo = namedtuple('XrefInfo', ['func_ea', 'offset', 'line', 'type'])
 
 
 def singleton(cls):
@@ -54,8 +54,8 @@ class XrefStorage(object):
             if struct_offset in data:
                 func_ea = func_offset + idaapi.get_imagebase()
                 for xref_info in data[struct_offset]:
-                    offset, line = xref_info
-                    result.append(XrefInfo(func_ea, offset, line))
+                    offset, line, usage_type = xref_info
+                    result.append(XrefInfo(func_ea, offset, line, usage_type))
         return result
 
 
@@ -81,12 +81,13 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         ordinal = struct_type.get_ordinal()
         if ordinal == 0:
             t = idaapi.tinfo_t()
-            struct_name = struct_type.dstr().split()[-1]        # "Get rid of `struct` prefix or something else
+            struct_name = struct_type.dstr().split()[-1]        # Get rid of `struct` prefix or something else
             t.get_named_type(idaapi.cvar.idati, struct_name)
             ordinal = t.get_ordinal()
 
         field_offset = expression.m
         ea = self.__find_ref_address(expression)
+        usage_type = self.__get_type(expression)
 
         assert ea != idaapi.BADADDR and ordinal, \
             "Failed to parse at address {0}, ordinal - {1}, type - {2}".format(
@@ -96,7 +97,7 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         one_line = self.__get_line()
 
         occurrence_offset = ea - self.__function_address
-        xref_info = (occurrence_offset, one_line)
+        xref_info = (occurrence_offset, one_line, usage_type)
 
         # Saving results
         if ordinal not in self.__result:
@@ -125,6 +126,22 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         for p in reversed(self.parents):
             if p.ea != idaapi.BADADDR:
                 return p.ea
+
+    def __get_type(self, cexpr):
+        """ Returns one of the following types: 'R' - read value, 'W' - write value, 'A' - function argument"""
+        child = cexpr
+        for p in reversed(self.parents):
+            assert p, "Failed to get type at " + hex(int(self.__function_address))
+
+            if p.cexpr.op == idaapi.cot_call:
+                return 'Arg'
+            if not p.is_expr():
+                return 'R'
+            if p.cexpr.op == idaapi.cot_asg:
+                if p.cexpr.x == child:
+                    return 'W'
+                return 'R'
+            child = p.cexpr
 
     def __get_line(self):
         for p in reversed(self.parents):

@@ -837,13 +837,12 @@ class RecastItemLeft(idaapi.action_handler_t):
                         return RECAST_RETURN, child.type, None
 
                 elif expression.op == idaapi.cot_call:
-
                     if expression.x.op == idaapi.cot_memptr:
                         # TODO: Recast arguments of virtual functions
                         return
 
                     if child and child.op == idaapi.cot_cast:
-                        if child.cexpr.x.op == idaapi.cot_memptr:
+                        if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
                             idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
                             return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
 
@@ -1169,6 +1168,7 @@ class FindFieldXrefs(idaapi.action_handler_t):
         for xref_info in result:
             data.append([
                 idaapi.get_short_name(xref_info.func_ea) + "+" + hex(int(xref_info.offset)),
+                xref_info.type,
                 xref_info.line
             ])
 
@@ -1176,7 +1176,9 @@ class FindFieldXrefs(idaapi.action_handler_t):
         chooser = Forms.MyChoose(
             data,
             "Cross-references to {0}::{1}".format(struct_type.dstr(), field_name),
-            [["Function", 20 | idaapi.Choose2.CHCOL_PLAIN], ["Line", 40 | idaapi.Choose2.CHCOL_PLAIN]]
+            [["Function", 20 | idaapi.Choose2.CHCOL_PLAIN],
+             ["Type", 2 | idaapi.Choose2.CHCOL_PLAIN],
+             ["Line", 40 | idaapi.Choose2.CHCOL_PLAIN]]
         )
         idx = chooser.Show(True)
         if idx == -1:
