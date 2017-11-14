@@ -177,7 +177,7 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         Helper.temporary_structure = TemporaryStructureModel()
-
+        Helper.init_imported_ea()
         # Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
