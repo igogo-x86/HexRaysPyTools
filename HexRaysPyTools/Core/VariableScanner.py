@@ -372,7 +372,8 @@ class DeepSearchVisitor(ShallowSearchVisitor):
 
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
-
+        if Helper.is_imported_ea(ea):
+            return
         if (ea, arg_index, self.origin + offset) in scanned_functions:
             return
         try:
