@@ -177,7 +177,6 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         Helper.temporary_structure = TemporaryStructureModel()
-        Helper.init_imported_ea()
         # Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
@@ -246,4 +245,5 @@ class MyPlugin(idaapi.plugin_t):
 
 def PLUGIN_ENTRY():
     idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_demangled_names)
+    idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_imported_ea)
     return MyPlugin()

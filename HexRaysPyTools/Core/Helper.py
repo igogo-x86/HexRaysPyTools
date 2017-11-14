@@ -8,31 +8,40 @@ import re
 
 temporary_structure = None
 demangled_names = {}
-imported_ea = []
+imported_ea = set()
 
-def init_imported_ea():
+
+def init_imported_ea(*args):
+
     def imp_cb(ea, name, ord):
-            imported_ea.append(ea)
-            # True -> Continue enumeration
-            # False -> Stop enumeration
-            return True
-        
+        imported_ea.add(ea)
+        # True -> Continue enumeration
+        # False -> Stop enumeration
+        return True
+
+    print "[Info] Collecting information about imports"
+    imported_ea.clear()
     nimps = idaapi.get_import_module_qty()
-    
-    print "Found %d import(s)..." % nimps
-    
+
     for i in xrange(0, nimps):
         name = idaapi.get_import_module_name(i)
         if not name:
-            print "Failed to get import module name for #%d" % i
+            print "[Warning] Failed to get import module name for #%d" % i
             continue
-    
-        print "Walking-> %s" % name
+
+        # print "Walking-> %s" % name
         idaapi.enum_import_names(i, imp_cb)
-    print "All done..."
+    print "[Info] Done..."
+
 
 def is_imported_ea(ea):
-    return (ea in imported_ea)
+    return ea in imported_ea
+
+
+def is_code_ea(ea):
+    flags = idaapi.getFlags(ea)  # flags_t
+    return idaapi.isCode(flags)
+
 
 def init_demangled_names(*args):
     """
