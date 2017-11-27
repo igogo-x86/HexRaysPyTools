@@ -2,18 +2,19 @@ import idaapi
 import idc
 
 
-def inverse_if(cif):
-    idaapi.qswap(cif.ithen, cif.ielse)
+def inverse_if_condition(cif):
+    # cexpr_t has become broken but fortunately still exist `assing` method which copies one expr into another
     cit_if_condition = cif.expr
-
-    if cit_if_condition.op == idaapi.cot_lnot:
-        new_if_condition = idaapi.cexpr_t(cit_if_condition.x)
-    else:
-        new_if_condition = idaapi.cexpr_t(idaapi.lnot(cit_if_condition))
-
-    new_if_condition.thisown = False
-    cif.expr = new_if_condition
+    tmp_cexpr = idaapi.cexpr_t()
+    tmp_cexpr.assign(cit_if_condition)
+    new_if_condition = idaapi.lnot(tmp_cexpr)
+    cif.expr.swap(new_if_condition)
     del cit_if_condition
+
+
+def inverse_if(cif):
+    inverse_if_condition(cif)
+    idaapi.qswap(cif.ithen, cif.ielse)
 
 
 class InversionInfo(object):
@@ -60,26 +61,18 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
                     if cblock.back().op == idaapi.cit_return and \
                                     cblock.at(size - 2).op == idaapi.cit_if and not cblock.at(size - 2).cif.ielse:
 
-                        cit_then = cblock.at(size - 2).cif.ithen
+                        cif = cblock.at(size - 2).cif
+                        cit_then = cif.ithen
 
                         # Skip if only one (not "if") statement in "then" branch
                         if cit_then.cblock.size() == 1 and cit_then.cblock.front().op != idaapi.cit_if:
                             return 0
 
-                        # Replacing condition to opposite
-                        cit_if_condition = cblock.at(size - 2).cif.expr
-                        if cit_if_condition.op == idaapi.cot_lnot:
-                            # Ida has following bug:
-                            # when return type of call cexpr_t is not signed int, function idaapi.lnot leads to crash
-                            new_if_condition = idaapi.cexpr_t(cit_if_condition.x)
-                        else:
-                            new_if_condition = idaapi.cexpr_t(idaapi.lnot(cit_if_condition))
-                        new_if_condition.thisown = False
-                        cblock.at(size - 2).cif.expr = new_if_condition
-                        del cit_if_condition
+                        inverse_if_condition(cif)
 
                         # Take return from list of statements and later put it back
-                        cit_return = idaapi.cinsn_t(instruction.cblock.back())
+                        cit_return = idaapi.cinsn_t()
+                        cit_return.assign(instruction.cblock.back())
                         cit_return.thisown = False
                         instruction.cblock.pop_back()
 
@@ -90,8 +83,9 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
 
                         # Put back main return if there's no another return or "GOTO" already
                         if instruction.cblock.back().op not in (idaapi.cit_return, idaapi.cit_goto):
-                            new_return = idaapi.cinsn_t(cit_return)
+                            new_return = idaapi.cinsn_t()
                             new_return.thisown = False
+                            new_return.assign(cit_return)
                             instruction.cblock.push_back(new_return)
 
                         # Put return into "Then" branch
