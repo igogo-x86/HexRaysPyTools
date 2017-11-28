@@ -1,8 +1,11 @@
+import logging
 import idaapi
 import idc
 import Const
 import Helper
 import TemporaryStructure
+
+logger = logging.getLogger(__name__)
 
 SCAN_ALL_ARGUMENTS = True
 scanned_functions = set()
@@ -107,6 +110,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         :param index: int
         :return: Structures.AbstractField
         """
+
         parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
         parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
 
@@ -145,9 +149,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     try:
                         self.protected_variables.remove(index)
                     except KeyError:
-                        print "[Info] Remove variable {0} from scan list, address: 0x{1:08X}".format(
+                        logger.info("Remove variable {0} from scan list, address: 0x{1:08X}".format(
                             index, self.expression_address
-                        )
+                        ))
                         self.variables.pop(index)
                     return
 
@@ -347,12 +351,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     return
 
         if 'return' not in parents_type[0:2] and parents_type[0] not in ('if', 'band', 'eq', 'ne', 'cast'):
-            print "[DEBUG] Unhandled type", self.variables[index].dstr(), \
-                "Index:", index, \
-                "Offset:", offset, \
-                "Function:", idaapi.get_ea_name(self.function.entry_ea), \
-                "Address: 0x{0:08X}".format(expression.ea), \
-                "Parents:", parents_type
+            logger.debug(
+                "Unhandled type `%s`, Index: %s, Offset: %s, Function: %s, Address: %s, Parents: %s",
+                str(self.variables[index]),
+                index,
+                offset,
+                idaapi.get_ea_name(self.function.entry_ea),
+                Helper.to_hex(self.expression_address),
+                parents_type
+            )
 
     def process(self):
         """
@@ -380,14 +387,14 @@ class DeepSearchVisitor(ShallowSearchVisitor):
             scanned_functions.add((ea, arg_index, self.origin + offset))
             new_function = idaapi.decompile(ea)
             if new_function:
-                print "[Info] Scanning function {name} at 0x{ea:08X}, origin: 0x{origin:04X}".format(
-                    name=idaapi.get_short_name(ea), ea=ea, origin=self.origin + offset
-                )
+                logger.info("Scanning function {name} at {ea}, origin: 0x{origin:04X}, index: {idx}".format(
+                    name=idaapi.get_short_name(ea), ea=Helper.to_hex(ea), origin=self.origin + offset, idx=arg_index
+                ))
                 scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
         except idaapi.DecompilationFailure:
-            print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(ea)
+            logger.warning("Ida failed to decompile function at {}".format(Helper.to_hex(ea)))
 
 
 class VariableLookupVisitor(idaapi.ctree_parentee_t):

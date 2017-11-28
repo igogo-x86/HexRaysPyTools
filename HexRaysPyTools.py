@@ -1,3 +1,4 @@
+import logging
 import HexRaysPyTools.Actions as Actions
 from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
@@ -7,7 +8,7 @@ import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 
-# import Core.QtShim as QtShim
+logging.basicConfig(format='[%(levelname)s] %(message)s\t(%(module)s:%(funcName)s)', level=logging.DEBUG)
 
 potential_negatives = {}
 

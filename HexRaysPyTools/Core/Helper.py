@@ -209,3 +209,10 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
             self.touch_all()
             return True
         return False
+
+
+def to_hex(ea):
+    """ Formats address so it could be double clicked at console """
+    if Const.EA64:
+        return "0x{:016X}".format(ea)
+    return "0x{:08X}".format(ea)
