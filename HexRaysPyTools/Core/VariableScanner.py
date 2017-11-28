@@ -114,14 +114,10 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
         parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
 
-        for parent in parents:
-            if parent.ea != idaapi.BADADDR:
-                self.expression_address = parent.ea
-                break
-        else:
-            self.expression_address = idaapi.BADADDR
-
+        self.expression_address = self._find_asm_address(expression)
         offset = 0
+
+        logger.debug("Parsing expression at %s, Index: %s", Helper.to_hex(self.expression_address), index)
 
         if parents_type[0:2] == ['asg', 'expr']:
             if parents[0].y == expression:

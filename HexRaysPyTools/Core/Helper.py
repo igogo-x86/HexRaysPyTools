@@ -216,3 +216,23 @@ def to_hex(ea):
     if Const.EA64:
         return "0x{:016X}".format(ea)
     return "0x{:08X}".format(ea)
+
+# ======================================================================
+# Functions that extends IDA Pro capabilities
+# ======================================================================
+
+
+def _find_asm_address(self, cexpr):
+    """ Returns most close virtual address corresponding to cexpr """
+
+    ea = cexpr.ea
+    if ea != idaapi.BADADDR:
+        return ea
+
+    for p in reversed(self.parents):
+        if p.ea != idaapi.BADADDR:
+            return p.ea
+
+
+def extend_ida():
+    idaapi.ctree_parentee_t._find_asm_address = _find_asm_address

@@ -247,4 +247,5 @@ class MyPlugin(idaapi.plugin_t):
 def PLUGIN_ENTRY():
     idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_demangled_names)
     idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_imported_ea)
+    Helper.extend_ida()
     return MyPlugin()
