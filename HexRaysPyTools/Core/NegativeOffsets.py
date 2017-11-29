@@ -1,8 +1,10 @@
 import re
-
+import logging
 import idaapi
-
 import idc
+import Helper
+
+logger = logging.getLogger(__name__)
 
 
 def parse_lvar_comment(lvar):
@@ -93,7 +95,6 @@ class NegativeLocalCandidate:
         min_struct_size = max_offset - min_offset
         result = []
         parent_tinfo = idaapi.tinfo_t()
-        udt_data = idaapi.udt_type_data_t()
         target_tinfo = idaapi.tinfo_t()
         if not target_tinfo.get_named_type(type_library, self.tinfo.dstr()):
             print "[Warning] Such type doesn't exist in '{0}' library".format(type_library.name)
@@ -118,43 +119,35 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
 
     def visit_expr(self, expression):
         if expression.op == idaapi.cot_add and expression.x.op == idaapi.cot_var and expression.y.op == idaapi.cot_num:
-            # print "ADD TYPE", expression.type.dstr()
             index = expression.x.v.idx
             if index in self.negative_lvars:
                 offset = expression.y.numval()
                 if offset >= self.negative_lvars[index].size:
                     self.create_containing_record(expression, index, offset)
         elif expression.op == idaapi.cot_sub and expression.x.op == idaapi.cot_var and expression.y.op == idaapi.cot_num:
-            # print "SUB TYPE", expression.type.dstr(), expression.x.type.dstr()
             index = expression.x.v.idx
             if index in self.negative_lvars:
                 offset = -expression.y.n.value(idaapi.tinfo_t(idaapi.BT_INT))
                 self.create_containing_record(expression, index, offset)
-        # elif expression.op == idaapi.cot_var:
-        #     index = expression.v.idx
-        #     if index in self.negative_lvars:
-        #         self.create_containing_record(expression, index, 0)
         return 0
 
     def create_containing_record(self, expression, index, offset):
-
         negative_lvar = self.negative_lvars[index]
-        # print "[DEBUG] Rebuilding negative offset", negative_lvar.offset, offset, negative_lvar.parent_tinfo.dstr()
-        diff = negative_lvar.offset + offset
+        logger.debug("Creating CONTAINING_RECORD macro, offset: {}, negative offset: {}, TYPE: {}".format(
+            negative_lvar.offset,
+            offset,
+            negative_lvar.parent_tinfo.dstr()
+        ))
 
         arg_address = idaapi.carg_t()
         if expression.op == idaapi.cot_var:
-            arg_address.consume_cexpr(expression)
+            arg_address.assign(expression)
         else:
-            arg_address.consume_cexpr(expression.x)
+            arg_address.assign(expression.x)
 
         arg_type = idaapi.carg_t()
-        cexpr_helper = idaapi.create_helper(
-            True,
-            self.pvoid_tinfo,
-            negative_lvar.parent_tinfo.dstr()
-        )
-        arg_type.consume_cexpr(cexpr_helper)
+        cexpr_helper = idaapi.create_helper(True, self.pvoid_tinfo, negative_lvar.parent_tinfo.dstr())
+        arg_type.assign(cexpr_helper)
 
         arg_field = idaapi.carg_t()
         cexpr_helper = idaapi.create_helper(
@@ -162,41 +155,43 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
             self.pvoid_tinfo,
             negative_lvar.member_name
         )
-        arg_field.consume_cexpr(cexpr_helper)
+        arg_field.assign(cexpr_helper)
         return_tinfo = idaapi.tinfo_t(negative_lvar.parent_tinfo)
         return_tinfo.create_ptr(return_tinfo)
         new_cexpr_call = idaapi.call_helper(return_tinfo, None, "CONTAINING_RECORD")
         new_cexpr_call.a.push_back(arg_address)
         new_cexpr_call.a.push_back(arg_type)
         new_cexpr_call.a.push_back(arg_field)
-        # new_cexpr_call.ea = expression.ea
-        # new_cexpr_call.x.ea = expression.ea
+        new_cexpr_call.thisown = False
 
         parent = reversed(self.parents).next().cexpr
+
+        diff = negative_lvar.offset + offset
         if diff:
             number = idaapi.make_num(diff)
-            new_cexpr_add = idaapi.cexpr_t(idaapi.cot_add, new_cexpr_call, number)
-            new_cexpr_add.thisown = False
+            number.thisown = False
+            new_cexpr_add = Helper.my_cexpr_t(idaapi.cot_add, x=new_cexpr_call, y=number)
             new_cexpr_add.type = return_tinfo
+
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
-                new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_add)
+                new_cexpr_cast = Helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_add)
                 new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
-                expression.replace_by(new_cexpr_cast)
+                expression.assign(new_cexpr_cast)
             else:
-                expression.replace_by(new_cexpr_add)
+                expression.assign(new_cexpr_add)
         else:
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
-                new_cexpr_cast = idaapi.cexpr_t(idaapi.cot_cast, new_cexpr_call)
+                new_cexpr_cast = Helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_call)
                 new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
-                expression.replace_by(new_cexpr_cast)
+                expression.assign(new_cexpr_cast)
             else:
-                expression.replace_by(new_cexpr_call)
+                expression.assign(new_cexpr_call)
 
 
 class SearchVisitor(idaapi.ctree_parentee_t):

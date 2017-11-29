@@ -234,5 +234,31 @@ def _find_asm_address(self, cexpr):
             return p.ea
 
 
+def my_cexpr_t(*args, **kwargs):
+    """ Replacement of bugged cexpr_t() function """
+
+    if len(args) == 0:
+        return idaapi.cexpr_t()
+
+    if len(args) != 1:
+        raise NotImplementedError
+
+    cexpr = idaapi.cexpr_t()
+    cexpr.thisown = False
+    if type(args[0]) == idaapi.cexpr_t:
+        cexpr.assign(args[0])
+    else:
+        op = args[0]
+        cexpr._set_op(op)
+
+        if 'x' in kwargs:
+            cexpr._set_x(kwargs['x'])
+        if 'y' in kwargs:
+            cexpr._set_y(kwargs['y'])
+        if 'z' in kwargs:
+            cexpr._set_z(kwargs['z'])
+    return cexpr
+
+
 def extend_ida():
     idaapi.ctree_parentee_t._find_asm_address = _find_asm_address
