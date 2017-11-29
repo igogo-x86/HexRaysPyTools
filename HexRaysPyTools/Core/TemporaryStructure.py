@@ -409,6 +409,9 @@ class Member(AbstractMember):
 
     def activate(self):
         new_type_declaration = idaapi.askstr(0x100, self.type_name, "Enter type:")
+        if new_type_declaration is None:
+            return
+
         result = idc.ParseType(new_type_declaration, 0)
         if result is None:
             return
