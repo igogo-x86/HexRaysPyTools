@@ -7,7 +7,10 @@ import TemporaryStructure
 
 logger = logging.getLogger(__name__)
 
+# If disabled then recursion will be triggered only for variable passed as first argument to function
 SCAN_ALL_ARGUMENTS = True
+
+# Global set which is populated when deep scanning and cleared after completion
 scanned_functions = set()
 
 
@@ -36,7 +39,11 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         if not self.variables[index].equals_to(Const.PVOID_TINFO):
             self.candidates.append(self.create_member(0, index, pvoid_applicable=True))
 
-        self.protected_variables = {index}
+        if function.lvars[index].is_arg_var:
+            self.protected_variables = set()
+        else:
+            self.protected_variables = {index}
+
         scanned_functions.add((function.entry_ea, index, self.origin))
 
     def create_member(self, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
@@ -142,13 +149,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                             )
                         ):
                             return
-                    try:
-                        self.protected_variables.remove(index)
-                    except KeyError:
-                        logger.info("Remove variable {0} from scan list, address: 0x{1:08X}".format(
-                            index, self.expression_address
-                        ))
-                        self.variables.pop(index)
+                    self._remove_scan_variable(index)
                     return
 
         # Assignment like v1 = (TYPE) v2 where TYPE is one the supported types
@@ -163,6 +164,11 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             arg_index, _ = Helper.get_func_argument_info(parents[0], expression)
             if SCAN_ALL_ARGUMENTS or not arg_index:
                 self.scan_function(parents[0].x.obj_ea, 0, arg_index)
+            return
+
+        # In situation call(..., (TYPE) &var, ...) there's great probability that var is no longer original pointer
+        if parents_type[0:3] == ['ref', 'cast', 'call']:
+            self._remove_scan_variable(index)
             return
 
         # --------------------------------------------------------------------------------------------
@@ -368,6 +374,15 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
     def clear():
         scanned_functions.clear()
 
+    def _remove_scan_variable(self, index):
+        try:
+            self.protected_variables.remove(index)
+        except KeyError:
+            logger.info("Remove variable {0} from scan list, address: 0x{1:08X}".format(
+                index, self.expression_address
+            ))
+            self.variables.pop(index)
+
 
 class DeepSearchVisitor(ShallowSearchVisitor):
     def __init__(self, function, origin, index=None, global_variable=None):
@@ -395,8 +410,12 @@ class DeepSearchVisitor(ShallowSearchVisitor):
                     return
 
                 logger.info("Scanning function {name} at {ea}, origin: 0x{origin:04X}, index: {idx}".format(
-                    name=func_name, ea=Helper.to_hex(ea), origin=self.origin + offset, idx=arg_index
+                    name=func_name,
+                    ea=Helper.to_hex(self.expression_address),
+                    origin=self.origin + offset,
+                    idx=arg_index
                 ))
+
                 scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
