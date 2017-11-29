@@ -383,14 +383,30 @@ class DeepSearchVisitor(ShallowSearchVisitor):
             scanned_functions.add((ea, arg_index, self.origin + offset))
             new_function = idaapi.decompile(ea)
             if new_function:
+                func_name = idaapi.get_short_name(ea)
+
+                # Check if scanned variable is really an argument, otherwise it can be part of format expression
+                if ea != self.function.entry_ea and not self.__is_func_arg(new_function, arg_index):
+                    logger.warning("Seems like we're scanning format argument at {}, function: {}, index: {}".format(
+                        Helper.to_hex(self.expression_address),
+                        func_name,
+                        arg_index
+                    ))
+                    return
+
                 logger.info("Scanning function {name} at {ea}, origin: 0x{origin:04X}, index: {idx}".format(
-                    name=idaapi.get_short_name(ea), ea=Helper.to_hex(ea), origin=self.origin + offset, idx=arg_index
+                    name=func_name, ea=Helper.to_hex(ea), origin=self.origin + offset, idx=arg_index
                 ))
                 scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
+                logger.info("Finished scanning function {}".format(func_name))
         except idaapi.DecompilationFailure:
             logger.warning("Ida failed to decompile function at {}".format(Helper.to_hex(ea)))
+
+    @staticmethod
+    def __is_func_arg(cfunc, index):
+        return index < len(cfunc.lvars) and cfunc.lvars[index].is_arg_var
 
 
 class VariableLookupVisitor(idaapi.ctree_parentee_t):
