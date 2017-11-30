@@ -1154,7 +1154,7 @@ class FindFieldXrefs(idaapi.action_handler_t):
                ctree_item.it.to_specific_type.op in (idaapi.cot_memptr, idaapi.cot_memref)
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
         item = hx_view.item
 
         if not self.check(item):
@@ -1188,6 +1188,6 @@ class FindFieldXrefs(idaapi.action_handler_t):
         idaapi.open_pseudocode(xref.func_ea + xref.offset, False)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
+        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
             return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
