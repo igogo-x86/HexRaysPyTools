@@ -58,12 +58,15 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
         while True:
             cblock = instruction.cblock
             size = cblock.size()
+            # Find block that has "If" and "return" as last 2 statements
             if size < 2:
                 break
 
+            if cblock.at(size - 2).op != idaapi.cit_if:
+                break
+
             cif = cblock.at(size - 2).cif
-            # Find block that has "If" and "return" as last 2 statements
-            if cblock.back().op != idaapi.cit_return or cif.op != idaapi.cit_if or cif.ielse:
+            if cblock.back().op != idaapi.cit_return or cif.ielse:
                 break
 
             cit_then = cif.ithen
