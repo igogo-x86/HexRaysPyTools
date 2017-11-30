@@ -13,6 +13,7 @@ from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStruct
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
+from HexRaysPyTools.Core.StructXrefs import XrefStorage
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -836,13 +837,12 @@ class RecastItemLeft(idaapi.action_handler_t):
                         return RECAST_RETURN, child.type, None
 
                 elif expression.op == idaapi.cot_call:
-
                     if expression.x.op == idaapi.cot_memptr:
                         # TODO: Recast arguments of virtual functions
                         return
 
                     if child and child.op == idaapi.cot_cast:
-                        if child.cexpr.x.op == idaapi.cot_memptr:
+                        if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
                             idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
                             return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
 
@@ -1139,5 +1139,55 @@ class SwapThenElse(idaapi.action_handler_t):
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class FindFieldXrefs(idaapi.action_handler_t):
+    name = "my:FindFieldXrefs"
+    description = "Field Xrefs"
+    hotkey = "Ctrl+X"
+
+    @staticmethod
+    def check(ctree_item):
+        return ctree_item.citype == idaapi.VDI_EXPR and \
+               ctree_item.it.to_specific_type.op in (idaapi.cot_memptr, idaapi.cot_memref)
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_tform_vdui(ctx.form)
+        item = hx_view.item
+
+        if not self.check(item):
+            return
+
+        data = []
+        offset = item.e.m
+        struct_type = idaapi.remove_pointer(item.e.x.type)
+        ordinal = struct_type.get_ordinal()
+        result = XrefStorage().get_structure_info(ordinal, offset)
+        for xref_info in result:
+            data.append([
+                idaapi.get_short_name(xref_info.func_ea) + "+" + hex(int(xref_info.offset)),
+                xref_info.type,
+                xref_info.line
+            ])
+
+        field_name = Helper.get_member_name(struct_type, offset)
+        chooser = Forms.MyChoose(
+            data,
+            "Cross-references to {0}::{1}".format(struct_type.dstr(), field_name),
+            [["Function", 20 | idaapi.Choose2.CHCOL_PLAIN],
+             ["Type", 2 | idaapi.Choose2.CHCOL_PLAIN],
+             ["Line", 40 | idaapi.Choose2.CHCOL_PLAIN]]
+        )
+        idx = chooser.Show(True)
+        if idx == -1:
+            return
+
+        xref = result[idx]
+        idaapi.open_pseudocode(xref.func_ea + xref.offset, False)
+
+    def update(self, ctx):
+        if ctx.form_title[0:10] == "Pseudocode":
             return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
