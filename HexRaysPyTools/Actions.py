@@ -1,6 +1,7 @@
 import ctypes
 import sys
 import re
+import logging
 
 import idaapi
 import idc
@@ -20,6 +21,8 @@ RECAST_GLOBAL_VARIABLE = 1
 RECAST_ARGUMENT = 2
 RECAST_RETURN = 3
 RECAST_STRUCTURE = 4
+
+logger = logging.getLogger(__name__)
 
 
 def register(action, *args):
@@ -851,8 +854,20 @@ class RecastItemLeft(idaapi.action_handler_t):
 
         elif expression.op == idaapi.cot_call:
             if expression.x.op == idaapi.cot_memptr:
-                # TODO: Recast arguments of virtual functions
-                return
+                arg_index, arg_tinfo = Helper.get_func_argument_info(expression, child)
+                if child.op == idaapi.cot_cast:
+                    # struct_ptr->func(..., (TYPE) var, ...);
+                    new_arg_tinfo = child.x.type
+                else:
+                    # struct_ptr->func(..., var, ...); When `var` and `arg` are different pointers
+                    if arg_tinfo.equals_to(child.type):
+                        return
+                    new_arg_tinfo = child.type
+
+                struct_type = expression.x.x.type.get_pointed_object()
+                funcptr_tinfo = expression.x.type
+                Helper.set_funcptr_argument(funcptr_tinfo, arg_index, new_arg_tinfo)
+                return RECAST_STRUCTURE, struct_type.dstr(), expression.x.m, funcptr_tinfo
 
             if child and child.op == idaapi.cot_cast:
                 if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
@@ -875,6 +890,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
         if not result:
             return
+
+        logger.debug("Recasting - %s", result)
 
         if result[0] == RECAST_LOCAL_VARIABLE:
             tinfo, lvar = result[1:]
