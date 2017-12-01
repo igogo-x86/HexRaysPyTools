@@ -786,143 +786,158 @@ class RecastItemLeft(idaapi.action_handler_t):
 
     @staticmethod
     def check(cfunc, ctree_item):
-        if ctree_item.citype == idaapi.VDI_EXPR:
-            expression = ctree_item.it.to_specific_type
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
 
-            child = None
-            while expression and expression.op not in (idaapi.cot_asg, idaapi.cit_return, idaapi.cot_call):
-                child = expression.to_specific_type
-                expression = cfunc.body.find_parent_of(expression)
+        expression = ctree_item.it.to_specific_type
+        child = None
 
-            if expression:
-                expression = expression.to_specific_type
-                if expression.op == idaapi.cot_asg and expression.x.op in (
-                        idaapi.cot_var, idaapi.cot_obj, idaapi.cot_memptr, idaapi.cot_memref):
+        # Look through parents until we found Return, Assignment or Call
+        while expression and expression.op not in (idaapi.cot_asg, idaapi.cit_return, idaapi.cot_call):
+            child = expression.to_specific_type
+            expression = cfunc.body.find_parent_of(expression)
+        if not expression:
+            return
 
-                    right_expr = expression.y
-                    right_tinfo = right_expr.x.type if right_expr.op == idaapi.cot_cast else right_expr.type
+        expression = expression.to_specific_type
+        if expression.opname == 'asg':
 
-                    # Check if both left and right parts of expression are of the same types.
-                    # If no then we can recast then.
-                    if right_tinfo.dstr() == expression.x.type.dstr():
-                        return
+            if expression.x.opname not in ('var', 'obj', 'memptr', 'memref'):
+                return
 
-                    if expression.x.op == idaapi.cot_var:
-                        variable = cfunc.get_lvars()[expression.x.v.idx]
-                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
-                        return RECAST_LOCAL_VARIABLE, right_tinfo, variable
-                    elif expression.x.op == idaapi.cot_obj:
-                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Global')
-                        return RECAST_GLOBAL_VARIABLE, right_tinfo, expression.x.obj_ea
-                    elif expression.x.op == idaapi.cot_memptr:
-                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
-                        return RECAST_STRUCTURE, expression.x.x.type.get_pointed_object().dstr(), expression.x.m, right_tinfo
-                    elif expression.x.op == idaapi.cot_memref:
-                        idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
-                        return RECAST_STRUCTURE, expression.x.x.type.dstr(), expression.x.m, right_tinfo
+            right_expr = expression.y
+            right_tinfo = right_expr.x.type if right_expr.op == idaapi.cot_cast else right_expr.type
 
-                elif expression.op == idaapi.cit_return:
+            # Check if both left and right parts of expression are of the same types.
+            # If not then we can recast then.
+            if right_tinfo.dstr() == expression.x.type.dstr():
+                return
 
-                    idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
-                    child = child or expression.creturn.expr
+            if expression.x.op == idaapi.cot_var:
+                # var = (TYPE ) ...;
+                variable = cfunc.get_lvars()[expression.x.v.idx]
+                idaapi.update_action_label(RecastItemLeft.name, 'Recast Variable "{0}"'.format(variable.name))
+                return RECAST_LOCAL_VARIABLE, right_tinfo, variable
+            elif expression.x.op == idaapi.cot_obj:
+                # g_var = (TYPE ) ...;
+                idaapi.update_action_label(RecastItemLeft.name, 'Recast Global')
+                return RECAST_GLOBAL_VARIABLE, right_tinfo, expression.x.obj_ea
+            elif expression.x.op == idaapi.cot_memptr:
+                # struct->member = (TYPE ) ...;
+                idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
+                return RECAST_STRUCTURE, expression.x.x.type.get_pointed_object().dstr(), expression.x.m, right_tinfo
+            elif expression.x.op == idaapi.cot_memref:
+                # struct.member = (TYPE ) ...;
+                idaapi.update_action_label(RecastItemLeft.name, 'Recast Field')
+                return RECAST_STRUCTURE, expression.x.x.type.dstr(), expression.x.m, right_tinfo
 
-                    if child.op == idaapi.cot_cast:
-                        return RECAST_RETURN, child.x.type, None
+        elif expression.op == idaapi.cit_return:
 
-                    func_tinfo = idaapi.tinfo_t()
-                    cfunc.get_func_type(func_tinfo)
-                    rettype = func_tinfo.get_rettype()
+            idaapi.update_action_label(RecastItemLeft.name, "Recast Return")
+            child = child or expression.creturn.expr
 
-                    if func_tinfo.get_rettype().dstr() != child.type.dstr():
-                        return RECAST_RETURN, child.type, None
+            if child.op == idaapi.cot_cast:
+                # return (TYPE) ...;
+                return RECAST_RETURN, child.x.type, None
 
-                elif expression.op == idaapi.cot_call:
-                    if expression.x.op == idaapi.cot_memptr:
-                        # TODO: Recast arguments of virtual functions
-                        return
+            func_tinfo = idaapi.tinfo_t()
+            cfunc.get_func_type(func_tinfo)
+            rettype = func_tinfo.get_rettype()
 
-                    if child and child.op == idaapi.cot_cast:
-                        if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
-                            idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
-                            return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
+            if func_tinfo.get_rettype().dstr() != child.type.dstr():
+                # return ...;
+                # This's possible when returned type and value are both pointers to different types
+                return RECAST_RETURN, child.type, None
 
-                        arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
-                        idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
-                        return (
-                            RECAST_ARGUMENT,
-                            arg_index,
-                            expression.x.type.get_pointed_object(),
-                            child.x.type,
-                            expression.x.obj_ea
-                        )
+        elif expression.op == idaapi.cot_call:
+            if expression.x.op == idaapi.cot_memptr:
+                # TODO: Recast arguments of virtual functions
+                return
+
+            if child and child.op == idaapi.cot_cast:
+                if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
+                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
+                    return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
+
+                arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
+                idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
+                return (
+                    RECAST_ARGUMENT,
+                    arg_index,
+                    expression.x.type.get_pointed_object(),
+                    child.x.type,
+                    expression.x.obj_ea
+                )
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
-        if result:
-            if result[0] == RECAST_LOCAL_VARIABLE:
-                tinfo, lvar = result[1:]
-                if hx_view.set_lvar_type(lvar, tinfo):
+        if not result:
+            return
+
+        if result[0] == RECAST_LOCAL_VARIABLE:
+            tinfo, lvar = result[1:]
+            if hx_view.set_lvar_type(lvar, tinfo):
+                hx_view.refresh_view(True)
+
+        elif result[0] == RECAST_GLOBAL_VARIABLE:
+            tinfo, address = result[1:]
+            if idaapi.apply_tinfo2(address, tinfo, idaapi.TINFO_DEFINITE):
+                hx_view.refresh_view(True)
+
+        elif result[0] == RECAST_ARGUMENT:
+            arg_index, func_tinfo, arg_tinfo, address = result[1:]
+            if arg_tinfo.is_array():
+                arg_tinfo.convert_array_to_ptr()
+
+            func_data = idaapi.func_type_data_t()
+            func_tinfo.get_func_details(func_data)
+            func_data[arg_index].type = arg_tinfo
+            new_func_tinfo = idaapi.tinfo_t()
+            new_func_tinfo.create_func(func_data)
+            if idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE):
+                hx_view.refresh_view(True)
+
+        elif result[0] == RECAST_RETURN:
+            return_type, func_address = result[1:]
+            try:
+                cfunc = idaapi.decompile(func_address) if func_address else hx_view.cfunc
+            except idaapi.DecompilationFailure:
+                print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(func_address)
+                return
+
+            function_tinfo = idaapi.tinfo_t()
+            cfunc.get_func_type(function_tinfo)
+            func_data = idaapi.func_type_data_t()
+            function_tinfo.get_func_details(func_data)
+            func_data.rettype = return_type
+            function_tinfo.create_func(func_data)
+            if idaapi.apply_tinfo2(cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
+                hx_view.refresh_view(True)
+
+        elif result[0] == RECAST_STRUCTURE:
+            structure_name, field_offset, new_type = result[1:]
+            tinfo = idaapi.tinfo_t()
+            tinfo.get_named_type(idaapi.cvar.idati, structure_name)
+
+            ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
+
+            if ordinal:
+                udt_member = idaapi.udt_member_t()
+                udt_member.offset = field_offset * 8
+                idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+                if udt_member.offset != field_offset * 8:
+                    print "[Info] Can't handle with arrays yet"
+                elif udt_member.type.get_size() != new_type.get_size():
+                    print "[Info] Can't recast different sizes yet"
+                else:
+                    udt_data = idaapi.udt_type_data_t()
+                    tinfo.get_udt_details(udt_data)
+                    udt_data[idx].type = new_type
+                    tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+                    tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.NTF_REPLACE, structure_name)
                     hx_view.refresh_view(True)
-
-            elif result[0] == RECAST_GLOBAL_VARIABLE:
-                tinfo, address = result[1:]
-                if idaapi.apply_tinfo2(address, tinfo, idaapi.TINFO_DEFINITE):
-                    hx_view.refresh_view(True)
-
-            elif result[0] == RECAST_ARGUMENT:
-                arg_index, func_tinfo, arg_tinfo, address = result[1:]
-                if arg_tinfo.is_array():
-                    arg_tinfo.convert_array_to_ptr()
-
-                func_data = idaapi.func_type_data_t()
-                func_tinfo.get_func_details(func_data)
-                func_data[arg_index].type = arg_tinfo
-                new_func_tinfo = idaapi.tinfo_t()
-                new_func_tinfo.create_func(func_data)
-                if idaapi.apply_tinfo2(address, new_func_tinfo, idaapi.TINFO_DEFINITE):
-                    hx_view.refresh_view(True)
-
-            elif result[0] == RECAST_RETURN:
-                return_type, func_address = result[1:]
-                try:
-                    cfunc = idaapi.decompile(func_address) if func_address else hx_view.cfunc
-                except idaapi.DecompilationFailure:
-                    print "[ERROR] Ida failed to decompile function at 0x{0:08X}".format(func_address)
-                    return
-
-                function_tinfo = idaapi.tinfo_t()
-                cfunc.get_func_type(function_tinfo)
-                func_data = idaapi.func_type_data_t()
-                function_tinfo.get_func_details(func_data)
-                func_data.rettype = return_type
-                function_tinfo.create_func(func_data)
-                if idaapi.apply_tinfo2(cfunc.entry_ea, function_tinfo, idaapi.TINFO_DEFINITE):
-                    hx_view.refresh_view(True)
-
-            elif result[0] == RECAST_STRUCTURE:
-                structure_name, field_offset, new_type = result[1:]
-                tinfo = idaapi.tinfo_t()
-                tinfo.get_named_type(idaapi.cvar.idati, structure_name)
-
-                ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
-
-                if ordinal:
-                    udt_member = idaapi.udt_member_t()
-                    udt_member.offset = field_offset * 8
-                    idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
-                    if udt_member.offset != field_offset * 8:
-                        print "[Info] Can't handle with arrays yet"
-                    elif udt_member.type.get_size() != new_type.get_size():
-                        print "[Info] Can't recast different sizes yet"
-                    else:
-                        udt_data = idaapi.udt_type_data_t()
-                        tinfo.get_udt_details(udt_data)
-                        udt_data[idx].type = new_type
-                        tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-                        tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.NTF_REPLACE, structure_name)
-                        hx_view.refresh_view(True)
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
@@ -941,35 +956,42 @@ class RecastItemRight(RecastItemLeft):
 
     @staticmethod
     def check(cfunc, ctree_item):
-        if ctree_item.citype == idaapi.VDI_EXPR:
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
 
-            expression = ctree_item.it
+        expression = ctree_item.it
 
-            while expression and expression.op != idaapi.cot_cast:
-                expression = expression.to_specific_type
-                expression = cfunc.body.find_parent_of(expression)
-            if expression:
-                expression = expression.to_specific_type
+        # Look through parents until we found Cast
+        while expression and expression.op != idaapi.cot_cast:
+            expression = expression.to_specific_type
+            expression = cfunc.body.find_parent_of(expression)
+        if not expression:
+            return
 
-                if expression.x.op == idaapi.cot_ref:
-                    new_type = expression.type.get_pointed_object()
-                    expression = expression.x
-                else:
-                    new_type = expression.type
+        expression = expression.to_specific_type
 
-                if expression.x.op == idaapi.cot_var:
+        # Find `(TYPE) something;` or `(TYPE) &something;` and calculate appropriate type for recast
+        if expression.x.op == idaapi.cot_ref:
+            new_type = expression.type.get_pointed_object()
+            expression = expression.x
+        else:
+            new_type = expression.type
 
-                    variable = cfunc.get_lvars()[expression.x.v.idx]
-                    idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
-                    return RECAST_LOCAL_VARIABLE, new_type, variable
+        if expression.x.op == idaapi.cot_var:
+            # (TYPE) var;
+            variable = cfunc.get_lvars()[expression.x.v.idx]
+            idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{0}"'.format(variable.name))
+            return RECAST_LOCAL_VARIABLE, new_type, variable
 
-                elif expression.x.op == idaapi.cot_obj:
-                    idaapi.update_action_label(RecastItemRight.name, 'Recast Global')
-                    return RECAST_GLOBAL_VARIABLE, new_type, expression.x.obj_ea
+        elif expression.x.op == idaapi.cot_obj:
+            # (TYPE) g_var;
+            idaapi.update_action_label(RecastItemRight.name, 'Recast Global')
+            return RECAST_GLOBAL_VARIABLE, new_type, expression.x.obj_ea
 
-                elif expression.x.op == idaapi.cot_call:
-                    idaapi.update_action_label(RecastItemRight.name, "Recast Return")
-                    return RECAST_RETURN, new_type, expression.x.x.obj_ea
+        elif expression.x.op == idaapi.cot_call:
+            # (TYPE) call();
+            idaapi.update_action_label(RecastItemRight.name, "Recast Return")
+            return RECAST_RETURN, new_type, expression.x.x.obj_ea
 
 
 class RenameOther(idaapi.action_handler_t):
