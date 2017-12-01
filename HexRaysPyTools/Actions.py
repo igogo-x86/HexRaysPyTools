@@ -978,6 +978,10 @@ class RecastItemRight(RecastItemLeft):
 
         expression = ctree_item.it
 
+        result = RecastItemRight._check_potential_array(cfunc, expression)
+        if result:
+            return result
+
         # Look through parents until we found Cast
         while expression and expression.op != idaapi.cot_cast:
             expression = expression.to_specific_type
@@ -987,7 +991,7 @@ class RecastItemRight(RecastItemLeft):
 
         expression = expression.to_specific_type
 
-        # Find `(TYPE) something;` or `(TYPE) &something;` and calculate appropriate type for recast
+        # Find `(TYPE) something;` or `(TYPE *) &something;` and calculate appropriate type for recast
         if expression.x.op == idaapi.cot_ref:
             new_type = expression.type.get_pointed_object()
             expression = expression.x
@@ -1009,6 +1013,34 @@ class RecastItemRight(RecastItemLeft):
             # (TYPE) call();
             idaapi.update_action_label(RecastItemRight.name, "Recast Return")
             return RECAST_RETURN, new_type, expression.x.x.obj_ea
+
+    @staticmethod
+    def _check_potential_array(cfunc, expr):
+        """ Checks `call(..., &buffer, ..., number)` and returns information for recasting """
+        if expr.op != idaapi.cot_var:
+            return
+
+        var_expr = expr.to_specific_type
+        parent = cfunc.body.find_parent_of(expr)
+        if parent.op != idaapi.cot_ref:
+            return
+
+        parent = cfunc.body.find_parent_of(parent)
+        if parent.op != idaapi.cot_call:
+            return
+
+        call_expr = parent.to_specific_type
+        for arg_expr in call_expr.a:
+            if arg_expr.op == idaapi.cot_num:
+                number = arg_expr.numval()
+                if number:
+                    variable = cfunc.lvars[var_expr.v.idx]
+                    char_array_tinfo = idaapi.tinfo_t()
+                    char_array_tinfo.create_array(idaapi.tinfo_t(idaapi.BTF_CHAR), number)
+                    idaapi.update_action_label(RecastItemRight.name, 'Recast Variable "{}" to "{}"'.format(
+                        variable.name, char_array_tinfo.dstr()
+                    ))
+                    return RECAST_LOCAL_VARIABLE, char_array_tinfo, variable
 
 
 class RenameOther(idaapi.action_handler_t):
