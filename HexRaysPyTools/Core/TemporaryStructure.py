@@ -50,15 +50,16 @@ def parse_vtable_name(address):
         return "Vtable_{0:X}".format(address), False
 
 
-def create_member(function, expression_address, origin, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
-    # Creates appropriate member (VTable, regular member, void *member) depending on input
+def create_member(function, expression_address, origin, offset, index, tinfo=None, vtable_ea=0, pvoid_applicable=False):
+    """ Creates appropriate member (VTable, regular member, void *member) depending on input """
+
     if isinstance(index, str):
         scanned_variable = ScannedVariable(function, None, expression_address, origin, False, index)
     else:
         scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
-    if ea:
-        if VirtualTable.check_address(ea):
-            return VirtualTable(offset, ea, scanned_variable, origin)
+    if vtable_ea:
+        if VirtualTable.check_address(vtable_ea):
+            return VirtualTable(offset, vtable_ea, scanned_variable, origin)
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
         tinfo.clr_const()
         return Member(offset, tinfo, scanned_variable, origin)

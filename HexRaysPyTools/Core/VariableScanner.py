@@ -35,24 +35,35 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             self.variables = {index: function.get_lvars()[index].type()}
         self.origin = origin
         self.expression_address = idaapi.BADADDR
+
+        # All extracted Members
         self.candidates = []
+
+        # Save information about parents of analyze expression to print it when debugging and simplify process of
+        # problems identification
+        self.__parents_type = None
+
         if not self.variables[index].equals_to(Const.PVOID_TINFO):
             self.candidates.append(self.create_member(0, index, pvoid_applicable=True))
 
+        # Dirty but haven't found out better way. Need to not allow deleting variables when faced to
+        # `var = new Constructor()`. Scanner by default stops scanning variable when happens situation like `var = ...`
+        # First variable will be deleted from protected variables. Than, after it's empty it will be removed form
+        # self.variables.
         if function.lvars[index].is_arg_var:
-            self.protected_variables = set()
+            self.__protected_variables = set()
         else:
-            self.protected_variables = {index}
+            self.__protected_variables = {index}
 
         scanned_functions.add((function.entry_ea, index, self.origin))
 
     def create_member(self, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
+        logger.debug("\tCreating member with type: {}, parents: {}".format(str(tinfo), self.__parents_type))
         return TemporaryStructure.create_member(
             self.function, self.expression_address, self.origin, offset, index, tinfo, ea, pvoid_applicable
         )
 
     def get_member(self, offset, index, **kwargs):
-
         # Handling all sorts of functions call
         try:
             call_expr, arg_expr = kwargs['call'], kwargs['arg']
@@ -81,7 +92,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 right_expr = right_expr.x
             if right_expr.op == idaapi.cot_obj:
                 member_type = idaapi.tinfo_t(right_expr.type)
-                member_type.create_ptr(member_type)
+                # TODO: Check if it's really correct
+                if not member_type.is_funcptr():
+                    member_type.create_ptr(member_type)
                 return self.create_member(offset, index, member_type, right_expr.obj_ea)
             if right_expr.op in Const.COT_ARITHMETIC:
                 return self.create_member(offset, index, cast_type)
@@ -90,7 +103,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             pass
 
     def add_variable(self, index):
-        self.variables[index] = self.function.get_lvars()[index].type()
+        lvar = self.function.lvars[index]
+        logger.debug("Adding variable {} to scan list", lvar.name)
+        self.variables[index] = lvar.type()
 
     def scan_function(self, ea, offset, arg_index):
         pass
@@ -119,6 +134,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         """
 
         parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
+        self.__parents_type = parents_type
         parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
 
         self.expression_address = self._find_asm_address(expression)
@@ -376,7 +392,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
     def _remove_scan_variable(self, index):
         try:
-            self.protected_variables.remove(index)
+            self.__protected_variables.remove(index)
         except KeyError:
             logger.info("Remove variable {0} from scan list, address: 0x{1:08X}".format(
                 index, self.expression_address
