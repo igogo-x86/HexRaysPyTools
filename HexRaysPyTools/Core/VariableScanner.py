@@ -12,10 +12,11 @@ SCAN_ALL_ARGUMENTS = True
 
 # Global set which is populated when deep scanning and cleared after completion
 scanned_functions = set()
+debug_scan_tree = []
 
 
 class ShallowSearchVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, function, origin, index=None, global_variable=None):
+    def __init__(self, function, origin, index=None, global_variable=None, start_ea=0):
         """
         This Class is idaapi.ctree_visitor_t and used for for finding candidates on class members.
         Usage: CtreeVisitor.apply_to() and then CtreeVisitor.candidates
@@ -23,6 +24,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         :param function: idaapi.cfunc_t
         :param origin: offset in main structure from which scanning is propagating
         :param index: variable index
+        :param start_ea: From where to start scanning process
         """
         super(ShallowSearchVisitor, self).__init__()
         self.function = function
@@ -56,6 +58,11 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
             self.__protected_variables = {index}
 
         scanned_functions.add((function.entry_ea, index, self.origin))
+
+        # If start_ea is specified than scanner will start processing expressions only when expression with address
+        # greater or equal then start_ea has been visited
+        self.__skip = True if start_ea else False
+        self.__start_scan_ea = start_ea
 
     def create_member(self, offset, index, tinfo=None, ea=0, pvoid_applicable=False):
         logger.debug("\tCreating member with type: {}, parents: {}".format(str(tinfo), self.__parents_type))
@@ -118,12 +125,20 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         pass
 
     def visit_expr(self, expression):
+        # Check if we have already started scanning
+        if self.__skip:
+            if expression.ea != idaapi.BADADDR and expression.ea >= self.__start_scan_ea:
+                self.__skip = False
+            else:
+                return 0
+
         if expression.op == idaapi.cot_var:
             index = expression.v.idx
         elif expression.op == idaapi.cot_obj:
             index = idc.GetTrueName(expression.obj_ea)
         else:
             return 0
+
         if index in self.variables:
             result = self.check_member_assignment(expression, index)
             if result:
@@ -221,6 +236,9 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                     if parents[0].theother(expression).op != idaapi.cot_num:
                         return
                     offset = parents[0].theother(expression).numval()
+                    cast_type = parents[1].type
+                    if cast_type.is_ptr() and cast_type.get_ptrarr_objsize() == 1:
+                        return self.create_member(offset, index, cast_type.get_pointed_object())
                     return self.get_member(offset, index, call=parents[2], arg=parents[1])
 
                 elif parents_type[2] == 'asg':
@@ -268,7 +286,6 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         # When variable is void *, PVOID, DWORD *, QWORD * etc
         # --------------------------------------------------------------------------------------------
         else:
-            # print "[DEBUG] D* Parents:", parents_type
             offset = 0
 
             if parents_type[0] == 'idx':
@@ -393,10 +410,6 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         """
         self.apply_to(self.function.body, None)
 
-    @staticmethod
-    def clear():
-        scanned_functions.clear()
-
     def _remove_scan_variable(self, index):
         try:
             self.__protected_variables.remove(index)
@@ -408,8 +421,10 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
 
 class DeepSearchVisitor(ShallowSearchVisitor):
-    def __init__(self, function, origin, index=None, global_variable=None):
-        super(DeepSearchVisitor, self).__init__(function, origin, index, global_variable)
+    def __init__(self, function, origin, index=None, global_variable=None, start_ea=0, level=0):
+        super(DeepSearchVisitor, self).__init__(function, origin, index, global_variable, start_ea)
+        self.__level = level
+        self.__add_scan_tree_info(idaapi.get_short_name(function.entry_ea), index, self.origin)
 
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
@@ -420,6 +435,7 @@ class DeepSearchVisitor(ShallowSearchVisitor):
         try:
             scanned_functions.add((ea, arg_index, self.origin + offset))
             new_function = idaapi.decompile(ea)
+
             if new_function:
                 func_name = idaapi.get_short_name(ea)
 
@@ -439,16 +455,45 @@ class DeepSearchVisitor(ShallowSearchVisitor):
                     idx=arg_index
                 ))
 
-                scanner = DeepSearchVisitor(new_function, self.origin + offset, arg_index)
+                # If we are scanning the same function but different variable, then start this process from
+                # current expression and not from the beginning of the function
+                if ea == self.function.entry_ea:
+                    start_ea = self.expression_address
+                else:
+                    start_ea = 0
+
+                scanner = DeepSearchVisitor(
+                    new_function, self.origin + offset, arg_index, start_ea=start_ea, level=self.__level + 1
+                )
                 scanner.apply_to(new_function.body, None)
                 self.candidates.extend(scanner.candidates)
                 logger.info("Finished scanning function {}".format(func_name))
+
         except idaapi.DecompilationFailure:
             logger.warning("Ida failed to decompile function at {}".format(Helper.to_hex(ea)))
+        debug_scan_tree = []
+
+    def __add_scan_tree_info(self, func_name, arg_index, offset):
+        prefix = " | " * (self.__level - 1) + " |_" if self.__level else ""
+        debug_scan_tree.append("{}{} {} {}".format(prefix, func_name, arg_index, offset))
+
+    @staticmethod
+    def clear():
+        global debug_scan_tree
+
+        scanned_functions.clear()
+        DeepSearchVisitor.dump_scan_tree()
+        debug_scan_tree = []
 
     @staticmethod
     def __is_func_arg(cfunc, index):
         return index < len(cfunc.lvars) and cfunc.lvars[index].is_arg_var
+
+    @staticmethod
+    def dump_scan_tree():
+        global debug_scan_tree
+
+        logger.debug("\n--- Scan Tree---\n{}\n----------------".format("\n".join(debug_scan_tree)))
 
 
 class VariableLookupVisitor(idaapi.ctree_parentee_t):
