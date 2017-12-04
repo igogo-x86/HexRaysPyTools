@@ -68,10 +68,16 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         try:
             call_expr, arg_expr = kwargs['call'], kwargs['arg']
             arg_index, arg_type = Helper.get_func_argument_info(call_expr, arg_expr)
-            if arg_type.equals_to(Const.PVOID_TINFO) or arg_type.equals_to(Const.CONST_PVOID_TINFO):
+
+            if arg_type is None:
+                # When function has variable amount of arguments and our argument is after determined amount of args
+                return self.create_member(offset, index)
+
+            elif arg_type.equals_to(Const.PVOID_TINFO) or arg_type.equals_to(Const.CONST_PVOID_TINFO):
                 if SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index)
+
             elif arg_type.equals_to(Const.X_WORD_TINFO) or arg_type.equals_to(Const.PX_WORD_TINFO) or \
                     arg_type.equals_to(Const.PBYTE_TINFO):
                 nice_tinfo = Helper.get_nice_pointed_object(arg_type)
@@ -80,6 +86,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 if SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index, pvoid_applicable=True)
+
             arg_type.remove_ptr_or_array()
             return self.create_member(offset, index, arg_type)
         except KeyError:
@@ -104,7 +111,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
 
     def add_variable(self, index):
         lvar = self.function.lvars[index]
-        logger.debug("Adding variable {} to scan list", lvar.name)
+        logger.debug("Adding variable {} to scan list".format(lvar.name))
         self.variables[index] = lvar.type()
 
     def scan_function(self, ea, offset, arg_index):

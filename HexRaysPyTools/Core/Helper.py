@@ -108,7 +108,10 @@ def get_func_argument_info(function, expression):
     """
     for idx, argument in enumerate(function.a):
         if expression == argument.cexpr:
-            return idx, function.x.type.get_nth_arg(idx)
+            func_tinfo = function.x.type
+            if idx < func_tinfo.get_nargs():
+                return idx, func_tinfo.get_nth_arg(idx)
+            return idx, None
     print "[ERROR] Wrong usage of 'Helper.get_func_argument_info()'"
 
 
