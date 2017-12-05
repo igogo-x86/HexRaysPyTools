@@ -60,8 +60,14 @@ def create_member(function, expression_address, origin, offset, index, tinfo=Non
     if vtable_ea:
         if VirtualTable.check_address(vtable_ea):
             return VirtualTable(offset, vtable_ea, scanned_variable, origin)
+
     if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
-        tinfo.clr_const()
+        if tinfo.equals_to(Const.CONST_PCHAR_TINFO):
+            tinfo = Const.PCHAR_TINFO
+        elif tinfo.equals_to(Const.CONST_PVOID_TINFO):
+            tinfo = Const.PVOID_TINFO
+        else:
+            tinfo.clr_const()
         return Member(offset, tinfo, scanned_variable, origin)
     else:
         # VoidMember shouldn't have ScannedVariable because after finalizing it can mess up with normal functions
