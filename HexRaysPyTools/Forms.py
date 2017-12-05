@@ -48,6 +48,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_pack = QtGui.QPushButton("&Pack")
         btn_unpack = QtGui.QPushButton("&Unpack")
         btn_remove = QtGui.QPushButton("&Remove")
+        btn_resolve = QtGui.QPushButton("Resolve")
         btn_clear = QtGui.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
         btn_recognize = QtGui.QPushButton("Recognize Shape")
         btn_recognize.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
@@ -81,6 +82,7 @@ class StructureBuilder(idaapi.PluginForm):
         grid_box.addWidget(btn_pack, 1, 1)
         grid_box.addWidget(btn_unpack, 1, 2)
         grid_box.addWidget(btn_remove, 1, 3)
+        grid_box.addWidget(btn_resolve, 0, 4)
         grid_box.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Expanding), 1, 5)
         grid_box.addWidget(btn_recognize, 0, 6)
         grid_box.addWidget(btn_clear, 1, 6)
@@ -98,6 +100,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_pack.clicked.connect(lambda: self.structure_model.pack_substructure(struct_view.selectedIndexes()))
         btn_unpack.clicked.connect(lambda: self.structure_model.unpack_substructure(struct_view.selectedIndexes()))
         btn_remove.clicked.connect(lambda: self.structure_model.remove_items(struct_view.selectedIndexes()))
+        btn_resolve.clicked.connect(lambda: self.structure_model.resolve_types())
         btn_clear.clicked.connect(lambda: self.structure_model.clear())
         btn_recognize.clicked.connect(lambda: self.structure_model.recognize_shape(struct_view.selectedIndexes()))
         struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.activated)

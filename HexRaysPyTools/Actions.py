@@ -11,7 +11,7 @@ import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
+from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor, scanned_functions
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
 from HexRaysPyTools.Core.StructXrefs import XrefStorage
@@ -310,7 +310,6 @@ class ShallowScanVariable(idaapi.action_handler_t):
         scanner.process()
         for field in scanner.candidates:
             self.temporary_structure.add_row(field)
-        scanner.clear()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:

@@ -12,6 +12,13 @@ import VariableScanner
 from HexRaysPyTools.Forms import MyChoose
 
 
+score_table = dict((v, k) for k, v in enumerate(
+    ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', 'char', '_WORD', '_WORD *',
+     'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int *', 'int', '_DWORD *', '_DWORD', 'void *',
+     'char *']
+))
+
+
 def parse_vtable_name(address):
     name = idaapi.get_short_name(address)
     if idaapi.is_valid_typename(name):
@@ -107,6 +114,18 @@ class AbstractMember:
     def set_enabled(self, enable):
         self.enabled = enable
         self.is_array = False
+
+    def has_collision(self, other):
+        if self.offset <= other.offset:
+            return self.offset + self.size > other.offset
+        return other.offset + other.size >= self.offset
+
+    @property
+    def score(self):
+        try:
+            return score_table[self.tinfo.dstr()]
+        except KeyError:
+            return 0xFFFF
 
     @property
     def type_name(self):
@@ -831,6 +850,33 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     member = Member(offset + udt_item.offset / 8, udt_item.type, None)
                     member.name = udt_item.name
                     self.add_row(member)
+
+    def resolve_types(self):
+        current_item = None
+        current_item_score = 0
+
+        for item in self.items:
+            if not item.enabled:
+                continue
+
+            if current_item is None:
+                current_item = item
+                current_item_score = current_item.score
+                continue
+
+            item_score = item.score
+            if current_item.has_collision(item):
+                if item_score < current_item_score:
+                    item.set_enabled(False)
+                    continue
+                elif item_score > current_item_score:
+                    current_item.set_enabled(False)
+
+            current_item = item
+            current_item_score = item_score
+
+        self.refresh_collisions()
+        self.modelReset.emit()
 
     def remove_items(self, indices):
         rows = map(lambda x: x.row(), indices)

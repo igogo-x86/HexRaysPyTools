@@ -57,8 +57,6 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         else:
             self.__protected_variables = {index}
 
-        scanned_functions.add((function.entry_ea, index, self.origin))
-
         # If start_ea is specified than scanner will start processing expressions only when expression with address
         # greater or equal then start_ea has been visited
         self.__skip = True if start_ea else False
@@ -425,6 +423,7 @@ class DeepSearchVisitor(ShallowSearchVisitor):
         super(DeepSearchVisitor, self).__init__(function, origin, index, global_variable, start_ea)
         self.__level = level
         self.__add_scan_tree_info(idaapi.get_short_name(function.entry_ea), index, self.origin)
+        scanned_functions.add((function.entry_ea, index, self.origin))
 
     def scan_function(self, ea, offset, arg_index):
         # Function for recursive search structure's members
