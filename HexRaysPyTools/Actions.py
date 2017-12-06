@@ -1013,6 +1013,11 @@ class RecastItemRight(RecastItemLeft):
             idaapi.update_action_label(RecastItemRight.name, "Recast Return")
             return RECAST_RETURN, new_type, expression.x.x.obj_ea
 
+        elif expression.x.op == idaapi.cot_memptr:
+            # (TYPE) var->member;
+            idaapi.update_action_label(RecastItemRight.name, "Recast Field")
+            return RECAST_STRUCTURE, expression.x.x.type.get_pointed_object().dstr(), expression.x.m, new_type
+
     @staticmethod
     def _check_potential_array(cfunc, expr):
         """ Checks `call(..., &buffer, ..., number)` and returns information for recasting """
