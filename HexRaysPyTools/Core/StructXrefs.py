@@ -1,6 +1,11 @@
-import idaapi
 import time
+import logging
 from collections import namedtuple
+
+import idaapi
+
+
+logger = logging.getLogger(__name__)
 
 XrefInfo = namedtuple('XrefInfo', ['func_ea', 'offset', 'line', 'type'])
 
@@ -58,6 +63,9 @@ class XrefStorage(object):
                     result.append(XrefInfo(func_ea, offset, line, usage_type))
         return result
 
+    def __len__(self):
+        return len(str(self.storage))
+
 
 class StructXrefVisitor(idaapi.ctree_parentee_t):
     def __init__(self, cfunc):
@@ -114,7 +122,8 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         for ordinal, data in self.__result.items():
             self.__storage.update_structure_info(ordinal, self.__function_address, data)
 
-        print "[Info] Xref processing: %f seconds passed" % (time.time() - t)
+        storage_mb_size = len(self.__storage) * 1.0 / 1024 ** 2
+        logger.debug("Xref processing: %f seconds passed, storage size - %.2f MB ", (time.time() - t), storage_mb_size)
 
     def __find_ref_address(self, cexpr):
         """ Returns most close virtual address corresponding to cexpr """
