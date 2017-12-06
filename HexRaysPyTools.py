@@ -38,6 +38,9 @@ def hexrays_events_callback(*args):
         if Actions.RenameOutside.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
 
+        if Actions.RenameUsingAssert.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RenameUsingAssert.name, None)
+
         if Actions.SwapThenElse.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
 
@@ -206,6 +209,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RenameOther)
         Actions.register(Actions.RenameInside)
         Actions.register(Actions.RenameOutside)
+        Actions.register(Actions.RenameUsingAssert)
         Actions.register(Actions.SwapThenElse)
         Actions.register(Actions.FindFieldXrefs)
 
@@ -250,6 +254,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.RenameOther)
         Actions.unregister(Actions.RenameInside)
         Actions.unregister(Actions.RenameOutside)
+        Actions.unregister(Actions.RenameUsingAssert)
         Actions.unregister(Actions.SwapThenElse)
         Actions.unregister(Actions.FindFieldXrefs)
         idaapi.term_hexrays_plugin()

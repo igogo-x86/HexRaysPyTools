@@ -1178,6 +1178,107 @@ class RenameOutside(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
+class RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
+
+    def __init__(self, cfunc, func_addr, arg_idx):
+        idaapi.ctree_parentee_t.__init__(self)
+        self.__cfunc = cfunc
+        self.__func_addr = func_addr
+        self.__arg_idx = arg_idx
+        self.__possible_names = set()
+
+    def visit_expr(self, expr):
+        if expr.op == idaapi.cot_call and expr.x.op == idaapi.cot_obj and expr.x.obj_ea == self.__func_addr:
+            arg_expr = expr.a[self.__arg_idx]
+            if arg_expr.op != idaapi.cot_obj:
+                logger.error("Argument is not string at {}".format(Helper.to_hex(self._find_asm_address(expr))))
+                return 1
+            self.__add_func_name(arg_expr)
+        return 0
+
+    def process(self):
+        self.apply_to(self.__cfunc.body, None)
+        if len(self.__possible_names) == 1:
+            self.__rename_func()
+        else:
+            logger.error("Function at {} has more than one candidate for renaming: {}".format(
+                Helper.to_hex(self.__cfunc.entry_ea), ", ".join(self.__possible_names)))
+
+    def __add_func_name(self, arg_expr):
+        new_name = idc.get_strlit_contents(arg_expr.obj_ea)
+        if not idaapi.is_valid_typename(new_name):
+            logger.warn("Argument has weird name `{}` at {}".format(
+                new_name, Helper.to_hex(self._find_asm_address(arg_expr))))
+            return
+
+        self.__possible_names.add(new_name)
+
+    def __rename_func(self):
+        idc.set_name(self.__cfunc.entry_ea, self.__possible_names.pop())
+
+
+class RenameUsingAssert(idaapi.action_handler_t):
+
+    name = "my:RenameUsingAssert"
+    description = "Rename as assert argument"
+    hotkey = None
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        expression = ctree_item.it.to_specific_type
+        if expression.op != idaapi.cot_obj:
+            return False
+
+        parent = cfunc.body.find_parent_of(expression).to_specific_type
+        if parent.op != idaapi.cot_call or parent.x.op != idaapi.cot_obj:
+            return False
+
+        obj_ea = expression.obj_ea
+        if not Helper.is_code_ea(obj_ea) and idc.get_str_type(obj_ea) == idc.STRTYPE_C:
+            str_potential_name = idc.get_strlit_contents(obj_ea)
+            return idaapi.is_valid_typename(str_potential_name)
+        return False
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        cfunc = hx_view.cfunc
+        ctree_item = hx_view.item
+        if not self.check(cfunc, ctree_item):
+            return
+
+        expr_arg = ctree_item.it.to_specific_type
+        expr_call = cfunc.body.find_parent_of(expr_arg).to_specific_type
+
+        arg_idx, _ = Helper.get_func_argument_info(expr_call, expr_arg)
+
+        assert_ea = expr_call.x.obj_ea
+        all_callers = Helper.get_funcs_calling_address(assert_ea)
+
+        for caller_ea in all_callers:
+            try:
+                cfunc = idaapi.decompile(caller_ea)
+                if not cfunc:
+                    raise idaapi.DecompilationFailure
+
+                RenameUsingAssertVisitor(cfunc, assert_ea, arg_idx).process()
+
+            except idaapi.DecompilationFailure:
+                logger.warn("IDA failed to decompile at {}".format(Helper.to_hex(caller_ea)))
+
+        hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
 class SwapThenElse(idaapi.action_handler_t):
     name = "my:SwapIfElse"
     description = "Swap then/else"

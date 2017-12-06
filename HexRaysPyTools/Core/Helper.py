@@ -200,6 +200,20 @@ def get_member_name(tinfo, offset):
     return udt_member.name
 
 
+def get_funcs_calling_address(ea):
+    """ Returns all addresses of functions which make call to a function at `ea`"""
+    xref_ea = idaapi.get_first_cref_to(ea)
+    xrefs = set()
+    while xref_ea != idaapi.BADADDR:
+        xref_func_ea = idc.GetFunctionAttr(xref_ea, idc.FUNCATTR_START)
+        if xref_func_ea != idaapi.BADADDR:
+            xrefs.add(xref_func_ea)
+        else:
+            print "[Warning] Function not found at 0x{0:08X}".format(xref_ea)
+        xref_ea = idaapi.get_next_cref_to(ea, xref_ea)
+    return xrefs
+
+
 touched_functions = set()
 
 
