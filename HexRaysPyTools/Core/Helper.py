@@ -43,6 +43,11 @@ def is_code_ea(ea):
     return idaapi.isCode(flags)
 
 
+def is_rw_ea(ea):
+    seg = idaapi.getseg(ea)
+    return seg.perm & idaapi.SEGPERM_WRITE and seg.perm & idaapi.SEGPERM_READ
+
+
 def init_demangled_names(*args):
     """
     Creates dictionary of demangled names => address, that will be used further at double click on methods got from

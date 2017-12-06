@@ -285,7 +285,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
 
         if ctree_item.citype == idaapi.VDI_EXPR:
             gvar = ctree_item.it.to_specific_type
-            if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type):
+            if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type) and Helper.is_rw_ea(gvar.obj_ea):
                 return "GLOBAL"
 
     def activate(self, ctx):
