@@ -6,6 +6,8 @@ import struct
 import idaapi
 import idc
 import idautils
+import ida_pro
+import ida_kernwin
 
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
@@ -67,7 +69,7 @@ class TypeLibrary:
     def enable_library_ordinals(library_num):
         idaname = "ida64" if Const.EA64 else "ida"
         if sys.platform == "win32":
-            dll = ctypes.windll[idaname + ".wll"]
+            dll = ctypes.windll[idaname + ".wll"] if ida_pro.IDA_SDK_VERSION < 700 else ctypes.windll[idaname + ".dll"]
         elif sys.platform == "linux2":
             dll = ctypes.cdll["lib" + idaname + ".so"]
         elif sys.platform == "darwin":
@@ -76,7 +78,14 @@ class TypeLibrary:
             print "[ERROR] Failed to enable ordinals"
             return
 
-        idati = ctypes.POINTER(TypeLibrary.til_t).in_dll(dll, "idati")
+        if ida_pro.IDA_SDK_VERSION < 700:
+            idati = ctypes.POINTER(TypeLibrary.til_t).in_dll(dll, "idati")
+        else:
+            get_idati = dll.get_idati
+            get_idati.restype = ctypes.POINTER(TypeLibrary.til_t)
+            idati = get_idati()
+
+
         dll.enable_numbered_types(idati.contents.base[library_num], True)
 
     @staticmethod
@@ -134,7 +143,7 @@ class RemoveArgument(idaapi.action_handler_t):
         return False
 
     def activate(self, ctx):
-        vu = idaapi.get_tform_vdui(ctx.form)
+        vu = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         function_tinfo = idaapi.tinfo_t()
         if not vu.cfunc.get_func_type(function_tinfo):
             return
@@ -172,7 +181,7 @@ class AddRemoveReturn(idaapi.action_handler_t):
 
     def activate(self, ctx):
         # ctx - action_activation_ctx_t
-        vu = idaapi.get_tform_vdui(ctx.form)
+        vu = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         function_tinfo = idaapi.tinfo_t()
         if not vu.cfunc.get_func_type(function_tinfo):
             return
@@ -210,7 +219,7 @@ class ConvertToUsercall(idaapi.action_handler_t):
 
     def activate(self, ctx):
         # ctx - action_activation_ctx_t
-        vu = idaapi.get_tform_vdui(ctx.form)
+        vu = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         function_tinfo = idaapi.tinfo_t()
         if not vu.cfunc.get_func_type(function_tinfo):
             return
@@ -285,7 +294,7 @@ class GetStructureBySize(idaapi.action_handler_t):
         return None
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         if hx_view.item.citype != idaapi.VDI_EXPR or hx_view.item.e.op != idaapi.cot_num:
             return
         ea = ctx.cur_ea
@@ -312,8 +321,12 @@ class GetStructureBySize(idaapi.action_handler_t):
             hx_view.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -340,7 +353,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
                 return "GLOBAL"
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         origin = self.temporary_structure.main_offset
 
         var_type = self.check(hx_view.cfunc,hx_view.item)
@@ -364,8 +377,12 @@ class ShallowScanVariable(idaapi.action_handler_t):
         scanner.clear()
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -385,7 +402,7 @@ class DeepScanVariable(idaapi.action_handler_t):
         return ShallowScanVariable.check(cfunc, ctree_item)
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         origin = self.temporary_structure.main_offset
 
         var_type = ShallowScanVariable.check(hx_view.cfunc,hx_view.item)
@@ -425,8 +442,12 @@ class DeepScanVariable(idaapi.action_handler_t):
         scanner.clear()
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -452,7 +473,7 @@ class DeepScanReturn(idaapi.action_handler_t):
         return False
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         address = hx_view.cfunc.entry_ea
 
         xref_ea = idaapi.get_first_cref_to(address)
@@ -485,8 +506,12 @@ class DeepScanReturn(idaapi.action_handler_t):
         DeepSearchVisitor.clear()
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -524,9 +549,14 @@ class DeepScanFunctions(idaapi.action_handler_t):
                 print "[Warning] Failed to decompile function at 0x{0:08X}".format(func_ea)
 
     def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_FUNCS:
-            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_type == idaapi.BWN_FUNCS:
+                idaapi.attach_action_to_popup(ctx.form, None, self.name)
             return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == idaapi.BWN_FUNCS:
+                idaapi.attach_action_to_popup(ctx.widget, None, self.name)
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -545,7 +575,7 @@ class RecognizeShape(idaapi.action_handler_t):
         return ShallowScanVariable.check(cfunc, ctree_item)
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
 
         var_type = ShallowScanVariable.check(hx_view.cfunc, hx_view.item)
         if var_type == "LOCAL":
@@ -576,8 +606,12 @@ class RecognizeShape(idaapi.action_handler_t):
             hx_view.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -614,7 +648,7 @@ class CreateNewField(idaapi.action_handler_t):
         return struct_type, udt_member.offset // 8, idx
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
         if result is None:
             return
@@ -678,8 +712,12 @@ class CreateNewField(idaapi.action_handler_t):
         hx_view.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
     @staticmethod
@@ -729,9 +767,14 @@ class ShowGraph(idaapi.action_handler_t):
             self.graph_view.Show()
 
     def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_LOCTYPS:
-            idaapi.attach_action_to_popup(ctx.form, None, self.name)
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_type == idaapi.BWN_LOCTYPS:
+                idaapi.attach_action_to_popup(ctx.form, None, self.name)
             return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == idaapi.BWN_LOCTYPS:
+                idaapi.attach_action_to_popup(ctx.widget, None, self.name)
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -781,7 +824,7 @@ class CreateVtable(idaapi.action_handler_t):
         if fDebug:
             pydevd.settrace('localhost', port=2255, stdoutToServer=True, stderrToServer=True)
         my_ti = idaapi.cvar.idati
-        vdui = idaapi.get_tform_vdui(ctx.form)
+        vdui = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         vdui.get_current_item(idaapi.USE_KEYBOARD)
         if vdui.item.is_citem() and vdui.item.it.is_expr():
             target_item = vdui.item.e
@@ -810,7 +853,7 @@ class CreateVtable(idaapi.action_handler_t):
 
     def update(self, ctx):
         #print "Update"
-        vdui = idaapi.get_tform_vdui(ctx.form)
+        vdui = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         if vdui:
             return idaapi.AST_ENABLE_FOR_FORM
         else:
@@ -935,7 +978,7 @@ class SelectContainingStructure(idaapi.action_handler_t):
         return False
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = TypeLibrary.choose_til()
         if result:
             selected_library, max_ordinal, is_local_types = result
@@ -984,7 +1027,7 @@ class ResetContainingStructure(idaapi.action_handler_t):
         return False
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         lvar = hx_view.cfunc.get_lvars()[hx_view.item.e.v.idx]
         hx_view.set_lvar_cmt(lvar, re.sub("```.*```", '', lvar.cmt))
         hx_view.refresh_view(True)
@@ -1077,7 +1120,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                         )
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
@@ -1145,8 +1188,12 @@ class RecastItemLeft(idaapi.action_handler_t):
                         hx_view.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -1226,7 +1273,7 @@ class RenameOther(idaapi.action_handler_t):
             return '_' + other_lvar.name, this_lvar
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
@@ -1234,8 +1281,12 @@ class RenameOther(idaapi.action_handler_t):
             hx_view.rename_lvar(lvar, name, True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -1268,7 +1319,7 @@ class RenameInside(idaapi.action_handler_t):
                         return func_tinfo, parent.x.obj_ea, arg_index, lvar.name.lstrip('_')
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
@@ -1283,8 +1334,12 @@ class RenameInside(idaapi.action_handler_t):
             hx_view.refresh_view(True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -1319,7 +1374,7 @@ class RenameOutside(idaapi.action_handler_t):
                     return name, lvar
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
@@ -1327,8 +1382,12 @@ class RenameOutside(idaapi.action_handler_t):
             hx_view.rename_lvar(lvar, name, True)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -1342,7 +1401,7 @@ class SimpleCreateStruct(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
         idaname = "ida64" if Const.EA64 else "ida"
         if sys.platform == "win32":
-            self.g_dll = ctypes.windll[idaname + ".wll"]
+            self.g_dll = ctypes.windll[idaname + ".wll"] if ida_pro.IDA_SDK_VERSION < 700 else ctypes.windll[idaname + ".dll"]
         elif sys.platform == "linux2":
             self.g_dll = ctypes.cdll["lib" + idaname + ".so"]
         elif sys.platform == "darwin":
@@ -1472,7 +1531,7 @@ class SimpleCreateStruct(idaapi.action_handler_t):
             Warning("set_numbered_type error")
 
     def activate(self, ctx):
-        vdui = idaapi.get_tform_vdui(ctx.form)
+        vdui = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         vdui.get_current_item(idaapi.USE_KEYBOARD)
         struc_size = 0
         if vdui.item.is_citem() and vdui.item.it.is_expr():
@@ -1521,8 +1580,12 @@ class SimpleCreateStruct(idaapi.action_handler_t):
         return 1
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 class RecastStructMember(idaapi.action_handler_t):
@@ -1548,7 +1611,7 @@ class RecastStructMember(idaapi.action_handler_t):
         return False
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         result = self.check(hx_view.cfunc, hx_view.item)
 
         if result:
@@ -1571,8 +1634,12 @@ class RecastStructMember(idaapi.action_handler_t):
 
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
 
@@ -1598,7 +1665,7 @@ class SwapThenElse(idaapi.action_handler_t):
         return insn.op == idaapi.cit_if and insn.cif.ielse
 
     def activate(self, ctx):
-        hx_view = idaapi.get_tform_vdui(ctx.form)
+        hx_view = idaapi.get_tform_vdui(ctx.form if ida_pro.IDA_SDK_VERSION < 700 else ctx.widget)
         if self.check(hx_view.cfunc, hx_view.item):
             insn = hx_view.item.it.to_specific_type
             inverse_if(insn.cif)
@@ -1607,6 +1674,10 @@ class SwapThenElse(idaapi.action_handler_t):
             InversionInfo(hx_view.cfunc.entry_ea).switch_inverted(insn.ea)
 
     def update(self, ctx):
-        if ctx.form_title[0:10] == "Pseudocode":
-            return idaapi.AST_ENABLE_FOR_FORM
+        if ida_pro.IDA_SDK_VERSION < 700:
+            if ctx.form_title[0:10] == "Pseudocode":
+                return idaapi.AST_ENABLE_FOR_FORM
+        else:
+            if ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM

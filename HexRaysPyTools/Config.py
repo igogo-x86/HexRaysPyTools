@@ -23,10 +23,12 @@ class Config(object):
             f.close()
         except:
             self.file_path = os.path.join(os.environ["APPDATA"],"IDA Pro","cfg", "HexRaysPyTools.cfg")
+            if not os.path.exists(os.path.join(os.environ["APPDATA"], "IDA Pro", "cfg")):
+                os.makedirs(os.path.join(os.environ["APPDATA"], "IDA Pro", "cfg"))
             f = open(self.file_path, "w+b")
             f.close()
         try:
-            f = open(self.file_path, "w+b")
+            f = open(self.file_path, "rb")
             self.reader.read(f)
             f.close()
             for ac in self.actions:
@@ -39,7 +41,7 @@ class Config(object):
             self.reader.add_section(self.section)
             for ac in self.actions:
                 self.reader.set(self.section, ac, "true" if self.actions[ac] else "false")
-            f = open(self.file_path, "w+b")
+            f = open(self.file_path, "wb")
             self.reader.write(f)
             f.close()
 

@@ -2,6 +2,7 @@ import idaapi
 # import PySide.QtGui as QtGui
 # import PySide.QtCore as QtCore
 from HexRaysPyTools.Cute import *
+import ida_pro
 
 fDebug = False
 if fDebug:
@@ -38,11 +39,14 @@ import Core.Classes
 #                 self.config.actions[ac] = getattr(self, "r" + ac).checked
 #             self.config.write_config()
 
-class ConfigFeaturesChooser(idaapi.Choose2):
+class ConfigFeaturesChooser(idaapi.Choose2 if ida_pro.IDA_SDK_VERSION < 700 else idaapi.Choose):
 
     def __init__(self,items,obj):
         self.obj = obj
-        idaapi.Choose2.__init__(self,"Features",[["Feature name",40],["Status",10]],embedded=True,width=100)
+        if ida_pro.IDA_SDK_VERSION < 700:
+            idaapi.Choose2.__init__(self,"Features",[["Feature name",40],["Status",10]],embedded=True,width=100)
+        else:
+            idaapi.Choose.__init__(self, "Features", [["Feature name", 40], ["Status", 10]], embedded=True, width=100)
         self.n = 0
         self.items = []
         self.make_items(items)
@@ -97,9 +101,13 @@ Double click for switch feature.
             self.config.write_config()
 
 
-class MyChoose(idaapi.Choose2):
+class MyChoose(idaapi.Choose2 if ida_pro.IDA_SDK_VERSION < 700 else idaapi.Choose):
     def __init__(self, items, title, cols, icon=-1):
-        idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL, icon=icon)
+        if ida_pro.IDA_SDK_VERSION < 700:
+            idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL, icon=icon)
+        else:
+            idaapi.Choose.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL, icon=icon)
+
         self.items = items
 
     def OnClose(self):
