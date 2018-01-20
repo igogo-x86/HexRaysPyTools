@@ -1,3 +1,9 @@
+# About fork!
+
+It's my fork of plugin with tuning for my convenience of work. Generaly, i add "Feature Config", which allows you to enable and disable certain elements of the pop-out menus from Actions.py. I don't use central feature "Reconstruct type", but various auxiliary recasts functions is amazing. So, I added my own version of creating of type and virtual tables. In my variant, a simple structure of a certain size with fields of a given width is created. Further, the fields are detailed during analysis. Some works with "actions" was unified.
+
+Port to IDA 7.0 save compatible with IDA 6.95. Port don't tested enough, but at first glance it works.
+
 # About
 
 Plugin assists in creation classes/structures and detection virtual tables. Also helps to transform decompiler output faster and allows to make some stuff otherwise impossible. Was introduced at ZeroNights 2016 ([slides][zeronights]).
