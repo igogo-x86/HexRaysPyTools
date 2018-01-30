@@ -9,8 +9,6 @@ import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 from HexRaysPyTools.Core.StructXrefs import *
 
-logging.basicConfig(format='[%(levelname)s] %(message)s\t(%(module)s:%(funcName)s)', level=logging.DEBUG)
-
 potential_negatives = {}
 
 

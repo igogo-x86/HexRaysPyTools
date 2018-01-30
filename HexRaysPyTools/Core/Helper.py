@@ -276,6 +276,13 @@ def _find_asm_address(self, cexpr):
             return p.ea
 
 
+def _get_line(self):
+    for p in reversed(self.parents):
+        if not p.is_expr():
+            return idaapi.tag_remove(p.print1(self.__cfunc.__deref__()))
+    AssertionError("Parent instruction is not found")
+
+
 def my_cexpr_t(*args, **kwargs):
     """ Replacement of bugged cexpr_t() function """
 
@@ -304,3 +311,4 @@ def my_cexpr_t(*args, **kwargs):
 
 def extend_ida():
     idaapi.ctree_parentee_t._find_asm_address = _find_asm_address
+    idaapi.ctree_parentee_t._get_line = _get_line
