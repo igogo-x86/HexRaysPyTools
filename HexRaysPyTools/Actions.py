@@ -890,14 +890,14 @@ class RecastItemLeft(idaapi.action_handler_t):
         if not result:
             return
 
-        logger.debug("Recasting - %s", result)
-
         if result[0] == RECAST_LOCAL_VARIABLE:
+            logger.debug("Recasting local variable. Type - %s", result[1].dstr())
             tinfo, lvar = result[1:]
             if hx_view.set_lvar_type(lvar, tinfo):
                 hx_view.refresh_view(True)
 
         elif result[0] == RECAST_GLOBAL_VARIABLE:
+            logger.debug("Recasting global. Type - %s. Address - %s", result[1].dstr(), Helper.to_hex(result[2]))
             tinfo, address = result[1:]
             if idaapi.apply_tinfo2(address, tinfo, idaapi.TINFO_DEFINITE):
                 hx_view.refresh_view(True)
@@ -1005,6 +1005,10 @@ class RecastItemRight(RecastItemLeft):
 
         elif expression.x.op == idaapi.cot_obj:
             # (TYPE) g_var;
+            if Helper.is_code_ea(expression.x.obj_ea) and new_type.is_funcptr():
+                # (TYPE) sub_XXXXXX;
+                new_type = new_type.get_pointed_object()
+
             idaapi.update_action_label(RecastItemRight.name, 'Recast Global')
             return RECAST_GLOBAL_VARIABLE, new_type, expression.x.obj_ea
 
