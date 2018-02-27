@@ -1,10 +1,12 @@
 import logging
 import HexRaysPyTools.Actions as Actions
+import HexRaysPyTools.Core.Cache
 from HexRaysPyTools.Core.TemporaryStructure import *
 import HexRaysPyTools.Forms as Forms
 import idaapi
 import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
 import HexRaysPyTools.Core.Helper as Helper
+import HexRaysPyTools.Core.Cache as Cache
 import HexRaysPyTools.Core.Const as Const
 from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
 from HexRaysPyTools.Core.StructXrefs import *
@@ -186,7 +188,7 @@ class MyPlugin(idaapi.plugin_t):
             print "[ERROR] Failed to initialize Hex-Rays SDK"
             return idaapi.PLUGIN_SKIP
 
-        Helper.temporary_structure = TemporaryStructureModel()
+        Cache.temporary_structure = TemporaryStructureModel()
         # Actions.register(Actions.CreateVtable)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
@@ -194,10 +196,10 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.RemoveArgument)
         Actions.register(Actions.AddRemoveReturn)
         Actions.register(Actions.ConvertToUsercall)
-        Actions.register(Actions.ShallowScanVariable, Helper.temporary_structure)
-        Actions.register(Actions.DeepScanVariable, Helper.temporary_structure)
-        Actions.register(Actions.DeepScanReturn, Helper.temporary_structure)
-        Actions.register(Actions.DeepScanFunctions, Helper.temporary_structure)
+        Actions.register(Actions.ShallowScanVariable, Cache.temporary_structure)
+        Actions.register(Actions.DeepScanVariable, Cache.temporary_structure)
+        Actions.register(Actions.DeepScanReturn, Cache.temporary_structure)
+        Actions.register(Actions.DeepScanFunctions, Cache.temporary_structure)
         Actions.register(Actions.RecognizeShape)
         Actions.register(Actions.CreateNewField)
         Actions.register(Actions.SelectContainingStructure, potential_negatives)
@@ -214,7 +216,6 @@ class MyPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
-        Helper.touched_functions.clear()
         Const.init()
         XrefStorage().open()
 
@@ -226,12 +227,12 @@ class MyPlugin(idaapi.plugin_t):
         if tform:
             idaapi.switchto_tform(tform, True)
         else:
-            Forms.StructureBuilder(Helper.temporary_structure).Show()
+            Forms.StructureBuilder(Cache.temporary_structure).Show()
 
     @staticmethod
     def term():
-        if Helper.temporary_structure:
-            Helper.temporary_structure.clear()
+        if Cache.temporary_structure:
+            Cache.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
         Actions.unregister(Actions.ShowGraph)
         Actions.unregister(Actions.ShowClasses)
@@ -260,7 +261,8 @@ class MyPlugin(idaapi.plugin_t):
 
 
 def PLUGIN_ENTRY():
-    idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_demangled_names)
-    idaapi.notify_when(idaapi.NW_OPENIDB, Helper.init_imported_ea)
+    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.init_demangled_names)
+    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.init_imported_ea)
+    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.reset_touched_functions)
     Helper.extend_ida()
     return MyPlugin()

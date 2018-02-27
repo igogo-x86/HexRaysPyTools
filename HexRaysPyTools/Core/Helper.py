@@ -1,41 +1,14 @@
-import idaapi
-import idautils
-import idc
-import Const
-
 import collections
-import re
 
-temporary_structure = None
-demangled_names = {}
-imported_ea = set()
+import idaapi
+import idc
 
-
-def init_imported_ea(*args):
-
-    def imp_cb(ea, name, ord):
-        imported_ea.add(ea)
-        # True -> Continue enumeration
-        # False -> Stop enumeration
-        return True
-
-    print "[Info] Collecting information about imports"
-    imported_ea.clear()
-    nimps = idaapi.get_import_module_qty()
-
-    for i in xrange(0, nimps):
-        name = idaapi.get_import_module_name(i)
-        if not name:
-            print "[Warning] Failed to get import module name for #%d" % i
-            continue
-
-        # print "Walking-> %s" % name
-        idaapi.enum_import_names(i, imp_cb)
-    print "[Info] Done..."
+import HexRaysPyTools.Core.Cache as Cache
+import HexRaysPyTools.Core.Const as Const
 
 
 def is_imported_ea(ea):
-    return ea in imported_ea
+    return ea in Cache.imported_ea
 
 
 def is_code_ea(ea):
@@ -46,29 +19,6 @@ def is_code_ea(ea):
 def is_rw_ea(ea):
     seg = idaapi.getseg(ea)
     return seg.perm & idaapi.SEGPERM_WRITE and seg.perm & idaapi.SEGPERM_READ
-
-
-def init_demangled_names(*args):
-    """
-    Creates dictionary of demangled names => address, that will be used further at double click on methods got from
-    symbols.
-    """
-    demangled_names.clear()
-    for address, name in idautils.Names():
-        short_name = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
-        if short_name:
-            demangled_names[short_name.split('(')[0]] = address - idaapi.get_imagebase()
-
-            # Names can have templates and should be transformed before creating local type
-            name = re.sub(r'[<>]', '_t_', name)
-
-            # Thunk functions with name like "[thunk]:CWarmupHostProvider::Release`adjustor{8}'"
-            result = re.search(r"(\[thunk\]:)?([^`]*)(.*\{(\d+)}.*)?", short_name)
-            name, adjustor = result.group(2), result.group(4)
-            if adjustor:
-                demangled_names[name + "_adj_" + adjustor] = address - idaapi.get_imagebase()
-
-    print "[DEBUG] Demangled names have been initialized"
 
 
 def get_virtual_func_address(name, tinfo=None, offset=None):
@@ -84,7 +34,7 @@ def get_virtual_func_address(name, tinfo=None, offset=None):
     if address != idaapi.BADADDR:
         return address
 
-    address = demangled_names.get(name, idaapi.BADADDR)
+    address = Cache.demangled_names.get(name, idaapi.BADADDR)
     if address != idaapi.BADADDR:
         return address + idaapi.get_imagebase()
 
@@ -94,7 +44,7 @@ def get_virtual_func_address(name, tinfo=None, offset=None):
     offset *= 8
     udt_member = idaapi.udt_member_t()
     while tinfo.is_struct():
-        address = demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
+        address = Cache.demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
         if address != idaapi.BADADDR:
             return address + idaapi.get_imagebase()
         udt_member.offset = offset
@@ -219,9 +169,6 @@ def get_funcs_calling_address(ea):
     return xrefs
 
 
-touched_functions = set()
-
-
 class FunctionTouchVisitor(idaapi.ctree_parentee_t):
     def __init__(self, cfunc):
         super(FunctionTouchVisitor, self).__init__()
@@ -234,8 +181,8 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
         return 0
 
     def touch_all(self):
-        for address in self.functions.difference(touched_functions):
-            touched_functions.add(address)
+        for address in self.functions.difference(Cache.touched_functions):
+            Cache.touched_functions.add(address)
             try:
                 cfunc = idaapi.decompile(address)
                 if cfunc:
@@ -245,8 +192,8 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
         idaapi.decompile(self.cfunc.entry_ea)
 
     def process(self):
-        if self.cfunc.entry_ea not in touched_functions:
-            touched_functions.add(self.cfunc.entry_ea)
+        if self.cfunc.entry_ea not in Cache.touched_functions:
+            Cache.touched_functions.add(self.cfunc.entry_ea)
             self.apply_to(self.cfunc.body, None)
             self.touch_all()
             return True

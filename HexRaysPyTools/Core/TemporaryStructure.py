@@ -5,6 +5,7 @@ import re
 import itertools
 # import PySide.QtCore as QtCore
 # import PySide.QtGui as QtGui
+import Cache
 from HexRaysPyTools.Cute import *
 import Const
 import Helper
@@ -346,7 +347,8 @@ class VirtualTable(AbstractMember):
             scanner = VariableScanner.DeepSearchVisitor(function, self.offset, 0)
             scanner.apply_to(function.body, None)
             for candidate in scanner.candidates:
-                Helper.temporary_structure.add_row(candidate)
+                # TODO: Remove usage `temporary_structure' as global
+                Cache.temporary_structure.add_row(candidate)
         else:
             print "[Warning] Bad type of first argument in virtual function at 0x{0:08X}".format(function.entry_ea)
 
