@@ -155,6 +155,42 @@ def get_member_name(tinfo, offset):
     return udt_member.name
 
 
+def set_member_name(tinfo, offset, name):
+    # Warning: destroys info about structure name
+    udt_data = idaapi.udt_type_data_t()
+    tinfo.get_udt_details(udt_data)
+    udt_member = idaapi.udt_member_t()
+    udt_member.offset = offset * 8
+    idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+    udt_member.name = name
+    udt_data[idx] = udt_member
+    return tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
+
+
+def change_member_name(ordinal, offset, name):
+    tinfo = idaapi.tinfo_t()
+    tinfo.get_numbered_type(idaapi.cvar.idati, ordinal)
+    struct_name = tinfo.dstr()
+    set_member_name(tinfo, offset, name)
+    ordinal = import_structure(struct_name, tinfo)
+    return bool(ordinal)
+
+
+def import_structure(name, tinfo):
+    cdecl_typedef = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
+                                       tinfo, name, None)
+    if idc.parse_decl(cdecl_typedef, idaapi.PT_TYP) is None:
+        return 0
+
+    previous_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, name)
+    if previous_ordinal:
+        idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
+        ordinal = idaapi.idc_set_local_type(previous_ordinal, cdecl_typedef, idaapi.PT_TYP)
+    else:
+        ordinal = idaapi.idc_set_local_type(-1, cdecl_typedef, idaapi.PT_TYP)
+    return ordinal
+
+
 def get_funcs_calling_address(ea):
     """ Returns all addresses of functions which make call to a function at `ea`"""
     xref_ea = idaapi.get_first_cref_to(ea)
@@ -223,13 +259,6 @@ def _find_asm_address(self, cexpr):
             return p.ea
 
 
-def _get_line(self):
-    for p in reversed(self.parents):
-        if not p.is_expr():
-            return idaapi.tag_remove(p.print1(self.__cfunc.__deref__()))
-    AssertionError("Parent instruction is not found")
-
-
 def my_cexpr_t(*args, **kwargs):
     """ Replacement of bugged cexpr_t() function """
 
@@ -258,4 +287,3 @@ def my_cexpr_t(*args, **kwargs):
 
 def extend_ida():
     idaapi.ctree_parentee_t._find_asm_address = _find_asm_address
-    idaapi.ctree_parentee_t._get_line = _get_line

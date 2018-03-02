@@ -9,6 +9,7 @@ import idc
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
+import HexRaysPyTools.Api as Api
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor, scanned_functions
@@ -1281,6 +1282,95 @@ class RenameUsingAssert(idaapi.action_handler_t):
                 logger.warn("IDA failed to decompile at {}".format(Helper.to_hex(caller_ea)))
 
         hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class PropagateName(idaapi.action_handler_t):
+    name = "my:PropagateName"
+    description = "Propagate name"
+    hotkey = "P"
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    @staticmethod
+    def manipulate(self, cexpr, obj_id):
+        if obj_id == Api.SO_GLOBAL_OBJECT:
+            old_name = idaapi.get_short_name(cexpr.obj_ea)
+            if PropagateName._is_default_name(old_name):
+                _, name = self._data
+                new_name = PropagateName.rename(lambda x: idaapi.set_name(cexpr.obj_ea, x), name)
+                logger.debug("Renamed global variable from {} to {}".format(old_name, new_name))
+        elif obj_id == Api.SO_LOCAL_VARIABLE:
+            lvar = self._cfunc.get_lvars()[cexpr.v.idx]
+            old_name = lvar.name
+            if PropagateName._is_default_name(old_name):
+                hx_view, name = self._data
+                new_name = PropagateName.rename(lambda x: hx_view.rename_lvar(lvar, x, True), name)
+                logger.debug("Renamed local variable from {} to {}".format(old_name, new_name))
+        elif obj_id in (Api.SO_STRUCT_POINTER, Api.SO_STRUCT_REFERENCE):
+            struct_tinfo = cexpr.x.type
+            offset = cexpr.m
+            struct_tinfo.remove_ptr_or_array()
+            old_name = Helper.get_member_name(struct_tinfo, offset)
+            if PropagateName._is_default_name(old_name):
+                _, name = self._data
+                new_name = PropagateName.rename(lambda x: Helper.change_member_name(struct_tinfo.get_ordinal(), offset, x), name)
+                logger.debug("Renamed struct member from {} to {}".format(old_name, new_name))
+
+    @staticmethod
+    def rename(rename_func, name):
+        while not rename_func(name):
+            name = "_" + name
+        return name
+
+    @staticmethod
+    def _is_default_name(string):
+        return re.match(r"[av]\d+$", string) is not None or \
+               re.match(r"this|[qd]?word|field_|off_", string) is not None
+
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+
+        obj = Api.ScanObject.create(cfunc, ctree_item)
+        if obj and not PropagateName._is_default_name(obj.name):
+            return obj
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        obj = self.check(hx_view.cfunc, hx_view.item)
+        if obj:
+            visitor = Api.ObjectDownwardsVisitor(hx_view.cfunc, obj, (hx_view, obj.name))
+            visitor.set_manipulator(PropagateName.manipulate)
+            visitor.process()
+            hx_view.refresh_view(True)
+
+    def update(self, ctx):
+        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
+class TestApi(idaapi.action_handler_t):
+    name = "my:ActionApi"
+    description = "Act API"
+    hotkey = None
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        item = hx_view.item
+        obj = Api.ScanObject.create(hx_view.cfunc, item)
+        if obj:
+            visitor = Api.ObjectDownwardsVisitor(hx_view.cfunc, obj).process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:

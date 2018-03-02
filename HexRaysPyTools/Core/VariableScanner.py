@@ -8,7 +8,7 @@ import TemporaryStructure
 logger = logging.getLogger(__name__)
 
 # If disabled then recursion will be triggered only for variable passed as first argument to function
-SCAN_ALL_ARGUMENTS = True
+SETTING_SCAN_ALL_ARGUMENTS = True
 
 # Global set which is populated when deep scanning and cleared after completion
 scanned_functions = set()
@@ -79,7 +79,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 return self.create_member(offset, index)
 
             elif arg_type.equals_to(Const.PVOID_TINFO) or arg_type.equals_to(Const.CONST_PVOID_TINFO):
-                if SCAN_ALL_ARGUMENTS or not arg_index:
+                if SETTING_SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index)
 
@@ -88,7 +88,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
                 nice_tinfo = Helper.get_nice_pointed_object(arg_type)
                 if nice_tinfo:
                     return self.create_member(offset, index, nice_tinfo)
-                if SCAN_ALL_ARGUMENTS or not arg_index:
+                if SETTING_SCAN_ALL_ARGUMENTS or not arg_index:
                     self.scan_function(call_expr.x.obj_ea, offset, arg_index)
                 return self.create_member(offset, index, pvoid_applicable=True)
 
@@ -198,7 +198,7 @@ class ShallowSearchVisitor(idaapi.ctree_parentee_t):
         # Universal call with no cast conversion and offsets: call(..., this, ...)
         if parents_type[0] == 'call':
             arg_index, _ = Helper.get_func_argument_info(parents[0], expression)
-            if SCAN_ALL_ARGUMENTS or not arg_index:
+            if SETTING_SCAN_ALL_ARGUMENTS or not arg_index:
                 self.scan_function(parents[0].x.obj_ea, 0, arg_index)
             return
 
