@@ -1298,7 +1298,16 @@ class PropagateName(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def manipulate(self, cexpr, obj_id):
+    def callback_start(self):
+        hx_view, _ = self._data
+        hx_view.switch_to(self._cfunc, False)
+
+    @staticmethod
+    def callback_manipulate(self, cexpr, obj_id):
+        if self.crippled:
+            logger.debug("Skipping crippled function at {}".format(Helper.to_hex(self._cfunc.entry_ea)))
+            return
+
         if obj_id == Api.SO_GLOBAL_OBJECT:
             old_name = idaapi.get_short_name(cexpr.obj_ea)
             if PropagateName._is_default_name(old_name):
@@ -1346,8 +1355,13 @@ class PropagateName(idaapi.action_handler_t):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
         obj = self.check(hx_view.cfunc, hx_view.item)
         if obj:
-            visitor = Api.ObjectDownwardsVisitor(hx_view.cfunc, obj, (hx_view, obj.name))
-            visitor.set_manipulator(PropagateName.manipulate)
+            cfunc = hx_view.cfunc
+            visitor = Api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name))
+            visitor.set_callbacks(
+                manipulate=PropagateName.callback_manipulate,
+                start_iteration=PropagateName.callback_start,
+                finish=lambda x: hx_view.switch_to(cfunc, True)
+            )
             visitor.process()
             hx_view.refresh_view(True)
 
@@ -1370,7 +1384,7 @@ class TestApi(idaapi.action_handler_t):
         item = hx_view.item
         obj = Api.ScanObject.create(hx_view.cfunc, item)
         if obj:
-            visitor = Api.ObjectDownwardsVisitor(hx_view.cfunc, obj).process()
+            Api.ObjectUpwardsVisitor(hx_view.cfunc, obj).process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:

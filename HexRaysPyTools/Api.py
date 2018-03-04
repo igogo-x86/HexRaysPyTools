@@ -1,12 +1,22 @@
 import logging
 import idaapi
 import idc
-from Core.Helper import to_hex, get_member_name
+from Core.Helper import to_hex, get_member_name, get_func_argument_info
 
 logger = logging.getLogger(__name__)
 
 
 SETTING_START_FROM_CURRENT_EXPR = True
+
+
+def decompile_function(address):
+    try:
+        cfunc = idaapi.decompile(address)
+        if cfunc:
+            return cfunc
+    except idaapi.DecompilationFailure:
+        pass
+    print logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
 
 
 class ScanObject(object):
@@ -138,41 +148,46 @@ ASSIGNMENT_LEFT = 2
 
 class ObjectDownwardsVisitor(idaapi.ctree_parentee_t):
     def __init__(self, cfunc, obj, data=None, skip_until_object=False):
+        super(ObjectDownwardsVisitor, self).__init__()
         self._cfunc = cfunc
         self._objects = [obj]
         self._data = data
         self.__start_ea = obj.ea
-        self.__skip = skip_until_object
-        super(ObjectDownwardsVisitor, self).__init__()
+        self._skip = skip_until_object
 
     def visit_expr(self, cexpr):
-        if self.__skip:
+        if self._skip:
             if self._objects[0].is_target(cexpr) and self._find_asm_address(cexpr) == self.__start_ea:
-                self.__skip = False
+                self._skip = False
             return 0
 
         for obj in self._objects:
             if not obj.is_target(cexpr):
                 continue
-            code = self.__check_assignment(cexpr)
+            code = self._check_assignment(cexpr)
             if code == ASSIGNMENT_RIGHT:
-                e = self.__extract_left_expression()
+                e = self._extract_left_expression()
                 new_obj = ScanObject.create(self._cfunc, e)
                 if new_obj:
                     self._objects.append(new_obj)
-                    self.manipulate(e, new_obj.id)
+                    self._manipulate(e, new_obj.id)
             elif code == ASSIGNMENT_LEFT:
-                if self.__is_object_overwritten(obj, cexpr):
+                if self._is_object_overwritten(obj, cexpr):
                     logger.info("Removed object from scanning at {}".format(to_hex(self._find_asm_address(cexpr))))
                     self._objects.remove(obj)
                     return 0
-            self.manipulate(cexpr, obj.id)
+            self._manipulate(cexpr, obj.id)
+            return 0
         return 0
+
+    def set_callbacks(self, manipulate=None):
+        if manipulate:
+            self.__manipulate = manipulate.__get__(self, ObjectDownwardsVisitor)
 
     def process(self):
         self.apply_to(self._cfunc.body, None)
 
-    def __check_assignment(self, cexpr):
+    def _check_assignment(self, cexpr):
         size = self.parents.size()
         parent = self.parents.at(size - 1)
         if parent.op == idaapi.cot_asg:
@@ -182,13 +197,20 @@ class ObjectDownwardsVisitor(idaapi.ctree_parentee_t):
         elif parent.op == idaapi.cot_cast and self.parents.at(size - 2).op == idaapi.cot_asg:
             return ASSIGNMENT_RIGHT
 
-    def __extract_left_expression(self):
+    def _extract_left_expression(self):
         size = self.parents.size()
         if self.parents.at(size - 1).op == idaapi.cot_asg:
             return self.parents.at(size - 1).cexpr.x
         return self.parents.at(size - 2).cexpr.x
 
-    def __is_object_overwritten(self, obj, cexpr):
+    def _extract_right_expression(self):
+        parent = self.parent_expr()
+        assert parent.op == idaapi.cot_asg
+        if parent.x.op == idaapi.cot_cast:
+            return parent.x.y
+        return parent.y
+
+    def _is_object_overwritten(self, obj, cexpr):
         size = self.parents.size()
         if size < obj.depth:
             return True
@@ -197,22 +219,139 @@ class ObjectDownwardsVisitor(idaapi.ctree_parentee_t):
                 return ScanObject.get_expression_block_ea(self._cfunc, cexpr) == obj.block_ea
         return False
 
-    def manipulate(self, cexpr, obj_id):
+    def _manipulate(self, cexpr, obj_id):
         """
         Method called for every object having assignment relationship with starter object. This method should be
-        reimplemented in order to something useful
+        reimplemented in order to do something useful
 
         :param cexpr: idaapi_cexpr_t
         :param id: one of the SO_* constants
         :return: None
         """
-        logger.info("Expression {} at {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr))))
+        logger.info("Expression {} at {}. Id - {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr)), obj_id))
 
-    def set_manipulator(self, func):
-        self.manipulate = func.__get__(self, ObjectDownwardsVisitor)
+    def _manipulate(self, cexpr, obj_id):
+        self.__manipulate(cexpr, obj_id)
 
     def __get_line(self):
         for p in reversed(self.parents):
             if not p.is_expr():
                 return idaapi.tag_remove(p.print1(self._cfunc))
         AssertionError("Parent instruction is not found")
+
+
+class ObjectUpwardsVisitor(ObjectDownwardsVisitor):
+    def __init__(self, cfunc, obj, data=None, skip_until_object=False):
+        super(ObjectUpwardsVisitor, self).__init__(cfunc, obj, data, skip_until_object)
+        self.cv_flags |= idaapi.CV_POST
+
+    def leave_expr(self, cexpr):
+        if self._skip:
+            if self._objects[0].is_target(cexpr) and self._find_asm_address(cexpr) == self.__start_ea:
+                self._skip = False
+            else:
+                return 0
+
+        for obj in self._objects:
+            if not obj.is_target(cexpr):
+                continue
+            code = self._check_assignment(cexpr)
+            self._manipulate(cexpr, obj.id)
+            if code == ASSIGNMENT_LEFT:
+                e = self._extract_right_expression()
+                self._objects.remove(obj)
+                new_obj = ScanObject.create(self._cfunc, e)
+                if new_obj:
+                    self._objects.append(new_obj)
+                    self._manipulate(e, new_obj.id)
+                elif len(self._objects) == 0:
+                    return 1
+            return 0
+        return 0
+
+
+class RecursiveObjectDownwardsVisitor(ObjectDownwardsVisitor):
+    def __init__(self, cfunc, obj, data=None, skip_until_object=False, visited=None):
+        super(RecursiveObjectDownwardsVisitor, self).__init__(cfunc, obj, data, skip_until_object)
+        self.__visited = visited if visited else set()
+        self.__new_for_visit = set()
+        self.crippled = self.__is_func_crippled()
+
+    def visit_expr(self, cexpr):
+        return super(RecursiveObjectDownwardsVisitor, self).visit_expr(cexpr)
+
+    def set_callbacks(self, manipulate=None, start=None, start_iteration=None, finish=None, finish_iteration=None):
+        super(RecursiveObjectDownwardsVisitor, self).set_callbacks(manipulate)
+        if start:
+            self.__start = start.__get__(self, RecursiveObjectDownwardsVisitor)
+        if start_iteration:
+            self.__start_iteration = start_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
+        if finish:
+            self.__finish = finish.__get__(self, RecursiveObjectDownwardsVisitor)
+        if finish_iteration:
+            self.__finish_iteration = finish_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
+
+    def prepare_new_scan(self, cfunc, obj):
+        self._cfunc = cfunc
+        self._objects = [obj]
+        self.__start_ea = obj.ea
+        self.crippled = self.__is_func_crippled()
+
+    def process(self):
+        self.__start()
+        self.__recursive_process()
+        self.__finish()
+
+    def __recursive_process(self):
+        self.__start_iteration()
+        super(RecursiveObjectDownwardsVisitor, self).process()
+        self.__finish_iteration()
+
+        while self.__new_for_visit:
+            func_ea, arg_idx = self.__new_for_visit.pop()
+            cfunc = decompile_function(func_ea)
+            if cfunc:
+                obj = VariableObject(arg_idx)
+                self.prepare_new_scan(cfunc, obj)
+                self.process()
+
+    def _manipulate(self, cexpr, obj_id):
+        self.__check_call(cexpr)
+        super(RecursiveObjectDownwardsVisitor, self)._manipulate(cexpr, obj_id)
+
+    def __check_call(self, cexpr):
+        parent = self.parent_expr()
+        grandparent = self.parents.at(self.parents.size() - 2)
+        if parent.op == idaapi.cot_call:
+            call_cexpr = parent
+            idx, _ = get_func_argument_info(call_cexpr, cexpr)
+            self.__add_visit(call_cexpr.x.obj_ea, idx)
+        elif parent.op == idaapi.cot_cast and grandparent.op == idaapi.cot_call:
+            call_cexpr = grandparent.cexpr
+            idx, _ = get_func_argument_info(call_cexpr, parent)
+            self.__add_visit(call_cexpr.x.obj_ea, idx)
+
+    def __add_visit(self, func_ea, arg_idx):
+        if (func_ea, arg_idx) not in self.__visited:
+            self.__visited.add((func_ea, arg_idx))
+            self.__new_for_visit.add((func_ea, arg_idx))
+
+    def __start(self):
+        pass
+
+    def __start_iteration(self):
+        pass
+
+    def __finish(self):
+        pass
+
+    def __finish_iteration(self):
+        pass
+
+    def __is_func_crippled(self):
+        # Check if function is just call to another function
+        b = self._cfunc.body.cblock
+        if b.size() == 1:
+            e = b.at(0)
+            return e.op == idaapi.cit_return or (e.op == idaapi.cit_expr and e.cexpr.op == idaapi.cot_call)
+        return False
