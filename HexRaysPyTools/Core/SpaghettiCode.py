@@ -57,8 +57,7 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
                 size = cblock.size()
                 if size >= 2:
                     # Find block that has "If" and "return" as last 2 statements
-                    if cblock.back().op == idaapi.cit_return and \
-                                    cblock.at(size - 2).op == idaapi.cit_if and not cblock.at(size - 2).cif.ielse:
+                    if cblock.back().op == idaapi.cit_return and cblock.at(size - 2).op == idaapi.cit_if and not cblock.at(size - 2).cif.ielse:
 
                         cit_then = cblock.at(size - 2).cif.ithen
 
@@ -74,8 +73,9 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
                             new_if_condition = idaapi.cexpr_t(cit_if_condition.x)
                         else:
                             new_if_condition = idaapi.cexpr_t(idaapi.lnot(cit_if_condition))
-                        new_if_condition.thisown = False
-                        cblock.at(size - 2).cif.expr = new_if_condition
+                        # new_if_condition = idaapi.cexpr_t(idaapi.lnot(cit_if_condition))
+                        cit_if_condition.thisown = False
+                        cblock.at(size - 2).cif.expr.swap(new_if_condition)
                         del cit_if_condition
 
                         # Take return from list of statements and later put it back
@@ -90,9 +90,13 @@ class SpaghettiVisitor(idaapi.ctree_parentee_t):
 
                         # Put back main return if there's no another return or "GOTO" already
                         if instruction.cblock.back().op not in (idaapi.cit_return, idaapi.cit_goto):
-                            new_return = idaapi.cinsn_t(cit_return)
-                            new_return.thisown = False
-                            instruction.cblock.push_back(new_return)
+                            #new_return = idaapi.cinsn_t(cit_return)
+                            # new_return.thisown = False
+                            temp_ret = instruction.new_insn(cit_return.ea)
+                            temp_ret.assign(cit_return)
+                            # temp_ret.op = idaapi.cit_return
+                            # temp_ret.creturn = idaapi.creturn_t()
+                            # temp_ret.creturn.expr = idaapi.cexpr_t(cit_return.creturn.expr)
 
                         # Put return into "Then" branch
                         cit_then.cblock.push_back(cit_return)

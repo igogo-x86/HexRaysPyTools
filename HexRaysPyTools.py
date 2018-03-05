@@ -104,20 +104,26 @@ def hexrays_events_callback(*args):
 
         hx_view = args[1]
         item = hx_view.item
-        if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
+        if item.citype == idaapi.VDI_EXPR and Helper.is_func_call(item,hx_view.cfunc) and item.e.op in (idaapi.cot_memptr, idaapi.cot_memref) \
+            and hx_view.cfunc.body.find_parent_of(item.e).op not in (idaapi.cot_memref, idaapi.cot_memptr):
             # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
             # After that remove pointer and get member name with the same offset
 
-            if item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
+            if item.e.op == idaapi.cot_memptr and item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
                 vtable_tinfo = item.e.x.type.get_pointed_object()
                 method_offset = item.e.m
                 class_tinfo = item.e.x.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.x.m
-            elif item.e.x.op == idaapi.cot_memptr:
+            elif item.e.op == idaapi.cot_memptr and item.e.x.op == idaapi.cot_memptr:
                 vtable_tinfo = item.e.x.type.get_pointed_object()
                 method_offset = item.e.m
                 class_tinfo = item.e.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.m
+            elif item.e.op == idaapi.cot_memref and item.e.x.op == idaapi.cot_memptr and not item.e.x.type.is_ptr():
+                vtable_tinfo = item.e.x.type
+                method_offset = item.e.m
+                class_tinfo = None
+                vtable_offset = None
             else:
                 return 0
             #print vtable_tinfo.get_type_name()
@@ -192,6 +198,7 @@ def hexrays_events_callback(*args):
             visitor.apply_to(cfunc.body, None)
 
         elif level_of_maturity == idaapi.CMAT_TRANS2:
+            # return 0
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
             # print '=' * 40

@@ -33,6 +33,68 @@ def init_demangled_names(*args):
 
     print "[DEBUG] Demangled names have been initialized"
 
+def is_func_call(item,cfunc):
+    if type(item) is idaapi.ctree_item_t:
+        item = item.it
+    while True:
+        parent = cfunc.body.find_parent_of(item)
+        if not parent or not parent.is_expr() or parent.to_specific_type.x.index != item.index:
+            return False
+        elif parent.op == idaapi.cot_call:
+            return True
+        item = parent
+
+def is_func_arg(item,cfunc):
+    if type(item) is idaapi.ctree_item_t:
+        item = item.it
+    while True:
+        parent = cfunc.body.find_parent_of(item)
+        if not parent or not parent.is_expr():
+            return False
+        elif parent.op == idaapi.cot_call and parent.to_specific_type.x.index != item.index:
+            return True
+        item = parent
+
+def get_nodes_to_call_parent(item,cfunc):
+    if type(item) is idaapi.ctree_item_t:
+        item = item.it
+    rc = [item]
+    while True:
+        parent = cfunc.body.find_parent_of(item)
+        if not parent or not parent.is_expr():
+            return None
+        rc.append(parent)
+        if parent.op == idaapi.cot_call:
+            rc.reverse()
+            return rc
+        item = parent
+
+def get_up_branch_to_op(cfunc,item,ops):
+    if type(item) is idaapi.ctree_item_t:
+        item = item.it
+    rc = [item]
+    while True:
+        parent = cfunc.body.find_parent_of(item)
+        if not parent or not parent.is_expr():
+            return None
+        rc.append(parent)
+        if parent.op in ops:
+            rc.reverse()
+            return rc
+        item = parent
+
+def get_branch(cfunc,item):
+    if type(item) is idaapi.ctree_item_t:
+        item = item.it
+    rc = [item.cexpr]
+    while True:
+        parent = cfunc.body.find_parent_of(item)
+        if not parent or not parent.is_expr():
+            break
+        rc.append(parent.cexpr)
+        item = parent
+    rc.reverse()
+    return rc
 
 def get_virtual_func_address(name, tinfo=None, offset=None):
     """
@@ -41,8 +103,9 @@ def get_virtual_func_address(name, tinfo=None, offset=None):
     :param offset: virtual table offset
     :return: address of the method
     """
-
-    address = idc.LocByName(name)
+    # address = idaapi.BADADDR
+    # if name in idautils.Functions():
+    address = idc.LocByName(name) #fucking idaapi. It's function work incorrectly. This returned 0xFF005BE7 instead BADADDR in some cases. get_name_ea problem.
 
     if address != idaapi.BADADDR:
         return address

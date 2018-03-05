@@ -4,6 +4,7 @@ import ConfigParser
 import idc
 import os.path
 import ida_kernwin
+import ida_diskio
 
 hex_pytools_config = None
 
@@ -12,27 +13,35 @@ class Config(object):
     def __init__(self):
         global hex_pytools_config
         self.section = "HexRaysPyTools features"
-        self.file_path = os.path.join(idc.GetIdaDirectory(),"cfg", "HexRaysPyTools.cfg")
+        self.file_path = os.path.join(ida_diskio.idadir(""),"cfg", "HexRaysPyTools.cfg")
         self.reader = ConfigParser.SafeConfigParser()
         self.reader.optionxform = str
         self.actions, self.action_names = self.GetDefActions()
         self.actions_refs = self.GetActionsRefs()
         hex_pytools_config = self
         try:
-            f = open(self.file_path, "w+b")
+            f = open(self.file_path, "ab")
             f.close()
         except:
+            print("Cannot open config file.")
             self.file_path = os.path.join(os.environ["APPDATA"],"IDA Pro","cfg", "HexRaysPyTools.cfg")
             if not os.path.exists(os.path.join(os.environ["APPDATA"], "IDA Pro", "cfg")):
                 os.makedirs(os.path.join(os.environ["APPDATA"], "IDA Pro", "cfg"))
-            f = open(self.file_path, "w+b")
+            f = open(self.file_path, "ab")
             f.close()
         try:
             f = open(self.file_path, "rb")
-            self.reader.read(f)
+            self.reader.readfp(f)
             f.close()
+            fRewrite = False
             for ac in self.actions:
-                self.actions[ac] = self.reader.getboolean(self.section,ac)
+                if self.reader.has_option(self.section,ac):
+                    self.actions[ac] = self.reader.getboolean(self.section,ac)
+                else:
+                    fRewrite = True
+            if fRewrite:
+                self.write_config()
+
         except ConfigParser.NoSectionError:
             self.actions, self.action_names = self.GetDefActions()
             del self.reader
