@@ -198,7 +198,6 @@ def hexrays_events_callback(*args):
             visitor.apply_to(cfunc.body, None)
 
         elif level_of_maturity == idaapi.CMAT_TRANS2:
-            # return 0
             # print '=' * 40
             # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
             # print '=' * 40
