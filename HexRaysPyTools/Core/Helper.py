@@ -242,6 +242,15 @@ def to_hex(ea):
         return "0x{:016X}".format(ea)
     return "0x{:08X}".format(ea)
 
+
+def to_nice_str(ea):
+    """ Shows address as function name + offset """
+    func_start_ea = idc.get_func_attr(ea, idc.FUNCATTR_START)
+    func_name = idc.Name(func_start_ea)
+    offset = ea - func_start_ea
+    return "{}+0x{:X}".format(func_name, offset)
+
+
 # ======================================================================
 # Functions that extends IDA Pro capabilities
 # ======================================================================

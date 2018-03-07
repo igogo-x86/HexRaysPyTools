@@ -1303,25 +1303,25 @@ class PropagateName(idaapi.action_handler_t):
         hx_view.switch_to(self._cfunc, False)
 
     @staticmethod
-    def callback_manipulate(self, cexpr, obj_id):
+    def callback_manipulate(self, cexpr, obj):
         if self.crippled:
             logger.debug("Skipping crippled function at {}".format(Helper.to_hex(self._cfunc.entry_ea)))
             return
 
-        if obj_id == Api.SO_GLOBAL_OBJECT:
+        if obj.id == Api.SO_GLOBAL_OBJECT:
             old_name = idaapi.get_short_name(cexpr.obj_ea)
             if PropagateName._is_default_name(old_name):
                 _, name = self._data
                 new_name = PropagateName.rename(lambda x: idaapi.set_name(cexpr.obj_ea, x), name)
                 logger.debug("Renamed global variable from {} to {}".format(old_name, new_name))
-        elif obj_id == Api.SO_LOCAL_VARIABLE:
+        elif obj.id == Api.SO_LOCAL_VARIABLE:
             lvar = self._cfunc.get_lvars()[cexpr.v.idx]
             old_name = lvar.name
             if PropagateName._is_default_name(old_name):
                 hx_view, name = self._data
                 new_name = PropagateName.rename(lambda x: hx_view.rename_lvar(lvar, x, True), name)
                 logger.debug("Renamed local variable from {} to {}".format(old_name, new_name))
-        elif obj_id in (Api.SO_STRUCT_POINTER, Api.SO_STRUCT_REFERENCE):
+        elif obj.id in (Api.SO_STRUCT_POINTER, Api.SO_STRUCT_REFERENCE):
             struct_tinfo = cexpr.x.type
             offset = cexpr.m
             struct_tinfo.remove_ptr_or_array()
@@ -1371,20 +1371,62 @@ class PropagateName(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class TestApi(idaapi.action_handler_t):
+class GuessAllocation(idaapi.action_handler_t):
     name = "my:ActionApi"
-    description = "Act API"
+    description = "Guess allocation"
     hotkey = None
+
+    class StructAllocChoose(Forms.MyChoose):
+        def __init__(self, items):
+            Forms.MyChoose.__init__(
+                self, items, "Possible structure allocations",
+                [["Function", 30], ["Variable", 10], ["Line", 50], ["Type", 10]]
+            )
+
+        def OnSelectLine(self, n):
+            idaapi.jumpto(self.items[n][0])
+
+        def OnGetLine(self, n):
+            func_ea, var, line, alloc_type = self.items[n]
+            return [Helper.to_nice_str(func_ea), var, line, alloc_type]
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
+    @staticmethod
+    def check(cfunc, ctree_item):
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+        return Api.ScanObject.create(cfunc, ctree_item)
+
+    @staticmethod
+    def callback_manipulate(self, cexpr, obj):
+        if obj.id == Api.SO_LOCAL_VARIABLE:
+            if self.check_assignment(cexpr) == Api.ASSIGNMENT_LEFT:
+                alloc_obj = Api.MemoryAllocationObject.create(self._cfunc, self.parent_expr().y)
+                if alloc_obj:
+                    self._data.append([alloc_obj.ea, obj.name, self._get_line(), "HEAP"])
+            elif self.parent_expr().op == idaapi.cot_ref:
+                self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "STACK"])
+        elif obj.id == Api.SO_GLOBAL_OBJECT:
+            self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "GLOBAL"])
+
+    @staticmethod
+    def callback_finish(self):
+        chooser = GuessAllocation.StructAllocChoose(self._data)
+        chooser.Show(False)
+
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
         item = hx_view.item
-        obj = Api.ScanObject.create(hx_view.cfunc, item)
+        obj = GuessAllocation.check(hx_view.cfunc, item)
         if obj:
-            Api.ObjectUpwardsVisitor(hx_view.cfunc, obj).process()
+            visitor = Api.RecursiveObjectUpwardsVisitor(hx_view.cfunc, obj, data=[], skip_after_object=True)
+            visitor.set_callbacks(
+                manipulate=self.callback_manipulate,
+                finish=self.callback_finish
+            )
+            visitor.process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:

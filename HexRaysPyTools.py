@@ -23,7 +23,10 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        idaapi.attach_action_to_popup(form, popup, Actions.TestApi.name, None)
+        idaapi.attach_action_to_popup(form, popup, Actions.GuessAllocation.name, None)
+
+        if Actions.GuessConstructor.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
 
         if Actions.RecastItemRight.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
@@ -195,7 +198,6 @@ class MyPlugin(idaapi.plugin_t):
 
         Cache.temporary_structure = TemporaryStructureModel()
         # Actions.register(Actions.CreateVtable)
-        Actions.register(Actions.TestApi)
         Actions.register(Actions.ShowGraph)
         Actions.register(Actions.ShowClasses)
         Actions.register(Actions.GetStructureBySize)
@@ -219,6 +221,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.register(Actions.SwapThenElse)
         Actions.register(Actions.FindFieldXrefs)
         Actions.register(Actions.PropagateName)
+        Actions.register(Actions.GuessAllocation)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -241,7 +244,6 @@ class MyPlugin(idaapi.plugin_t):
         if Cache.temporary_structure:
             Cache.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
-        Actions.unregister(Actions.TestApi)
         Actions.unregister(Actions.ShowGraph)
         Actions.unregister(Actions.ShowClasses)
         Actions.unregister(Actions.GetStructureBySize)
@@ -265,6 +267,7 @@ class MyPlugin(idaapi.plugin_t):
         Actions.unregister(Actions.SwapThenElse)
         Actions.unregister(Actions.FindFieldXrefs)
         Actions.unregister(Actions.PropagateName)
+        Actions.unregister(Actions.GuessAllocation)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
