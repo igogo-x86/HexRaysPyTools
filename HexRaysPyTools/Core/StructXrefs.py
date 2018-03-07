@@ -3,6 +3,7 @@ import logging
 from collections import namedtuple
 
 import idaapi
+import Helper
 
 
 logger = logging.getLogger(__name__)
@@ -97,10 +98,10 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         ea = self.__find_ref_address(expression)
         usage_type = self.__get_type(expression)
 
-        assert ea != idaapi.BADADDR and ordinal, \
-            "Failed to parse at address {0}, ordinal - {1}, type - {2}".format(
-                hex(int(ea)), ordinal, struct_type.dstr()
-            )
+        if ea == idaapi.BADADDR or not ordinal:
+            logger.warning("Failed to parse at address {0}, ordinal - {1}, type - {2}".format(
+                Helper.to_hex(ea), ordinal, struct_type.dstr()
+            ))
 
         one_line = self.__get_line()
 
@@ -140,7 +141,7 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         """ Returns one of the following types: 'R' - read value, 'W' - write value, 'A' - function argument"""
         child = cexpr
         for p in reversed(self.parents):
-            assert p, "Failed to get type at " + hex(int(self.__function_address))
+            assert p, "Failed to get type at " + Helper.to_hex(self.__function_address)
 
             if p.cexpr.op == idaapi.cot_call:
                 return 'Arg'
