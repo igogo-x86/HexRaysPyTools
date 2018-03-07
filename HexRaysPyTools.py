@@ -25,7 +25,7 @@ def hexrays_events_callback(*args):
 
         idaapi.attach_action_to_popup(form, popup, Actions.GuessAllocation.name, None)
 
-        if Actions.GuessConstructor.check(hx_view.cfunc, item):
+        if Actions.GuessAllocation.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
 
         if Actions.RecastItemRight.check(hx_view.cfunc, item):
