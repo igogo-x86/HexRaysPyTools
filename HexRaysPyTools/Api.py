@@ -16,7 +16,7 @@ def decompile_function(address):
             return cfunc
     except idaapi.DecompilationFailure:
         pass
-    print logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
+    logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
 
 
 class ScanObject(object):
@@ -81,7 +81,7 @@ class ScanObject(object):
         while expr:
             expr = cfunc.body.find_parent_of(expr.to_specific_type)
             idx += 1
-        return idx
+        return idx - 1
 
     @staticmethod
     def get_expression_address(cfunc, cexpr):
@@ -164,17 +164,26 @@ class CallArgObject(ScanObject):
         super(CallArgObject, self).__init__()
         self.__func_ea = func_address
         self.__arg_idx = arg_idx
-        self.name = idaapi.get_short_name(func_address)
         self.id = SO_CALL_ARGUMENT
 
     def is_target(self, cexpr):
         return cexpr.op == idaapi.cot_call and cexpr.x.obj_ea == self.__func_ea
 
-    def create_arg_obj(self, cfunc, cexpr):
+    def create_scan_obj(self, cfunc, cexpr):
         e = cexpr.a[self.__arg_idx]
         while e.op in (idaapi.cot_cast, idaapi.cot_ref, idaapi.cot_add, idaapi.cot_sub, idaapi.cot_idx):
             e = e.x
         return ScanObject.create(cfunc, e)
+
+    @staticmethod
+    def create(cfunc, arg_idx):
+        result = CallArgObject(cfunc.entry_ea, arg_idx)
+        result.name = cfunc.get_lvars()[arg_idx].name
+        result.tinfo = cfunc.type
+        return result
+
+    def __repr__(self):
+        return "{}"
 
 
 class MemoryAllocationObject(ScanObject):
@@ -227,29 +236,6 @@ class ObjectVisitor(idaapi.ctree_parentee_t):
         if manipulate:
             self.__manipulate = manipulate.__get__(self, ObjectDownwardsVisitor)
 
-    def check_assignment(self, cexpr):
-        size = self.parents.size()
-        parent = self.parents.at(size - 1)
-        if parent.op == idaapi.cot_asg:
-            if parent.cexpr.y == cexpr:
-                return ASSIGNMENT_RIGHT
-            return ASSIGNMENT_LEFT
-        elif parent.op == idaapi.cot_cast and self.parents.at(size - 2).op == idaapi.cot_asg:
-            return ASSIGNMENT_RIGHT
-
-    def extract_left_expression(self):
-        size = self.parents.size()
-        if self.parents.at(size - 1).op == idaapi.cot_asg:
-            return self.parents.at(size - 1).cexpr.x
-        return self.parents.at(size - 2).cexpr.x
-
-    def extract_right_expression(self):
-        parent = self.parent_expr()
-        assert parent.op == idaapi.cot_asg
-        if parent.x.op == idaapi.cot_cast:
-            return parent.x.y
-        return parent.y
-
     def _is_initial_object(self, cexpr):
         return self._init_obj.is_target(cexpr) and self._find_asm_address(cexpr) == self._start_ea
 
@@ -271,12 +257,13 @@ class ObjectVisitor(idaapi.ctree_parentee_t):
         :param id: one of the SO_* constants
         :return: None
         """
-        logger.info("Expression {} at {} Id - {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr)), obj_id))
+        logger.info("Expression {} at {} Id - {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr)), obj.id))
 
 
 class ObjectDownwardsVisitor(ObjectVisitor):
     def __init__(self, cfunc, obj, data=None, skip_until_object=False):
         super(ObjectDownwardsVisitor, self).__init__(cfunc, obj, data, skip_until_object)
+        self.cv_flags |= idaapi.CV_POST
 
     def visit_expr(self, cexpr):
         if self._skip:
@@ -285,26 +272,39 @@ class ObjectDownwardsVisitor(ObjectVisitor):
             else:
                 return 0
 
+        if cexpr.op != idaapi.cot_asg:
+            return 0
+
+        x_cexpr = cexpr.x
+        if cexpr.y.op == idaapi.cot_cast:
+            y_cexpr = cexpr.y.x
+        else:
+            y_cexpr = cexpr.y
+
         for obj in self._objects:
-            if not obj.is_target(cexpr):
-                continue
-            code = self.check_assignment(cexpr)
-            if code == ASSIGNMENT_RIGHT:
-                e = self.extract_left_expression()
-                new_obj = ScanObject.create(self._cfunc, e)
+            if obj.is_target(x_cexpr):
+                if self.__is_object_overwritten(x_cexpr, obj):
+                    logger.info("Removed object from scanning at {}".format(to_hex(self._find_asm_address(x_cexpr))))
+                    self._objects.remove(obj)
+                return 0
+            elif obj.is_target(y_cexpr):
+                new_obj = ScanObject.create(self._cfunc, x_cexpr)
                 if new_obj:
                     self._objects.append(new_obj)
-                    self._manipulate(e, new_obj)
-            elif code == ASSIGNMENT_LEFT:
-                if self._is_object_overwritten(obj, cexpr):
-                    logger.info("Removed object from scanning at {}".format(to_hex(self._find_asm_address(cexpr))))
-                    self._objects.remove(obj)
-                    return 0
-            self._manipulate(cexpr, obj)
-            return 0
+                return 0
         return 0
 
-    def _is_object_overwritten(self, obj, cexpr):
+    def leave_expr(self, cexpr):
+        if self._skip:
+            return 0
+
+        for obj in self._objects:
+            if obj.is_target(cexpr):
+                self._manipulate(cexpr, obj)
+                return 0
+        return 0
+
+    def __is_object_overwritten(self, cexpr, obj):
         size = self.parents.size()
         if size < obj.depth:
             return True
@@ -329,19 +329,24 @@ class ObjectUpwardsVisitor(ObjectVisitor):
             return 0
 
         if self._call_obj and self._call_obj.is_target(cexpr):
-            obj = self._call_obj.create_arg_obj(self._cfunc, cexpr)
+            obj = self._call_obj.create_scan_obj(self._cfunc, cexpr)
             if obj:
                 self._objects.append(obj)
+            return 0
 
-        obj = ScanObject.create(self._cfunc, cexpr)
-        if obj:
-            code = self.check_assignment(cexpr)
-            if code == ASSIGNMENT_LEFT:
-                left_obj = obj
-                right_cexpr = self.extract_right_expression()
-                right_obj = ScanObject.create(self._cfunc, right_cexpr)
-                if right_obj:
-                    self.__add_object_assignment(left_obj, right_obj)
+        if cexpr.op != idaapi.cot_asg:
+            return 0
+
+        x_cexpr = cexpr.x
+        if cexpr.y.op == idaapi.cot_cast:
+            y_cexpr = cexpr.y.x
+        else:
+            y_cexpr = cexpr.y
+
+        obj_left = ScanObject.create(self._cfunc, x_cexpr)
+        obj_right = ScanObject.create(self._cfunc, y_cexpr)
+        if obj_left and obj_right:
+            self.__add_object_assignment(obj_left, obj_right)
 
         if self._skip and self._is_initial_object(cexpr):
             return 1
@@ -388,6 +393,7 @@ class ObjectUpwardsVisitor(ObjectVisitor):
             todo |= o - result
             result |= o
         self._objects = list(result)
+        self._tree.clear()
 
 
 class RecursiveObjectVisitor(ObjectVisitor):
@@ -396,6 +402,10 @@ class RecursiveObjectVisitor(ObjectVisitor):
         self._visited = visited if visited else set()
         self._new_for_visit = set()
         self.crippled = self.__is_func_crippled()
+        self._arg_idx = -1
+        self._debug_scan_tree = {}
+        self.__debug_scan_tree_root = idc.Name(self._cfunc.entry_ea)
+        self.__debug_message = []
 
     def visit_expr(self, cexpr):
         return super(RecursiveObjectVisitor, self).visit_expr(cexpr)
@@ -411,8 +421,9 @@ class RecursiveObjectVisitor(ObjectVisitor):
         if finish_iteration:
             self.__finish_iteration = finish_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
 
-    def prepare_new_scan(self, cfunc, obj, skip=False):
+    def prepare_new_scan(self, cfunc, arg_idx, obj, skip=False):
         self._cfunc = cfunc
+        self._arg_idx = arg_idx
         self._objects = [obj]
         self._init_obj = obj
         self._skip = False
@@ -422,6 +433,21 @@ class RecursiveObjectVisitor(ObjectVisitor):
         self.__start()
         self._recursive_process()
         self.__finish()
+        self.dump_scan_tree()
+
+    def dump_scan_tree(self):
+        self.__prepare_debug_message()
+        logger.info("{}\n---------------".format("\n".join(self.__debug_message)))
+
+    def __prepare_debug_message(self, key=None, level=1):
+        if key is None:
+            key = (self.__debug_scan_tree_root, -1)
+            self.__debug_message.append("--- Scan Tree---\n{}".format(key))
+        if key in self._debug_scan_tree:
+            for func_name, arg_idx in self._debug_scan_tree[key]:
+                prefix = " | " * (level - 1) + " |_ "
+                self.__debug_message.append("{}{} (idx: {})".format(prefix, func_name, arg_idx))
+                self.__prepare_debug_message((func_name, arg_idx), level + 1)
 
     def _recursive_process(self):
         self.__start_iteration()
@@ -439,6 +465,14 @@ class RecursiveObjectVisitor(ObjectVisitor):
         if (func_ea, arg_idx) not in self._visited:
             self._visited.add((func_ea, arg_idx))
             self._new_for_visit.add((func_ea, arg_idx))
+
+    def _add_scan_tree_info(self, func_ea, arg_idx):
+        head_node = (idc.Name(self._cfunc.entry_ea), self._arg_idx)
+        tail_node = (idc.Name(func_ea), arg_idx)
+        if head_node in self._debug_scan_tree:
+            self._debug_scan_tree[head_node].add(tail_node)
+        else:
+            self._debug_scan_tree[head_node] = {tail_node}
 
     def __start(self):
         """ Called at the beginning of visiting """
@@ -474,22 +508,28 @@ class RecursiveObjectDownwardsVisitor(RecursiveObjectVisitor, ObjectDownwardsVis
         grandparent = self.parents.at(self.parents.size() - 2)
         if parent.op == idaapi.cot_call:
             call_cexpr = parent
-            idx, _ = get_func_argument_info(call_cexpr, cexpr)
-            self._add_visit(call_cexpr.x.obj_ea, idx)
+            arg_cexpr = cexpr
         elif parent.op == idaapi.cot_cast and grandparent.op == idaapi.cot_call:
             call_cexpr = grandparent.cexpr
-            idx, _ = get_func_argument_info(call_cexpr, parent)
-            self._add_visit(call_cexpr.x.obj_ea, idx)
+            arg_cexpr = parent
+        else:
+            return
+        idx, _ = get_func_argument_info(call_cexpr, arg_cexpr)
+        func_ea = call_cexpr.x.obj_ea
+        if func_ea == idaapi.BADADDR:
+            return
+        self._add_visit(func_ea, idx)
+        self._add_scan_tree_info(func_ea, idx)
 
     def _recursive_process(self):
-        super(RecursiveObjectVisitor, self).process()
+        super(RecursiveObjectDownwardsVisitor, self)._recursive_process()
 
         while self._new_for_visit:
             func_ea, arg_idx = self._new_for_visit.pop()
             cfunc = decompile_function(func_ea)
             if cfunc:
                 obj = VariableObject(arg_idx)
-                self.prepare_new_scan(cfunc, obj)
+                self.prepare_new_scan(cfunc, arg_idx, obj)
                 self._recursive_process()
 
 
@@ -497,23 +537,29 @@ class RecursiveObjectUpwardsVisitor(RecursiveObjectVisitor, ObjectUpwardsVisitor
     def __init__(self, cfunc, obj, data=None, skip_after_object=False, visited=None):
         super(RecursiveObjectUpwardsVisitor, self).__init__(cfunc, obj, data, skip_after_object, visited)
 
-    def prepare_new_scan(self, cfunc, obj, skip=False):
-        super(RecursiveObjectUpwardsVisitor, self).prepare_new_scan(cfunc, obj, skip)
+    def prepare_new_scan(self, cfunc, arg_idx, obj, skip=False):
+        super(RecursiveObjectUpwardsVisitor, self).prepare_new_scan(cfunc, arg_idx, obj, skip)
         self._call_obj = obj if obj.id == SO_CALL_ARGUMENT else None
 
     def _check_call(self, cexpr):
         if cexpr.op == idaapi.cot_var and self._cfunc.get_lvars()[cexpr.v.idx].is_arg_var:
-            self._add_visit(self._cfunc.entry_ea, cexpr.v.idx)
+            func_ea = self._cfunc.entry_ea
+            arg_idx = cexpr.v.idx
+            self._add_visit(func_ea, arg_idx)
+            for callee_ea in get_funcs_calling_address(func_ea):
+                self._add_scan_tree_info(callee_ea, arg_idx)
 
     def _recursive_process(self):
         super(RecursiveObjectUpwardsVisitor, self)._recursive_process()
 
         while self._new_for_visit:
-            func_ea, arg_idx = self._new_for_visit.pop()
-            funcs = get_funcs_calling_address(func_ea)
-            obj = CallArgObject(func_ea, arg_idx)
-            for callee_ea in funcs:
-                cfunc = decompile_function(callee_ea)
-                if cfunc:
-                    self.prepare_new_scan(cfunc, obj, False)
-                    self._recursive_process()
+            new_visit = list(self._new_for_visit)
+            self._new_for_visit.clear()
+            for func_ea, arg_idx in new_visit:
+                funcs = get_funcs_calling_address(func_ea)
+                obj = CallArgObject.create(self._cfunc, arg_idx)
+                for callee_ea in funcs:
+                    cfunc = decompile_function(callee_ea)
+                    if cfunc:
+                        self.prepare_new_scan(cfunc, arg_idx, obj, False)
+                        super(RecursiveObjectUpwardsVisitor, self)._recursive_process()

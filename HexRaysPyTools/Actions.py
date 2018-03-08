@@ -1402,7 +1402,8 @@ class GuessAllocation(idaapi.action_handler_t):
     @staticmethod
     def callback_manipulate(self, cexpr, obj):
         if obj.id == Api.SO_LOCAL_VARIABLE:
-            if self.check_assignment(cexpr) == Api.ASSIGNMENT_LEFT:
+            parent = self.parent_expr()
+            if parent.op == idaapi.cot_asg:
                 alloc_obj = Api.MemoryAllocationObject.create(self._cfunc, self.parent_expr().y)
                 if alloc_obj:
                     self._data.append([alloc_obj.ea, obj.name, self._get_line(), "HEAP"])
