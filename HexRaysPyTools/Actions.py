@@ -524,8 +524,9 @@ class CreateNewField(idaapi.action_handler_t):
         if declaration is None:
             return
 
-        result = self.__parse_declaration(declaration)
+        result = self.parse_declaration(declaration)
         if result is None:
+            logger.warn("Bad member declaration")
             return
 
         field_tinfo, field_name = result
@@ -571,12 +572,12 @@ class CreateNewField(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
     @staticmethod
-    def __parse_declaration(declaration):
-        m = re.search(r"^(\w+[ *]+)(\w+)$", declaration)
+    def parse_declaration(declaration):
+        m = re.search(r"^(\w+[ *]+)(\w+)(\[(\d+)\])?$", declaration)
         if m is None:
             return
 
-        type_name, field_name = m.groups()
+        type_name, field_name, _, arr_size = m.groups()
         if field_name[0].isdigit():
             print "[ERROR] Bad field name"
             return
@@ -588,6 +589,8 @@ class CreateNewField(idaapi.action_handler_t):
         _, tp, fld = result
         tinfo = idaapi.tinfo_t()
         tinfo.deserialize(idaapi.cvar.idati, tp, fld, None)
+        if arr_size:
+            assert tinfo.create_array(tinfo, int(arr_size))
         return tinfo, field_name
 
 
@@ -811,6 +814,9 @@ class RecastItemLeft(idaapi.action_handler_t):
 
         elif expression.op == idaapi.cot_call:
             if expression.x.op == idaapi.cot_memptr:
+                if expression.x == child:
+                    return
+
                 arg_index, arg_tinfo = Helper.get_func_argument_info(expression, child)
                 if child.op == idaapi.cot_cast:
                     # struct_ptr->func(..., (TYPE) var, ...);
@@ -831,6 +837,8 @@ class RecastItemLeft(idaapi.action_handler_t):
                     idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
                     return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
 
+                if expression.x == child.cexpr:
+                    return
                 arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
                 idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
                 return (
