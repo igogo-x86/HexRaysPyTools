@@ -155,25 +155,8 @@ def get_member_name(tinfo, offset):
     return udt_member.name
 
 
-def set_member_name(tinfo, offset, name):
-    # Warning: destroys info about structure name
-    udt_data = idaapi.udt_type_data_t()
-    tinfo.get_udt_details(udt_data)
-    udt_member = idaapi.udt_member_t()
-    udt_member.offset = offset * 8
-    idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
-    udt_member.name = name
-    udt_data[idx] = udt_member
-    return tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-
-
-def change_member_name(ordinal, offset, name):
-    tinfo = idaapi.tinfo_t()
-    tinfo.get_numbered_type(idaapi.cvar.idati, ordinal)
-    struct_name = tinfo.dstr()
-    set_member_name(tinfo, offset, name)
-    ordinal = import_structure(struct_name, tinfo)
-    return bool(ordinal)
+def change_member_name(struct_name, offset, name):
+    return idc.set_member_name(idc.get_struc_id(struct_name), offset, name)
 
 
 def import_structure(name, tinfo):

@@ -94,14 +94,11 @@ def hexrays_events_callback(*args):
                     idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
-
         hx_view = args[1]
         item = hx_view.item
-        print item.e.opname
         if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
             # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
             # After that remove pointer and get member name with the same offset
-
             if item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
                 vtable_tinfo = item.e.x.type.get_pointed_object()
                 method_offset = item.e.m

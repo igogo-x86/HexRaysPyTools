@@ -1293,7 +1293,7 @@ class PropagateName(idaapi.action_handler_t):
             old_name = Helper.get_member_name(struct_tinfo, offset)
             if PropagateName._is_default_name(old_name):
                 _, name = self._data
-                new_name = PropagateName.rename(lambda x: Helper.change_member_name(struct_tinfo.get_ordinal(), offset, x), name)
+                new_name = PropagateName.rename(lambda x: Helper.change_member_name(struct_tinfo.dstr(), offset, x), name)
                 logger.debug("Renamed struct member from {} to {}".format(old_name, new_name))
 
     @staticmethod
