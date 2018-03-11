@@ -12,7 +12,7 @@ import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Api as Api
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
+from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, NewDeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
 from HexRaysPyTools.Core.StructXrefs import XrefStorage
@@ -317,43 +317,13 @@ class DeepScanVariable(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
+        cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        var_type = ShallowScanVariable.check(hx_view.item)
-        if var_type == "LOCAL":
-            variable = hx_view.item.get_lvar()  # lvar_t
-            index = list(hx_view.cfunc.get_lvars()).index(variable)
-            definition_address = None if variable.is_arg_var else variable.defea
-
-            # index = list(hx_view.cfunc.get_lvars()).index(variable)
-            if FunctionTouchVisitor(hx_view.cfunc).process():
-                hx_view.refresh_view(True)
-
-            # Because index of the variable can be changed after touching, we would like to calculate it appropriately
-            lvars = hx_view.cfunc.get_lvars()
-
-            if definition_address:
-                index = next(x for x in xrange(len(lvars)) if lvars[x].defea == definition_address)
-
-            scanner = DeepSearchVisitor(hx_view.cfunc, origin, index=index)
-
-        elif var_type == "GLOBAL":
-            gvar = hx_view.item.it.to_specific_type
-            name = idc.GetTrueName(gvar.obj_ea)
-            tinfo = gvar.type
-
-            if FunctionTouchVisitor(hx_view.cfunc).process():
-                hx_view.refresh_view(True)
-
-            scanner = DeepSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
-
-        else:
-            return
-
-        scanner.process()
-        for field in scanner.candidates:
-            self.temporary_structure.add_row(field)
-        scanner.clear()
+        obj = Api.ScanObject.create(cfunc, hx_view.item)
+        if obj:
+            visitor = NewDeepSearchVisitor(cfunc, origin, obj, self.temporary_structure)
+            visitor.process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:

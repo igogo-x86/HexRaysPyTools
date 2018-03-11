@@ -9,6 +9,7 @@ COT_ARITHMETIC = (idaapi.cot_num, idaapi.cot_fnum, idaapi.cot_add, idaapi.cot_fa
 
 VOID_TINFO = None
 PVOID_TINFO = idaapi.tinfo_t()
+CONST_VOID_TINFO = idaapi.tinfo_t(idaapi.BT_VOID | idaapi.BTM_CONST)
 CONST_PVOID_TINFO = idaapi.tinfo_t()
 CONST_PCHAR_TINFO = idaapi.tinfo_t()
 PCHAR_TINFO = idaapi.tinfo_t()

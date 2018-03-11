@@ -24,8 +24,6 @@ class ScanObject(object):
         self.ea = idaapi.BADADDR
         self.name = None
         self.tinfo = None
-        self.depth = 0
-        self.block_ea = idaapi.BADADDR
         self.id = 0
 
     @staticmethod
@@ -38,7 +36,6 @@ class ScanObject(object):
                 result = VariableObject(lvar, index)
                 if arg.e:
                     result.ea = ScanObject.get_expression_address(cfunc, arg.e)
-                result.tinfo = lvar.type()
                 return result
             cexpr = arg.e
         else:
@@ -47,6 +44,8 @@ class ScanObject(object):
         if cexpr.op == idaapi.cot_var:
             lvar = cfunc.get_lvars()[cexpr.v.idx]
             result = VariableObject(lvar, cexpr.v.idx)
+            result.ea = ScanObject.get_expression_address(cfunc, cexpr)
+            return result
         elif cexpr.op == idaapi.cot_memptr:
             t = cexpr.x.type.get_pointed_object()
             result = StructPtrObject(t.dstr(), cexpr.m)
@@ -62,25 +61,7 @@ class ScanObject(object):
             return
         result.tinfo = cexpr.type
         result.ea = ScanObject.get_expression_address(cfunc, cexpr)
-        result.depth = ScanObject.get_expression_depth(cfunc, cexpr)
-        result.block_ea = ScanObject.get_expression_block_ea(cfunc, cexpr)
         return result
-
-    @staticmethod
-    def get_expression_block_ea(cfunc, cexpr):
-        expr = cexpr
-        while expr and expr.op != idaapi.cit_block:
-            expr = cfunc.body.find_parent_of(expr.to_specific_type)
-        return expr.ea
-
-    @staticmethod
-    def get_expression_depth(cfunc, cexpr):
-        expr = cexpr
-        idx = 0
-        while expr:
-            expr = cfunc.body.find_parent_of(expr.to_specific_type)
-            idx += 1
-        return idx - 1
 
     @staticmethod
     def get_expression_address(cfunc, cexpr):
@@ -115,6 +96,7 @@ class VariableObject(ScanObject):
     def __init__(self, lvar, index):
         super(VariableObject, self).__init__()
         self.lvar = lvar
+        self.tinfo = lvar.type()
         self.name = lvar.name
         self.index = index
         self.id = SO_LOCAL_VARIABLE
@@ -312,13 +294,6 @@ class ObjectDownwardsVisitor(ObjectVisitor):
 
     def __is_object_overwritten(self, cexpr, obj):
         return len(self._objects) > 1
-        # size = self.parents.size()
-        # if size < obj.depth:
-        #     return True
-        # elif size == obj.depth:
-        #     if obj.ea != self._find_asm_address(cexpr):
-        #         return ScanObject.get_expression_block_ea(self._cfunc, cexpr) == obj.block_ea
-        # return False
 
 
 class ObjectUpwardsVisitor(ObjectVisitor):
@@ -540,7 +515,7 @@ class RecursiveObjectDownwardsVisitor(RecursiveObjectVisitor, ObjectDownwardsVis
             func_ea, arg_idx = self._new_for_visit.pop()
             cfunc = decompile_function(func_ea)
             if cfunc:
-                obj = VariableObject(self._cfunc.get_lvars()[arg_idx], arg_idx)
+                obj = VariableObject(cfunc.get_lvars()[arg_idx], arg_idx)
                 self.prepare_new_scan(cfunc, arg_idx, obj)
                 self._recursive_process()
 
