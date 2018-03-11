@@ -12,6 +12,7 @@ PVOID_TINFO = idaapi.tinfo_t()
 CONST_PVOID_TINFO = idaapi.tinfo_t()
 CONST_PCHAR_TINFO = idaapi.tinfo_t()
 PCHAR_TINFO = idaapi.tinfo_t()
+CHAR_TINFO = idaapi.tinfo_t(idaapi.BTF_CHAR)
 BYTE_TINFO = None
 PBYTE_TINFO = None
 

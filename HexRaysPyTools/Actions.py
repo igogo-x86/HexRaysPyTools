@@ -12,7 +12,7 @@ import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Api as Api
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import ShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor, scanned_functions
+from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, DeepSearchVisitor, VariableLookupVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
 from HexRaysPyTools.Core.StructXrefs import XrefStorage
@@ -291,26 +291,13 @@ class ShallowScanVariable(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
+        cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        var_type = self.check(hx_view.item)
-        if var_type == "LOCAL":
-            variable = hx_view.item.get_lvar()  # lvar_t
-            index = list(hx_view.cfunc.get_lvars()).index(variable)
-            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, index)
-
-        elif var_type == "GLOBAL":
-            gvar = hx_view.item.it.to_specific_type
-            name = idc.GetTrueName(gvar.obj_ea)
-            tinfo = gvar.type
-            scanner = ShallowSearchVisitor(hx_view.cfunc, origin, global_variable=(name, tinfo))
-
-        else:
-            return
-
-        scanner.process()
-        for field in scanner.candidates:
-            self.temporary_structure.add_row(field)
+        obj = Api.ScanObject.create(cfunc, hx_view.item)
+        if obj:
+            visitor = NewShallowSearchVisitor(cfunc, origin, obj, self.temporary_structure)
+            visitor.process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
@@ -1356,7 +1343,7 @@ class PropagateName(idaapi.action_handler_t):
         obj = self.check(hx_view.cfunc, hx_view.item)
         if obj:
             cfunc = hx_view.cfunc
-            visitor = Api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name))
+            visitor = Api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name), True)
             visitor.set_callbacks(
                 manipulate=PropagateName.callback_manipulate,
                 start_iteration=PropagateName.callback_start,

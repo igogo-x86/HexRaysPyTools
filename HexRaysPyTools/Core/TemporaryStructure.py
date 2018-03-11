@@ -451,8 +451,9 @@ class Member(AbstractMember):
 
 
 class VoidMember(Member):
-    def __init__(self, offset, scanned_variable, origin=0):
-        Member.__init__(self, offset, Const.BYTE_TINFO, scanned_variable, origin)
+    def __init__(self, offset, scanned_variable, origin=0, char=False):
+        tinfo = Const.CHAR_TINFO if char else Const.BYTE_TINFO
+        Member.__init__(self, offset, tinfo, scanned_variable, origin)
         self.is_array = True
 
     def type_equals_to(self, tinfo):
@@ -619,7 +620,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
         final_tinfo = idaapi.tinfo_t()
         udt_data = idaapi.udt_type_data_t()
-        origin = self.items[start].offset
+        origin = self.items[start].offset if start else 0
         offset = origin
 
         for item in filter(lambda x: x.enabled, self.items[start:stop]):    # Filter disabled members
@@ -665,7 +666,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     tinfo = idaapi.create_typedef(structure_name)
                     ptr_tinfo = idaapi.tinfo_t()
                     ptr_tinfo.create_ptr(tinfo)
-                    for scanned_var in self.get_scanned_variables(origin):
+                    for scanned_var in self.get_unique_scanned_variables(origin):
                         scanned_var.apply_type(ptr_tinfo)
                     return tinfo
             else:
@@ -707,12 +708,10 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             self.refresh_collisions()
             self.modelReset.emit()
 
-    def get_scanned_variables(self, origin=0):
-        return set(
-            itertools.chain.from_iterable(
-                [list(item.scanned_variables) for item in self.items if item.origin == origin]
-            )
-        )
+    def get_unique_scanned_variables(self, origin=0):
+        scan_objects = itertools.chain.from_iterable(
+            [list(item.scanned_variables) for item in self.items if item.origin == origin])
+        return dict(((item.function_name, item.name), item) for item in scan_objects).values()
 
     def get_next_enabled(self, row):
         row += 1
@@ -900,7 +899,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             tinfo = self.get_recognized_shape()
             if tinfo:
                 tinfo.create_ptr(tinfo)
-                for scanned_var in self.get_scanned_variables(origin=0):
+                for scanned_var in self.get_unique_scanned_variables(origin=0):
                     scanned_var.apply_type(tinfo)
                 self.clear()
         else:
@@ -911,7 +910,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             if tinfo:
                 ptr_tinfo = idaapi.tinfo_t()
                 ptr_tinfo.create_ptr(tinfo)
-                for scanned_var in self.get_scanned_variables(base):
+                for scanned_var in self.get_unique_scanned_variables(base):
                     scanned_var.apply_type(ptr_tinfo)
                 self.items = filter(lambda x: x.offset < base or x.offset >= base + tinfo.get_size(), self.items)
                 self.add_row(Member(base, tinfo, None))
