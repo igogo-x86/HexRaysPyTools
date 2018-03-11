@@ -97,6 +97,7 @@ def hexrays_events_callback(*args):
 
         hx_view = args[1]
         item = hx_view.item
+        print item.e.opname
         if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
             # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
             # After that remove pointer and get member name with the same offset
@@ -112,13 +113,15 @@ def hexrays_events_callback(*args):
                 class_tinfo = item.e.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.m
             else:
+                func_offset = item.e.m
+                struct_tinfo = item.e.x.type.get_pointed_object()
+                func_ea = Helper.get_virtual_func_address(Helper.get_member_name(struct_tinfo, func_offset))
+                if func_ea:
+                    idaapi.jumpto(func_ea)
                 return 0
 
-            udt_member = idaapi.udt_member_t()
-            udt_member.offset = method_offset * 8
-            vtable_tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
-
-            func_ea = Helper.get_virtual_func_address(udt_member.name, class_tinfo, vtable_offset)
+            func_name = Helper.get_member_name(vtable_tinfo, method_offset)
+            func_ea = Helper.get_virtual_func_address(func_name, class_tinfo, vtable_offset)
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
