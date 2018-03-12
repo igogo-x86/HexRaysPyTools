@@ -245,7 +245,6 @@ def save_long_str_to_idb(array_name, value):
         s = value[idx * 1024: (idx + 1) * 1024]
         r.append(s)
         idc.set_array_string(id, idx, s)
-    print "".join(r)
 
 
 def load_long_str_from_idb(array_name):

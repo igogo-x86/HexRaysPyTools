@@ -333,7 +333,6 @@ class DeepScanVariable(idaapi.action_handler_t):
 
 
 class DeepScanReturn(idaapi.action_handler_t):
-
     name = "my:DeepScanReturn"
     description = "Deep Scan Returned Variables"
     hotkey = None
@@ -1277,14 +1276,14 @@ class PropagateName(idaapi.action_handler_t):
 
         if obj.id == Api.SO_GLOBAL_OBJECT:
             old_name = idaapi.get_short_name(cexpr.obj_ea)
-            if PropagateName._is_default_name(old_name):
+            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 _, name = self._data
                 new_name = PropagateName.rename(lambda x: idaapi.set_name(cexpr.obj_ea, x), name)
                 logger.debug("Renamed global variable from {} to {}".format(old_name, new_name))
         elif obj.id == Api.SO_LOCAL_VARIABLE:
             lvar = self._cfunc.get_lvars()[cexpr.v.idx]
             old_name = lvar.name
-            if PropagateName._is_default_name(old_name):
+            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 hx_view, name = self._data
                 new_name = PropagateName.rename(lambda x: hx_view.rename_lvar(lvar, x, True), name)
                 logger.debug("Renamed local variable from {} to {}".format(old_name, new_name))
@@ -1293,7 +1292,7 @@ class PropagateName(idaapi.action_handler_t):
             offset = cexpr.m
             struct_tinfo.remove_ptr_or_array()
             old_name = Helper.get_member_name(struct_tinfo, offset)
-            if PropagateName._is_default_name(old_name):
+            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 _, name = self._data
                 new_name = PropagateName.rename(lambda x: Helper.change_member_name(struct_tinfo.dstr(), offset, x), name)
                 logger.debug("Renamed struct member from {} to {}".format(old_name, new_name))
@@ -1306,8 +1305,6 @@ class PropagateName(idaapi.action_handler_t):
 
     @staticmethod
     def _is_default_name(string):
-        if Settings.PROPAGATE_THROUGH_ALL_NAMES:
-            return True
         return re.match(r"[av]\d+$", string) is not None or \
                re.match(r"this|[qd]?word|field_|off_", string) is not None
 

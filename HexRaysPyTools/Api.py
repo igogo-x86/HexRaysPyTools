@@ -515,6 +515,7 @@ class RecursiveObjectDownwardsVisitor(RecursiveObjectVisitor, ObjectDownwardsVis
             func_ea, arg_idx = self._new_for_visit.pop()
             cfunc = decompile_function(func_ea)
             if cfunc:
+                assert arg_idx < len(cfunc.get_lvars()), "Wrong argument at func {}".format(func_ea)
                 obj = VariableObject(cfunc.get_lvars()[arg_idx], arg_idx)
                 self.prepare_new_scan(cfunc, arg_idx, obj)
                 self._recursive_process()

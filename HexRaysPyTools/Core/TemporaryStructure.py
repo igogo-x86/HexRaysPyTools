@@ -18,7 +18,7 @@ SCORE_TABLE = dict((v, k) for k, v in enumerate(
      'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
      '_WORD *', '_WORD **',
      'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int **', 'char **', 'int *', 'void **',
-     'int', '_DWORD *', '_WORD', 'char', '_DWORD', 'void *', 'char *']
+     'int', '_DWORD *', 'char', '_DWORD', '_WORD', 'void *', 'char *']
 ))
 
 
