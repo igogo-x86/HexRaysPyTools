@@ -5,6 +5,7 @@ import json
 
 import idaapi
 import Helper
+import HexRaysPyTools.Settings as Settings
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,10 @@ class XrefStorage(object):
         self.storage = None
 
     def open(self):
+        if not Settings.STORE_XREFS:
+            self.storage = {}
+            return
+
         result = Helper.load_long_str_from_idb(self.ARRAY_NAME)
         if result:
             try:
@@ -44,6 +49,9 @@ class XrefStorage(object):
         self.storage = None
 
     def save(self):
+        if not Settings.STORE_XREFS:
+            return
+
         if self.storage:
             Helper.save_long_str_to_idb(self.ARRAY_NAME, json.dumps(self.storage))
 

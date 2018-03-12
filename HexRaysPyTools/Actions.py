@@ -10,6 +10,7 @@ import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
 import HexRaysPyTools.Api as Api
+import Settings
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
 from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, NewDeepSearchVisitor, VariableLookupVisitor
@@ -1305,6 +1306,8 @@ class PropagateName(idaapi.action_handler_t):
 
     @staticmethod
     def _is_default_name(string):
+        if Settings.PROPAGATE_THROUGH_ALL_NAMES:
+            return True
         return re.match(r"[av]\d+$", string) is not None or \
                re.match(r"this|[qd]?word|field_|off_", string) is not None
 
