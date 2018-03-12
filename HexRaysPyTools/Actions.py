@@ -489,8 +489,9 @@ class CreateNewField(idaapi.action_handler_t):
 
         parent = cfunc.body.find_parent_of(ctree_item.it).to_specific_type
         if parent.op != idaapi.cot_idx or parent.y.op != idaapi.cot_num:
-            return
-        idx = parent.y.n._value
+            idx = 0
+        else:
+            idx = parent.y.numval()
 
         struct_type = item.x.type.get_pointed_object()
         udt_member = idaapi.udt_member_t()
