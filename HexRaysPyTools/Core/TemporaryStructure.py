@@ -58,32 +58,6 @@ def parse_vtable_name(address):
         return "Vtable_{0:X}".format(address), False
 
 
-def create_member(function, expression_address, origin, offset, index, tinfo=None, vtable_ea=0, pvoid_applicable=False):
-    """ Creates appropriate member (VTable, regular member, void *member) depending on input """
-
-    if isinstance(index, str):
-        scanned_variable = ScannedVariable(function, None, expression_address, origin, False, index)
-    else:
-        scanned_variable = ScannedVariable(function, function.get_lvars()[index], expression_address, origin)
-    if vtable_ea:
-        if VirtualTable.check_address(vtable_ea):
-            return VirtualTable(offset, vtable_ea, scanned_variable, origin)
-
-    if tinfo and not tinfo.equals_to(Const.VOID_TINFO):
-        if tinfo.equals_to(Const.CONST_PCHAR_TINFO):
-            tinfo = Const.PCHAR_TINFO
-        elif tinfo.equals_to(Const.CONST_PVOID_TINFO):
-            tinfo = Const.PVOID_TINFO
-        else:
-            tinfo.clr_const()
-        return Member(offset, tinfo, scanned_variable, origin)
-    else:
-        # VoidMember shouldn't have ScannedVariable because after finalizing it can mess up with normal functions
-        # like `memset` or operator delete
-        scanned_variable.applicable = pvoid_applicable
-        return VoidMember(offset, scanned_variable, origin)
-
-
 class AbstractMember:
     def __init__(self, offset, scanned_variable, origin):
         """
@@ -468,72 +442,6 @@ class VoidMember(Member):
     @property
     def font(self):
         return QtGui.QFont("Consolas", 10, italic=True)
-
-
-class ScannedVariable:
-    def __init__(self, function, variable, expression_address, origin, applicable=True, global_variable=None):
-        """
-        Class for storing variable and it's function that have been scanned previously.
-        Need to think whether it's better to store address and index, or cfunc_t and lvar_t
-
-        :param function: idaapi.cfunc_t
-        :param variable: idaapi.vdui_t
-        """
-        self.function = function
-        if global_variable is not None:
-            self.gvar = global_variable
-            self.lvar = None
-            self.applicable = False
-        else:
-            self.gvar = None
-            self.lvar = variable
-
-        self.expression_address = expression_address
-        self.origin = origin
-        self.applicable = applicable
-
-    @property
-    def name(self):
-        if self.gvar is not None:
-            return self.gvar
-        return self.lvar.name
-
-    @property
-    def function_name(self):
-        return idaapi.get_short_name(self.function.entry_ea)
-
-    def apply_type(self, tinfo):
-        """ Finally apply Class'es tinfo to this variable """
-
-        if self.applicable:
-            hx_view = idaapi.open_pseudocode(self.function.entry_ea, -1)
-            if hx_view:
-                print "[Info] Applying tinfo to variable {0} in function {1}".format(
-                    self.lvar.name,
-                    idaapi.get_short_name(self.function.entry_ea)
-                )
-                # Finding lvar of new window that have the same name that saved one and applying tinfo_t
-                lvar = filter(lambda x: x == self.lvar, hx_view.cfunc.get_lvars())
-                if lvar:
-                    print "+++++++++++"
-                    hx_view.set_lvar_type(lvar[0], tinfo)
-                else:
-                    print "-----------"
-
-    def to_list(self):
-        """ Creates list that is acceptable to MyChoose2 viewer """
-        return [
-            "0x{0:04X}".format(self.origin),
-            self.function_name,
-            self.name,
-            "0x{0:08X}".format(self.expression_address)
-        ]
-
-    def __eq__(self, other):
-        return self.function.entry_ea == other.function.entry_ea and self.lvar == other.lvar
-
-    def __hash__(self):
-        return hash((self.function.entry_ea, self.name))
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
