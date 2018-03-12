@@ -13,10 +13,12 @@ import VariableScanner
 from HexRaysPyTools.Forms import MyChoose
 
 
-score_table = dict((v, k) for k, v in enumerate(
-    ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', 'char', '_WORD', '_WORD *',
-     'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int *', 'int', '_DWORD *', '_DWORD', 'void *',
-     'char *']
+SCORE_TABLE = dict((v, k) for k, v in enumerate(
+    ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', '_BYTE **', 'const char **',
+     'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
+     '_WORD *', '_WORD **',
+     'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int **', 'char **', 'int *', 'void **',
+     'int', '_DWORD *', '_WORD', 'char', '_DWORD', 'void *', 'char *']
 ))
 
 
@@ -97,9 +99,12 @@ class AbstractMember:
 
     @property
     def score(self):
+        """ More score of the member - it better suits as candidate for this offset """
         try:
-            return score_table[self.tinfo.dstr()]
+            return SCORE_TABLE[self.tinfo.dstr()]
         except KeyError:
+            if self.tinfo.is_funcptr():
+                return 0x1000 + len(self.tinfo.dstr())
             return 0xFFFF
 
     @property
@@ -775,7 +780,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
             item_score = item.score
             if current_item.has_collision(item):
-                if item_score < current_item_score:
+                if item_score <= current_item_score:
                     item.set_enabled(False)
                     continue
                 elif item_score > current_item_score:
