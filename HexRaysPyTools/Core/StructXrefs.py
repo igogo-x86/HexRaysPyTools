@@ -1,6 +1,7 @@
 import time
 import logging
 from collections import namedtuple
+import json
 
 import idaapi
 import Helper
@@ -23,22 +24,28 @@ def singleton(cls):
 
 @singleton
 class XrefStorage(object):
+    ARRAY_NAME = "$HexRaysPyTools:XrefStorage"
+
     def __init__(self):
         self.storage = None
 
     def open(self):
-        # Check if already exist
-            # Load data
-
-            # Create storage
+        result = Helper.load_long_str_from_idb(self.ARRAY_NAME)
+        if result:
+            try:
+                self.storage = json.loads(result, object_hook=self.json_keys_to_str)
+                return
+            except ValueError:
+                logger.error("Failed to read previous info about Xrefs. Try Ctrl+F5 to cache data")
         self.storage = {}
-        pass
 
     def close(self):
-        pass
+        self.save()
+        self.storage = None
 
     def save(self):
-        pass
+        if self.storage:
+            Helper.save_long_str_to_idb(self.ARRAY_NAME, json.dumps(self.storage))
 
     def update_structure_info(self, ordinal, function_address, data):
         """ Accepts data in form dictionary {structure offset -> list(offsets within function with field appealing) """
@@ -63,6 +70,12 @@ class XrefStorage(object):
                     offset, line, usage_type = xref_info
                     result.append(XrefInfo(func_ea, offset, line, usage_type))
         return result
+
+    @staticmethod
+    def json_keys_to_str(x):
+        if isinstance(x, dict):
+            return {int(k): v for k, v in x.items()}
+        return x
 
     def __len__(self):
         return len(str(self.storage))

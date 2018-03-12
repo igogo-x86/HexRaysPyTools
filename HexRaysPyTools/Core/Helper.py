@@ -234,6 +234,29 @@ def to_nice_str(ea):
     return "{}+0x{:X}".format(func_name, offset)
 
 
+def save_long_str_to_idb(array_name, value):
+    """ Overwrites old array completely in process """
+    id = idc.get_array_id(array_name)
+    if id != -1:
+        idc.delete_array(id)
+    id = idc.create_array(array_name)
+    r = []
+    for idx in xrange(len(value) / 1024 + 1):
+        s = value[idx * 1024: (idx + 1) * 1024]
+        r.append(s)
+        idc.set_array_string(id, idx, s)
+    print "".join(r)
+
+
+def load_long_str_from_idb(array_name):
+    id = idc.get_array_id(array_name)
+    if id == -1:
+        return None
+    max_idx = idc.get_last_index(idc.AR_STR, id)
+    result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in xrange(max_idx + 1)]
+    return "".join(result)
+
+
 # ======================================================================
 # Functions that extends IDA Pro capabilities
 # ======================================================================
