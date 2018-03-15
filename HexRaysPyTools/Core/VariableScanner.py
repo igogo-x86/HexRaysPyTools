@@ -91,11 +91,11 @@ class ScannedVariableObject(ScannedObject):
 
         hx_view = idaapi.open_pseudocode(self.func_ea, -1)
         if hx_view:
-            logger.info("Applying tinfo to variable {0} in function {1}".format(self.name, self.function_name))
+            logger.debug("Applying tinfo to variable {0} in function {1}".format(self.name, self.function_name))
             # Finding lvar of new window that have the same name that saved one and applying tinfo_t
             lvar = filter(lambda x: x == self.__lvar, hx_view.cfunc.get_lvars())
             if lvar:
-                logger.info("Successful")
+                logger.debug("Successful")
                 hx_view.set_lvar_type(lvar[0], tinfo)
             else:
                 logger.warn("Failed to find previously scanned local variable {} from {}".format(
@@ -124,7 +124,7 @@ class SearchVisitor(Api.ObjectVisitor):
         super(SearchVisitor, self)._manipulate(cexpr, obj)
 
         if not Helper.is_legal_type(obj.tinfo):
-            logger.warn("Variable obj.name has weird type at {}".format(self._find_asm_address(cexpr)))
+            logger.warn("Variable obj.name has weird type at {}".format(Helper.to_hex(self._find_asm_address(cexpr))))
             return
         if cexpr.type.is_ptr():
             member = self.__extract_member_from_pointer(cexpr, obj)
@@ -150,7 +150,7 @@ class SearchVisitor(Api.ObjectVisitor):
                 else:
                     tinfo = Const.DUMMY_FUNC
                 return TemporaryStructure.Member(offset, tinfo, scan_obj, self.__origin)
-            logger.warn("Want to see this ea - {},".format(Helper.to_hex(cexpr_ea)))
+            # logger.warn("Want to see this ea - {},".format(Helper.to_hex(cexpr_ea)))
 
         if not tinfo or tinfo.equals_to(Const.VOID_TINFO) or tinfo.equals_to(Const.CONST_VOID_TINFO):
             return TemporaryStructure.VoidMember(offset, scan_obj, self.__origin)
