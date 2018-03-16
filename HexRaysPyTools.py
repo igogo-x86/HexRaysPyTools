@@ -68,7 +68,8 @@ def hexrays_events_callback(*args):
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
                 idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
                 idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
-                idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
+                if Actions.DeepScanReturn.check(hx_view):
+                    idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument

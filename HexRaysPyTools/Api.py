@@ -89,6 +89,7 @@ SO_STRUCT_REFERENCE = 3     # cexpr.op == idaapi.cot_memref
 SO_GLOBAL_OBJECT = 4        # cexpr.op == idaapi.cot_obj
 SO_CALL_ARGUMENT = 5        # cexpr.op == idaapi.cot_call
 SO_MEMORY_ALLOCATOR = 6
+SO_RETURNED_OBJECT = 7
 
 
 class VariableObject(ScanObject):
@@ -167,6 +168,17 @@ class CallArgObject(ScanObject):
 
     def __repr__(self):
         return "{}"
+
+
+class ReturnedObject(ScanObject):
+    # Represents value returned by function
+    def __init__(self, func_address):
+        super(ReturnedObject, self).__init__()
+        self.__func_ea = func_address
+        self.id = SO_RETURNED_OBJECT
+
+    def is_target(self, cexpr):
+        return cexpr.op == idaapi.cot_call and cexpr.x.obj_ea == self.__func_ea
 
 
 class MemoryAllocationObject(ScanObject):
@@ -281,7 +293,7 @@ class ObjectDownwardsVisitor(ObjectVisitor):
             return 0
 
         for obj in self._objects:
-            if obj.is_target(cexpr):
+            if obj.is_target(cexpr) and obj.id != SO_RETURNED_OBJECT:
                 self._manipulate(cexpr, obj)
                 return 0
         return 0
@@ -401,7 +413,7 @@ class RecursiveObjectVisitor(ObjectVisitor):
         super(RecursiveObjectVisitor, self).__init__(cfunc, obj, data, skip_until_object)
         self._visited = visited if visited else set()
         self._new_for_visit = set()
-        self.crippled = self.__is_func_crippled()
+        self.crippled = False
         self._arg_idx = -1
         self._debug_scan_tree = {}
         self.__debug_scan_tree_root = idc.Name(self._cfunc.entry_ea)
@@ -413,13 +425,13 @@ class RecursiveObjectVisitor(ObjectVisitor):
     def set_callbacks(self, manipulate=None, start=None, start_iteration=None, finish=None, finish_iteration=None):
         super(RecursiveObjectVisitor, self).set_callbacks(manipulate)
         if start:
-            self.__start = start.__get__(self, RecursiveObjectDownwardsVisitor)
+            self._start = start.__get__(self, RecursiveObjectDownwardsVisitor)
         if start_iteration:
-            self.__start_iteration = start_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
+            self._start_iteration = start_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
         if finish:
-            self.__finish = finish.__get__(self, RecursiveObjectDownwardsVisitor)
+            self._finish = finish.__get__(self, RecursiveObjectDownwardsVisitor)
         if finish_iteration:
-            self.__finish_iteration = finish_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
+            self._finish_iteration = finish_iteration.__get__(self, RecursiveObjectDownwardsVisitor)
 
     def prepare_new_scan(self, cfunc, arg_idx, obj, skip=False):
         self._cfunc = cfunc
@@ -430,9 +442,9 @@ class RecursiveObjectVisitor(ObjectVisitor):
         self.crippled = self.__is_func_crippled()
 
     def process(self):
-        self.__start()
+        self._start()
         self._recursive_process()
-        self.__finish()
+        self._finish()
         self.dump_scan_tree()
 
     def dump_scan_tree(self):
@@ -450,9 +462,9 @@ class RecursiveObjectVisitor(ObjectVisitor):
                 self.__prepare_debug_message((func_name, arg_idx), level + 1)
 
     def _recursive_process(self):
-        self.__start_iteration()
+        self._start_iteration()
         super(RecursiveObjectVisitor, self).process()
-        self.__finish_iteration()
+        self._finish_iteration()
 
     def _manipulate(self, cexpr, obj):
         self._check_call(cexpr)
@@ -476,19 +488,19 @@ class RecursiveObjectVisitor(ObjectVisitor):
         else:
             self._debug_scan_tree[head_node] = {tail_node}
 
-    def __start(self):
+    def _start(self):
         """ Called at the beginning of visiting """
         pass
 
-    def __start_iteration(self):
+    def _start_iteration(self):
         """ Called every time new function visiting started """
         pass
 
-    def __finish(self):
+    def _finish(self):
         """ Called after all visiting happened """
         pass
 
-    def __finish_iteration(self):
+    def _finish_iteration(self):
         """ Called every time new function visiting finished """
         pass
 
@@ -530,7 +542,7 @@ class RecursiveObjectDownwardsVisitor(RecursiveObjectVisitor, ObjectDownwardsVis
             func_ea, arg_idx = self._new_for_visit.pop()
             cfunc = decompile_function(func_ea)
             if cfunc:
-                assert arg_idx < len(cfunc.get_lvars()), "Wrong argument at func {}".format(func_ea)
+                assert arg_idx < len(cfunc.get_lvars()), "Wrong argument at func {}".format(to_hex(func_ea))
                 obj = VariableObject(cfunc.get_lvars()[arg_idx], arg_idx)
                 self.prepare_new_scan(cfunc, arg_idx, obj)
                 self._recursive_process()

@@ -123,7 +123,7 @@ class SearchVisitor(Api.ObjectVisitor):
     def _manipulate(self, cexpr, obj):
         super(SearchVisitor, self)._manipulate(cexpr, obj)
 
-        if not Helper.is_legal_type(obj.tinfo):
+        if obj.tinfo and not Helper.is_legal_type(obj.tinfo):
             logger.warn("Variable obj.name has weird type at {}".format(Helper.to_hex(self._find_asm_address(cexpr))))
             return
         if cexpr.type.is_ptr():
@@ -136,6 +136,11 @@ class SearchVisitor(Api.ObjectVisitor):
             self.__temporary_structure.add_row(member)
 
     def _get_member(self, offset, cexpr, obj, tinfo=None, obj_ea=None):
+        if offset < 0:
+            logger.error("Considered to be imposible: offset - {}, obj - {}".format(
+                offset, Helper.to_hex(self._get_asm_address(cexpr))))
+            raise AssertionError
+
         applicable = not self.crippled
         cexpr_ea = self._find_asm_address(cexpr)
         scan_obj = ScannedObject.create(obj, cexpr_ea, self.__origin, applicable)
@@ -299,24 +304,32 @@ class NewDeepSearchVisitor(SearchVisitor, Api.RecursiveObjectDownwardsVisitor):
         super(NewDeepSearchVisitor, self).__init__(cfunc, origin, obj, temporary_structure)
 
 
-class VariableLookupVisitor(idaapi.ctree_parentee_t):
-    """ Helps to find all variables that are returned by some function placed at func_address """
+class DeepReturnVisitor(NewDeepSearchVisitor):
+    def __init__(self, cfunc, origin, obj, temporary_structure):
+        super(DeepReturnVisitor, self).__init__(cfunc, origin, obj, temporary_structure)
+        self.__callers_ea = Helper.get_funcs_calling_address(cfunc.entry_ea)
+        self.__call_obj = obj
 
-    def __init__(self, func_address):
-        super(VariableLookupVisitor, self).__init__()
-        self.func_address = func_address
-        self.result = []
+    def _start(self):
+        for ea in self.__callers_ea:
+            self._add_scan_tree_info(ea, -1)
+        assert self.__prepare_scanner()
 
-    def visit_expr(self, expression):
-        # We are looking for expressions like `var = func(...)` or `var = (TYPE) func(...)`
-        if expression.op == idaapi.cot_asg and expression.x.op == idaapi.cot_var:
-            if expression.y.op == idaapi.cot_call:
-                if self.__check_call(expression.y) or \
-                        expression.y.op == idaapi.cot_cast and expression.y.x.op == idaapi.cot_call:
+    def _finish(self):
+        if self.__prepare_scanner():
+            self._recursive_process()
 
-                    idx = expression.x.v.idx
-                    self.result.append(idx)
-        return 0
+    def __prepare_scanner(self):
+        try:
+            cfunc = self.__iter_callers().next()
+        except StopIteration:
+            return False
 
-    def __check_call(self, expression):
-        return expression.x.obj_ea == self.func_address
+        self.prepare_new_scan(cfunc, -1, self.__call_obj)
+        return True
+
+    def __iter_callers(self):
+        for ea in self.__callers_ea:
+            cfunc = Api.decompile_function(ea)
+            if cfunc:
+                yield cfunc

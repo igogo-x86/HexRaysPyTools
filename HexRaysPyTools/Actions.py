@@ -13,7 +13,7 @@ import HexRaysPyTools.Api as Api
 import Settings
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
 from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, NewDeepSearchVisitor, VariableLookupVisitor
+from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, NewDeepSearchVisitor, DeepReturnVisitor
 from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
 from HexRaysPyTools.Core.SpaghettiCode import *
 from HexRaysPyTools.Core.StructXrefs import XrefStorage
@@ -338,46 +338,22 @@ class DeepScanReturn(idaapi.action_handler_t):
     hotkey = None
 
     def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
+        self.temp_struct = temporary_structure
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        return hx_view.cfunc.get_rettype().equals_to(Const.VOID_TINFO)
+    def check(hx_view):
+        tinfo = idaapi.tinfo_t()
+        hx_view.cfunc.get_func_type(tinfo)
+        return not tinfo.get_rettype().equals_to(Const.VOID_TINFO)
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
-        address = hx_view.cfunc.entry_ea
+        func_ea = hx_view.cfunc.entry_ea
 
-        xref_ea = idaapi.get_first_cref_to(address)
-        xrefs = set()
-        while xref_ea != idaapi.BADADDR:
-            xref_func_ea = idc.GetFunctionAttr(xref_ea, idc.FUNCATTR_START)
-            if xref_func_ea != idaapi.BADADDR:
-                xrefs.add(xref_func_ea)
-            else:
-                print "[Warning] Function not found at 0x{0:08X}".format(xref_ea)
-            xref_ea = idaapi.get_next_cref_to(address, xref_ea)
-
-        for func_ea in xrefs:
-            visitor = VariableLookupVisitor(address)
-
-            try:
-                cfunc = idaapi.decompile(func_ea)
-                if cfunc:
-                    FunctionTouchVisitor(cfunc).process()
-                    visitor.apply_to(cfunc.body, None)
-                    for idx in visitor.result:
-                        scanner = DeepSearchVisitor(cfunc, 0, idx)
-                        scanner.process()
-                        for field in scanner.candidates:
-                            self.temporary_structure.add_row(field)
-
-            except idaapi.DecompilationFailure:
-                print "[Warning] Failed to decompile function at 0x{0:08X}".format(xref_ea)
-
-        DeepSearchVisitor.clear()
+        obj = Api.ReturnedObject(func_ea)
+        visitor = DeepReturnVisitor(hx_view.cfunc, self.temp_struct.main_offset, obj, self.temp_struct)
+        visitor.process()
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
