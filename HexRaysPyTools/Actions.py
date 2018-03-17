@@ -374,24 +374,10 @@ class DeepScanFunctions(idaapi.action_handler_t):
     def activate(self, ctx):
         for idx in ctx.chooser_selection:
             func_ea = idaapi.getn_func(idx - 1).startEA
-            try:
-                cfunc = idaapi.decompile(func_ea)
-                if cfunc is None:
-                    continue
-
-                FunctionTouchVisitor(cfunc).process()
-
-                lvars = cfunc.get_lvars()
-                if not (lvars and lvars[0].is_arg_var and Helper.is_legal_type(lvars[0].type())):
-                    continue
-
-                scanner = DeepSearchVisitor(cfunc, 0, 0)
-                scanner.process()
-                for field in scanner.candidates:
-                    self.temporary_structure.add_row(field)
-
-            except idaapi.DecompilationFailure:
-                print "[Warning] Failed to decompile function at 0x{0:08X}".format(func_ea)
+            cfunc = Api.decompile_function(func_ea)
+            obj = Api.VariableObject(cfunc.get_lvars()[0], 0)
+            if cfunc:
+                NewDeepSearchVisitor(cfunc, 0, obj, self.temporary_structure).process()
 
     def update(self, ctx):
         if ctx.form_type == idaapi.BWN_FUNCS:
