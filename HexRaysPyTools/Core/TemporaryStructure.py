@@ -10,6 +10,7 @@ from HexRaysPyTools.Cute import *
 import Const
 import Helper
 import VariableScanner
+import HexRaysPyTools.Api as Api
 from HexRaysPyTools.Forms import MyChoose
 
 
@@ -101,9 +102,9 @@ class AbstractMember:
     def score(self):
         """ More score of the member - it better suits as candidate for this offset """
         try:
-            return SCORE_TABLE[self.tinfo.dstr()]
+            return SCORE_TABLE[self.type_name]
         except KeyError:
-            if self.tinfo.is_funcptr():
+            if self.tinfo and self.tinfo.is_funcptr():
                 return 0x1000 + len(self.tinfo.dstr())
             return 0xFFFF
 
@@ -161,7 +162,7 @@ class VirtualFunction:
         return udt_member
 
     def get_information(self):
-        return ["0x{0:08X}".format(self.address), self.name, self.tinfo.dstr()]
+        return [Helper.to_hex(self.address), self.name, self.tinfo.dstr()]
 
     @property
     def name(self):
@@ -210,6 +211,33 @@ class ImportedVirtualFunction(VirtualFunction):
 
 
 class VirtualTable(AbstractMember):
+    class VirtualTableChoose(MyChoose):
+        def __init__(self, items, temp_struct, virtual_table):
+            MyChoose.__init__(
+                self,
+                items,
+                "Select Virtual Function",
+                [["Address", 10], ["Name", 15], ["Declaration", 45]],
+                13
+            )
+            self.popup_names = ["Scan All", "-", "Scan", "-"]
+            self.__temp_struct = temp_struct
+            self.__virtual_table = virtual_table
+
+        def OnGetLineAttr(self, n):
+            return [0xd9d9d9, 0x0] if self.__virtual_table.virtual_functions[n].visited else [0xffffff, 0x0]
+
+        def OnGetIcon(self, n):
+            return 32 if self.__virtual_table.virtual_functions[n].visited else 160
+
+        def OnInsertLine(self):
+            """ Scan All Functions menu """
+            self.__virtual_table.scan_virtual_functions()
+
+        def OnEditLine(self, n):
+            """ Scan menu """
+            self.__virtual_table.scan_virtual_function(n)
+
     def __init__(self, offset, address, scanned_variable=None, origin=0):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
@@ -288,21 +316,8 @@ class VirtualTable(AbstractMember):
             print "*" * 100
 
     def show_virtual_functions(self):
-        function_chooser = MyChoose(
-            [function.get_information() for function in self.virtual_functions],
-            "Select Virtual Function",
-            [["Address", 10], ["Name", 15], ["Declaration", 45]],
-            13
-        )
-        function_chooser.OnGetIcon = lambda n: 32 if self.virtual_functions[n].visited else 160
-        function_chooser.OnGetLineAttr = \
-            lambda n: [0xd9d9d9, 0x0] if self.virtual_functions[n].visited else [0xffffff, 0x0]
-
-        # Very nasty, but have no time to make nice QT window instead Ida Choose2 menu.
-        # This function creates menu "Scan All"
-        function_chooser.popup_names = ["Scan All", "-", "Scan", "-"]
-        function_chooser.OnInsertLine = self.scan_virtual_functions
-        function_chooser.OnEditLine = self.scan_virtual_function
+        function_chooser = self.VirtualTableChoose(
+            [function.get_information() for function in self.virtual_functions], Cache.temporary_structure, self)
 
         idx = function_chooser.Show(True)
         if idx != -1:
@@ -323,11 +338,10 @@ class VirtualTable(AbstractMember):
             function = idaapi.decompile(self.virtual_functions[index].address)
         if function.arguments and function.arguments[0].is_arg_var and Helper.is_legal_type(function.arguments[0].tif):
             print "[Info] Scanning virtual function at 0x{0:08X}".format(function.entry_ea)
-            scanner = VariableScanner.DeepSearchVisitor(function, self.offset, 0)
-            scanner.apply_to(function.body, None)
-            for candidate in scanner.candidates:
-                # TODO: Remove usage `temporary_structure' as global
-                Cache.temporary_structure.add_row(candidate)
+            # TODO: Remove usage `temporary_structure' as global
+            obj = Api.VariableObject(function.get_lvars()[0], 0)
+            scanner = VariableScanner.NewDeepSearchVisitor(function, self.offset, obj, Cache.temporary_structure)
+            scanner.process()
         else:
             print "[Warning] Bad type of first argument in virtual function at 0x{0:08X}".format(function.entry_ea)
 
