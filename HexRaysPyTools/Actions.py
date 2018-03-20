@@ -283,20 +283,21 @@ class ShallowScanVariable(idaapi.action_handler_t):
     def check(ctree_item):
         lvar = ctree_item.get_lvar()
         if lvar is not None:
-            return "LOCAL" if Helper.is_legal_type(lvar.type()) else None
+            return Helper.is_legal_type(lvar.type())
 
-        if ctree_item.citype == idaapi.VDI_EXPR:
-            gvar = ctree_item.it.to_specific_type
-            if gvar.op == idaapi.cot_obj and Helper.is_legal_type(gvar.type) and Helper.is_rw_ea(gvar.obj_ea):
-                return "GLOBAL"
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return False
+
+        obj = Api.ScanObject.create(ctree_item.e)
+        return obj and Helper.is_legal_type(obj.tinfo)
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
         cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        obj = Api.ScanObject.create(cfunc, hx_view.item)
-        if obj:
+        if self.check(hx_view.item):
+            obj = Api.ScanObject.create(cfunc, hx_view.item)
             visitor = NewShallowSearchVisitor(cfunc, origin, obj, self.temporary_structure)
             visitor.process()
 
@@ -321,8 +322,8 @@ class DeepScanVariable(idaapi.action_handler_t):
         cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        obj = Api.ScanObject.create(cfunc, hx_view.item)
-        if obj:
+        if ShallowScanVariable.check(hx_view.item):
+            obj = Api.ScanObject.create(cfunc, hx_view.item)
             visitor = NewDeepSearchVisitor(cfunc, origin, obj, self.temporary_structure)
             visitor.process()
 
