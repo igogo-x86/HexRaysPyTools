@@ -280,7 +280,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(ctree_item):
+    def check(cfunc, ctree_item):
         lvar = ctree_item.get_lvar()
         if lvar is not None:
             return Helper.is_legal_type(lvar.type())
@@ -288,7 +288,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
         if ctree_item.citype != idaapi.VDI_EXPR:
             return False
 
-        obj = Api.ScanObject.create(ctree_item.e)
+        obj = Api.ScanObject.create(cfunc, ctree_item.e)
         return obj and Helper.is_legal_type(obj.tinfo)
 
     def activate(self, ctx):
@@ -296,7 +296,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
         cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        if self.check(hx_view.item):
+        if self.check(cfunc, hx_view.item):
             obj = Api.ScanObject.create(cfunc, hx_view.item)
             visitor = NewShallowSearchVisitor(cfunc, origin, obj, self.temporary_structure)
             visitor.process()
@@ -322,7 +322,7 @@ class DeepScanVariable(idaapi.action_handler_t):
         cfunc = hx_view.cfunc
         origin = self.temporary_structure.main_offset
 
-        if ShallowScanVariable.check(hx_view.item):
+        if ShallowScanVariable.check(cfunc, hx_view.item):
             obj = Api.ScanObject.create(cfunc, hx_view.item)
             visitor = NewDeepSearchVisitor(cfunc, origin, obj, self.temporary_structure)
             visitor.process()
@@ -398,33 +398,22 @@ class RecognizeShape(idaapi.action_handler_t):
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
+        cfunc = hx_view.cfunc
 
-        var_type = ShallowScanVariable.check(hx_view.item)
-        if var_type == "LOCAL":
-            variable = hx_view.item.get_lvar()  # lvar_t
-            index = list(hx_view.cfunc.get_lvars()).index(variable)
-            scanner = ShallowSearchVisitor(hx_view.cfunc, 0, index)
-
-        elif var_type == "GLOBAL":
-            variable = hx_view.item.it.to_specific_type
-            name = idc.GetTrueName(variable.obj_ea)
-            tinfo = variable.type
-            scanner = ShallowSearchVisitor(hx_view.cfunc, 0, global_variable=(name, tinfo))
-
-        else:
+        if not ShallowScanVariable.check(cfunc, hx_view.item):
             return
 
-        scanner.process()
-        structure = TemporaryStructureModel()
-        for field in scanner.candidates:
-            structure.add_row(field)
-        tinfo = structure.get_recognized_shape()
+        obj = Api.ScanObject.create(cfunc, hx_view.item)
+        temp_struct = TemporaryStructureModel()
+        visitor = NewShallowSearchVisitor(cfunc, 0, obj, temp_struct)
+        visitor.process()
+        tinfo = temp_struct.get_recognized_shape()
         if tinfo:
             tinfo.create_ptr(tinfo)
-            if var_type == "LOCAL":
-                hx_view.set_lvar_type(variable, tinfo)
-            elif var_type == "GLOBAL":
-                idaapi.apply_tinfo2(variable.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
+            if obj.id == Api.SO_LOCAL_VARIABLE:
+                hx_view.set_lvar_type(obj.lvar, tinfo)
+            elif obj.id == Api.SO_GLOBAL_OBJECT:
+                idaapi.apply_tinfo2(obj.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
             hx_view.refresh_view(True)
 
     def update(self, ctx):
