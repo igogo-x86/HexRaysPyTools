@@ -1,7 +1,7 @@
 import logging
 import idaapi
 import idc
-from Core.Helper import to_hex, get_member_name, get_func_argument_info, get_funcs_calling_address
+from Core.Helper import to_hex, get_member_name, get_func_argument_info, get_funcs_calling_address, is_imported_ea
 
 logger = logging.getLogger(__name__)
 
@@ -537,6 +537,8 @@ class RecursiveObjectDownwardsVisitor(RecursiveObjectVisitor, ObjectDownwardsVis
 
         while self._new_for_visit:
             func_ea, arg_idx = self._new_for_visit.pop()
+            if is_imported_ea(func_ea):
+                continue
             cfunc = decompile_function(func_ea)
             if cfunc:
                 assert arg_idx < len(cfunc.get_lvars()), "Wrong argument at func {}".format(to_hex(func_ea))

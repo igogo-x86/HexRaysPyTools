@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 def is_imported_ea(ea):
+    if idc.get_segm_name(ea) == ".plt":
+        return True
     return ea in Cache.imported_ea
 
 
@@ -205,6 +207,8 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
     def touch_all(self):
         diff = self.functions.difference(Cache.touched_functions)
         for address in diff:
+            if is_imported_ea(address):
+                continue
             try:
                 cfunc = idaapi.decompile(address)
                 if cfunc:
