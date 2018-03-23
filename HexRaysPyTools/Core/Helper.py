@@ -1,10 +1,13 @@
 import collections
+import logging
 
 import idaapi
 import idc
 
 import HexRaysPyTools.Core.Cache as Cache
 import HexRaysPyTools.Core.Const as Const
+
+logger = logging.getLogger(__name__)
 
 
 def is_imported_ea(ea):
@@ -200,14 +203,15 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
         return 0
 
     def touch_all(self):
-        for address in self.functions.difference(Cache.touched_functions):
-            Cache.touched_functions.add(address)
+        diff = self.functions.difference(Cache.touched_functions)
+        for address in diff:
             try:
                 cfunc = idaapi.decompile(address)
                 if cfunc:
                     FunctionTouchVisitor(cfunc).process()
             except idaapi.DecompilationFailure:
-                print "[ERROR] IDA failed to decompile function at 0x{address:08X}".format(address=address)
+                logger.warn("IDA failed to decompile function at {}".format(to_hex(address)))
+                Cache.touched_functions.add(address)
         idaapi.decompile(self.cfunc.entry_ea)
 
     def process(self):

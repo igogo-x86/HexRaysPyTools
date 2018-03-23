@@ -239,9 +239,6 @@ class ObjectVisitor(idaapi.ctree_parentee_t):
         AssertionError("Parent instruction is not found")
 
     def _manipulate(self, cexpr, obj):
-        self.__manipulate(cexpr, obj)
-
-    def __manipulate(self, cexpr, obj):
         """
         Method called for every object having assignment relationship with starter object. This method should be
         reimplemented in order to do something useful

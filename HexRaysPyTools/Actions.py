@@ -324,7 +324,9 @@ class DeepScanVariable(idaapi.action_handler_t):
 
         if ShallowScanVariable.check(cfunc, hx_view.item):
             obj = Api.ScanObject.create(cfunc, hx_view.item)
-            visitor = NewDeepSearchVisitor(cfunc, origin, obj, self.temporary_structure)
+            if FunctionTouchVisitor(cfunc).process():
+                hx_view.refresh_view(True)
+            visitor = NewDeepSearchVisitor(hx_view.cfunc, origin, obj, self.temporary_structure)
             visitor.process()
 
     def update(self, ctx):
