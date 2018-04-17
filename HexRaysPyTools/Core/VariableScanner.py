@@ -42,7 +42,7 @@ class ScannedObject(object):
     def create(obj, expression_address, origin, applicable):
         """ Creates suitable instance of ScannedObject depending on obj """
         if obj.id == Api.SO_GLOBAL_OBJECT:
-            return ScannedGlobalObject(obj.ea.obj.name, expression_address, origin, applicable)
+            return ScannedGlobalObject(obj.ea, obj.name, expression_address, origin, applicable)
         elif obj.id == Api.SO_LOCAL_VARIABLE:
             return ScannedVariableObject(obj.lvar, obj.name, expression_address, origin, applicable)
         elif obj.id in (Api.SO_STRUCT_REFERENCE, Api.SO_STRUCT_POINTER):
@@ -138,7 +138,7 @@ class SearchVisitor(Api.ObjectVisitor):
     def _get_member(self, offset, cexpr, obj, tinfo=None, obj_ea=None):
         if offset < 0:
             logger.error("Considered to be imposible: offset - {}, obj - {}".format(
-                offset, Helper.to_hex(self._get_asm_address(cexpr))))
+                offset, Helper.to_hex(self._find_asm_address(cexpr))))
             raise AssertionError
 
         applicable = not self.crippled
@@ -199,10 +199,14 @@ class SearchVisitor(Api.ObjectVisitor):
                 del parents_type[0]
                 del parents[0]
         elif parents_type[0:2] == ['cast', 'add']:
-            # (TYPE *)obj + offset
+            # (TYPE *)obj + offset or (TYPE)obj + offset
             if parents[1].y.op != idaapi.cot_num:
                 return
-            offset = parents[1].theother(parents[0]).numval() * parents[0].type.get_ptrarr_objsize()
+            if parents[0].type.is_ptr():
+                size = parents[0].type.get_ptrarr_objsize()
+            else:
+                size = 1
+            offset = parents[1].theother(parents[0]).numval() * size
             cexpr = parents[1]
             del parents_type[0:2]
             del parents[0:2]

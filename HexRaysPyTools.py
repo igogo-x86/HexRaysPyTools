@@ -23,10 +23,8 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        idaapi.attach_action_to_popup(form, popup, Actions.GuessAllocation.name, None)
-
         if Actions.GuessAllocation.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
+            idaapi.attach_action_to_popup(form, popup, Actions.GuessAllocation.name, None)
 
         if Actions.RecastItemRight.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
