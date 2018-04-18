@@ -83,6 +83,7 @@ class ScanObject(object):
     def __repr__(self):
         return self.name
 
+
 SO_LOCAL_VARIABLE = 1       # cexpr.op == idaapi.cot_var
 SO_STRUCT_POINTER = 2       # cexpr.op == idaapi.cot_memptr
 SO_STRUCT_REFERENCE = 3     # cexpr.op == idaapi.cot_memref
@@ -247,6 +248,9 @@ class ObjectVisitor(idaapi.ctree_parentee_t):
         :param id: one of the SO_* constants
         :return: None
         """
+        self.__manipulate(cexpr, obj)
+
+    def __manipulate(self, cexpr, obj):
         logger.debug("Expression {} at {} Id - {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr)), obj.id))
 
 
