@@ -520,6 +520,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     return QtGui.QBrush(QtGui.QColor("#ff8080"))
             if self.have_collision(row):
                 return QtGui.QBrush(QtGui.QColor("#ffff99"))
+        elif role == QtCore.Qt.ForegroundRole:
+            if self.have_collision(row):
+                return QtGui.QBrush(QtGui.QColor("#191919"))
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
