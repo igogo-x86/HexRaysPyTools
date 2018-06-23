@@ -512,7 +512,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         elif role == QtCore.Qt.FontRole:
             if col == 1:
                 return item.font
-        elif role == QtCore.Qt.BackgroundColorRole:
+        elif role == QtCore.Qt.BackgroundRole:
             if not item.enabled:
                 return QtGui.QColor(QtCore.Qt.gray)
             if item.offset == self.main_offset:
