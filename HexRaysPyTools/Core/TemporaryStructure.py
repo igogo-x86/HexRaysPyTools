@@ -512,7 +512,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         elif role == QtCore.Qt.FontRole:
             if col == 1:
                 return item.font
-        elif role == QtCore.Qt.BackgroundColorRole:
+        elif role == QtCore.Qt.BackgroundRole:
             if not item.enabled:
                 return QtGui.QColor(QtCore.Qt.gray)
             if item.offset == self.main_offset:
@@ -520,6 +520,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     return QtGui.QBrush(QtGui.QColor("#ff8080"))
             if self.have_collision(row):
                 return QtGui.QBrush(QtGui.QColor("#ffff99"))
+        elif role == QtCore.Qt.ForegroundRole:
+            if self.have_collision(row):
+                return QtGui.QBrush(QtGui.QColor("#191919"))
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
