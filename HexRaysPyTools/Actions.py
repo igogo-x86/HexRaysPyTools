@@ -566,10 +566,10 @@ class ShowGraph(idaapi.action_handler_t):
         """
         form = self.graph_view.GetTForm() if self.graph_view else None
         if form:
-            self.graph_view.change_selected(list(ctx.chooser_selection))
+            self.graph_view.change_selected([sel + 1 for sel in ctx.chooser_selection])
             self.graph_view.Show()
         else:
-            self.graph = StructureGraph(list(ctx.chooser_selection))
+            self.graph = StructureGraph([sel + 1 for sel in ctx.chooser_selection])
             self.graph_view = Forms.StructureGraphViewer("Structure Graph", self.graph)
             self.graph_view.Show()
 
