@@ -124,12 +124,12 @@ class StructRefObject(ScanObject):
     # Represents `x.m` expression
     def __init__(self, struct_name, offset):
         super(StructRefObject, self).__init__()
-        self.__struct_name = struct_name
-        self.__offset = offset
+        self.struct_name = struct_name
+        self.offset = offset
         self.id = SO_STRUCT_REFERENCE
 
     def is_target(self, cexpr):
-        return cexpr.op == idaapi.cot_memref and cexpr.m == self.__offset and cexpr.x.type.dstr() == self.__struct_name
+        return cexpr.op == idaapi.cot_memref and cexpr.m == self.offset and cexpr.x.type.dstr() == self.struct_name
 
 
 class GlobalVariableObject(ScanObject):
@@ -144,18 +144,18 @@ class GlobalVariableObject(ScanObject):
 
 
 class CallArgObject(ScanObject):
-    # Represents call of function and specified argument
+    # Represents call of a function and argument index
     def __init__(self, func_address, arg_idx):
         super(CallArgObject, self).__init__()
-        self.__func_ea = func_address
-        self.__arg_idx = arg_idx
+        self.func_ea = func_address
+        self.arg_idx = arg_idx
         self.id = SO_CALL_ARGUMENT
 
     def is_target(self, cexpr):
-        return cexpr.op == idaapi.cot_call and cexpr.x.obj_ea == self.__func_ea
+        return cexpr.op == idaapi.cot_call and cexpr.x.obj_ea == self.func_ea
 
     def create_scan_obj(self, cfunc, cexpr):
-        e = cexpr.a[self.__arg_idx]
+        e = cexpr.a[self.arg_idx]
         while e.op in (idaapi.cot_cast, idaapi.cot_ref, idaapi.cot_add, idaapi.cot_sub, idaapi.cot_idx):
             e = e.x
         return ScanObject.create(cfunc, e)
