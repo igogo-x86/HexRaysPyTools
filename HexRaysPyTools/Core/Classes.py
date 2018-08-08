@@ -464,8 +464,10 @@ class TreeModel(QtCore.QAbstractItemModel):
             return index.internalPointer().item.font(index.column())
         elif role == QtCore.Qt.ToolTipRole:
             return index.internalPointer().item.tooltip
-        elif role == QtCore.Qt.BackgroundColorRole:
+        elif role == QtCore.Qt.BackgroundRole:
             return index.internalPointer().item.color
+        elif role == QtCore.Qt.ForegroundRole:
+            return QtGui.QBrush(QtGui.QColor("#191919"))
         return None
 
     def setData(self, index, value, role=QtCore.Qt.DisplayRole):
