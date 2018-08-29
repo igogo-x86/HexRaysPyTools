@@ -378,11 +378,16 @@ class VirtualTable(AbstractMember):
     def check_address(address):
         # Checks if given address contains virtual table. Returns True if more than 2 function pointers found
         # Also if table's addresses point to code in executable section, than tries to make functions at that addresses
+        if Helper.is_code_ea(address):
+            return False
+
         functions_count = 0
         while True:
             func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
+            print "\t", hex(func_address)
             # print "[INFO] Address 0x{0:08X}".format(func_address)
             if Helper.is_code_ea(func_address) or Helper.is_imported_ea(func_address):
+                print "\t\tigogo"
                 functions_count += 1
                 address += Const.EA_SIZE
             else:
