@@ -1,6 +1,6 @@
 import time
 import logging
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import json
 
 import idaapi
@@ -28,7 +28,12 @@ class XrefStorage(object):
     ARRAY_NAME = "$HexRaysPyTools:XrefStorage"
 
     def __init__(self):
+        """
+        storage - {ordinal: {func_offset: (code_offset, line, usage_type)}}
+        __delete_items_helper - {func_offset: set(ordinals)}
+        """
         self.storage = None
+        self.__delete_items_helper = None
 
     def open(self):
         if not Settings.STORE_XREFS:
@@ -39,6 +44,7 @@ class XrefStorage(object):
         if result:
             try:
                 self.storage = json.loads(result, object_hook=self.json_keys_to_str)
+                self.__init_delete_helper()
                 return
             except ValueError:
                 logger.error("Failed to read previous info about Xrefs. Try Ctrl+F5 to cache data")
@@ -55,14 +61,14 @@ class XrefStorage(object):
         if self.storage:
             Helper.save_long_str_to_idb(self.ARRAY_NAME, json.dumps(self.storage))
 
-    def update_structure_info(self, ordinal, function_address, data):
-        """ Accepts data in form dictionary {structure offset -> list(offsets within function with field appealing) """
-        if ordinal not in self.storage:
-            self.storage[ordinal] = {}
+    def update(self, function_offset, data):
+        """ data - {ordinal : (code_offset, line, usage_type)} """
+        for ordinal, info in data.items():
+            self.__update_ordinal_info(ordinal, function_offset, info)
 
-        image_base = idaapi.get_imagebase()
-        function_offset = function_address - image_base
-        self.storage[ordinal][function_offset] = data
+        deleted_ordinals = self.__delete_items_helper[function_offset].difference(data.keys())
+        for ordinal in deleted_ordinals:
+            self.__remove_ordinal_info(ordinal, function_offset)
 
     def get_structure_info(self, ordinal, struct_offset):
         """ By given ordinal and offset within a structure returns dictionary {func_address -> list(offsets)} """
@@ -71,10 +77,10 @@ class XrefStorage(object):
         if ordinal not in self.storage:
             return result
 
-        for func_offset, data in self.storage[ordinal].items():
-            if struct_offset in data:
+        for func_offset, info in self.storage[ordinal].items():
+            if struct_offset in info:
                 func_ea = func_offset + idaapi.get_imagebase()
-                for xref_info in data[struct_offset]:
+                for xref_info in info[struct_offset]:
                     offset, line, usage_type = xref_info
                     result.append(XrefInfo(func_ea, offset, line, usage_type))
         return result
@@ -88,12 +94,27 @@ class XrefStorage(object):
     def __len__(self):
         return len(str(self.storage))
 
+    def __init_delete_helper(self):
+        self.__delete_items_helper = defaultdict(set)
+        for ordinal, data in self.storage.items():
+            for func_offset in data:
+                self.__delete_items_helper[func_offset].add(ordinal)
+
+    def __remove_ordinal_info(self, ordinal, function_offset):
+        del self.storage[ordinal][function_offset]
+        self.__delete_items_helper[function_offset].remove(ordinal)
+
+    def __update_ordinal_info(self, ordinal, function_offset, info):
+        if ordinal not in self.storage:
+            self.storage[ordinal] = {}
+        self.storage[ordinal][function_offset] = info
+        self.__delete_items_helper[function_offset].add(ordinal)
+
 
 class StructXrefVisitor(idaapi.ctree_parentee_t):
     def __init__(self, cfunc):
         super(StructXrefVisitor, self).__init__()
         self.__cfunc = cfunc
-        self.__image_base = idaapi.get_imagebase()
         self.__function_address = cfunc.entry_ea
         self.__result = {}
         self.__storage = XrefStorage()
@@ -141,8 +162,7 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
     def process(self):
         t = time.time()
         self.apply_to(self.__cfunc.body, None)
-        for ordinal, data in self.__result.items():
-            self.__storage.update_structure_info(ordinal, self.__function_address, data)
+        self.__storage.update(self.__function_address - idaapi.get_imagebase(), self.__result)
 
         storage_mb_size = len(self.__storage) * 1.0 / 1024 ** 2
         logger.debug("Xref processing: %f seconds passed, storage size - %.2f MB ", (time.time() - t), storage_mb_size)
