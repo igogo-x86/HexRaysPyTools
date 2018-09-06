@@ -18,9 +18,8 @@ class VirtualMethod(object):
         self.class_name = None
         self.name_modified = False
         self.parents = [parent]
-        self.base_address = Helper.get_virtual_func_address(name)
-        if self.base_address:
-            self.base_address -= idaapi.get_imagebase()
+        image_base = idaapi.get_imagebase()
+        self.ra_addresses = [ea - image_base for ea in Helper.get_virtual_func_addresses(name)]
 
         self.rowcount = 0
         self.children = []
@@ -41,17 +40,17 @@ class VirtualMethod(object):
         self.name_modified = False
         self.tinfo_modified = False
 
-        self.base_address = idc.LocByName(self.name)
-        if self.base_address != idaapi.BADADDR:
-            self.base_address -= idaapi.get_imagebase()
-
     def data(self, column):
         if column == 0:
             return self.name
         elif column == 1:
             return self.tinfo.get_pointed_object().dstr()
         elif column == 2:
-            return "0x{0:08X}".format(self.address) if self.address else None
+            addresses = self.addresses
+            if len(addresses) > 1:
+                return "LIST"
+            elif len(addresses) == 1:
+                return Helper.to_hex(addresses[0])
 
     def setData(self, column, value):
         if column == 0:
@@ -86,7 +85,8 @@ class VirtualMethod(object):
 
     def flags(self, column):
         if column != 2:
-            if self.address:
+            if len(self.addresses) == 1:
+                # Virtual function has only one address. Allow to modify its signature and name
                 return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsEditable
         return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
 
@@ -101,8 +101,9 @@ class VirtualMethod(object):
         return None
 
     @property
-    def address(self):
-        return self.base_address + idaapi.get_imagebase() if self.base_address else None
+    def addresses(self):
+        image_base = idaapi.get_imagebase()
+        return [ra + image_base for ra in self.ra_addresses]
 
     def set_first_argument_type(self, name):
         func_data = idaapi.func_type_data_t()
@@ -127,24 +128,32 @@ class VirtualMethod(object):
                 print "[Warning] function {0} probably have wrong type".format(self.name)
 
     def open_function(self):
-        if self.address:
-            if idaapi.decompile(self.address):
-                idaapi.open_pseudocode(self.address, 0)
-            else:
-                idaapi.jumpto(self.address)
+        addresses = self.addresses
+        if len(addresses) > 1:
+            address = Helper.choose_virtual_func_address(self.name)
+        elif len(addresses) == 1:
+            address = addresses[0]
+        else:
+            return
+
+        if idaapi.decompile(address):
+            idaapi.open_pseudocode(address, 0)
+        else:
+            idaapi.jumpto(address)
 
     def commit(self):
+        addresses = self.addresses
         if self.name_modified:
             self.name_modified = False
-            if self.address:
-                idaapi.set_name(self.address, self.name)
+            if len(addresses) == 1:
+                idaapi.set_name(addresses[0], self.name)
         if self.tinfo_modified:
             self.tinfo_modified = False
-            if self.address:
-                idaapi.apply_tinfo2(self.address, self.tinfo.get_pointed_object(), idaapi.TINFO_DEFINITE)
+            if len(addresses) == 1:
+                idaapi.apply_tinfo2(addresses[0], self.tinfo.get_pointed_object(), idaapi.TINFO_DEFINITE)
 
     def __eq__(self, other):
-        return self.address == other.address
+        return self.addresses == other.addresses
 
     def __repr__(self):
         return self.name

@@ -11,6 +11,7 @@ import Const
 import Helper
 import VariableScanner
 import HexRaysPyTools.Api as Api
+import Common
 from HexRaysPyTools.Forms import MyChoose
 
 
@@ -24,7 +25,7 @@ SCORE_TABLE = dict((v, k) for k, v in enumerate(
 
 
 def parse_vtable_name(address):
-    name = idaapi.get_short_name(address)
+    name = idaapi.get_name(address)
     if idaapi.is_valid_typename(name):
         if name[0:3] == 'off':
             # off_XXXXXXXX case
@@ -32,33 +33,10 @@ def parse_vtable_name(address):
         elif "table" in name:
             return name, True
         print "[Warning] Weird virtual table name -", name
-        return "Vtable_" + name
-    else:
-        # Attempt to make nice and valid name from demangled RTTI name
-        try:
-            name = re.sub("^const ", "", name)
-            sliced_names = name.split("::")
-            name, for_part = "_for_".join(sliced_names[:-1]), sliced_names[-1]
-            print name, for_part
-            templates = re.search("<(.*)>", name)
-            if templates:
-                templates = templates.group(1)
-                name = re.sub("<.*>", "", name)
-                templates = re.sub("[^a-zA-Z0-9_*]", "_", templates)
-                templates = re.sub("\*", "PTR", templates)
-                name += '_' + templates
-
-            for_part = re.search("\{for `(.*)'\}", for_part)
-            if for_part:
-                for_part = for_part.group(1)
-                name += '_' + for_part
-
-            return 'Vtable_' + name, True
-
-        except (AttributeError, IndexError):
-            print "[Warning] Unable to parse virtual table name - "
-
-        return "Vtable_{0:X}".format(address), False
+        return "Vtable_" + name, False
+    name = idc.demangle_name(idaapi.get_name(address), idc.INF_SHORT_DN)
+    assert name, "Virtual table must have either legal c-type name or mangled name"
+    return Common.demangled_name_to_c_str(name), True
 
 
 class AbstractMember:
@@ -166,17 +144,11 @@ class VirtualFunction:
 
     @property
     def name(self):
-        name = idaapi.get_short_name(self.address)
-        name = name.split('(')[0]
-        result = re.search(r"(\[thunk\]:)?([^`]*)(.*\{(\d+)}.*)?", name)
-        name, adjuster = result.group(2), result.group(4)
-        if adjuster:
-            name += "_adj_" + adjuster
-        name = name.translate(None, "`'").replace(':', '_').replace(' ', '_').replace(',', '_').replace('~', 'DESTR__')
-        name = name.replace("==", "__eq__")
-        name = name.replace("=", "__asg__")
-        name = re.sub(r'[<>]', '_t_', name)
-        return name
+        name = idaapi.get_name(self.address)
+        if idaapi.is_valid_typename(name):
+            return name
+        name = idc.Demangle(name, idc.INF_SHORT_DN)
+        return Common.demangled_name_to_c_str(name)
 
     @property
     def tinfo(self):
@@ -384,10 +356,8 @@ class VirtualTable(AbstractMember):
         functions_count = 0
         while True:
             func_address = idaapi.get_64bit(address) if Const.EA64 else idaapi.get_32bit(address)
-            print "\t", hex(func_address)
             # print "[INFO] Address 0x{0:08X}".format(func_address)
             if Helper.is_code_ea(func_address) or Helper.is_imported_ea(func_address):
-                print "\t\tigogo"
                 functions_count += 1
                 address += Const.EA_SIZE
             else:

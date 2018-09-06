@@ -7,6 +7,7 @@ import idc
 import HexRaysPyTools.Core.Cache as Cache
 import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Settings as Settings
+import HexRaysPyTools.Forms as Forms
 
 logger = logging.getLogger(__name__)
 
@@ -31,36 +32,60 @@ def is_rw_ea(ea):
     return seg.perm & idaapi.SEGPERM_WRITE and seg.perm & idaapi.SEGPERM_READ
 
 
-def get_virtual_func_address(name, tinfo=None, offset=None):
+def get_virtual_func_addresses(name, tinfo=None, offset=None):
     """
-    :param name: method name
-    :param tinfo: class tinfo
+    Returns set of possible addresses of virtual function by its name.
+    If there're symbols in binary and name is the name of an overloaded function, then returns list of all address of
+    this overloaded function.
+    TODO: After implementing inheritance return set of methods of all child classes
+
+    :param name: method name, can be mangled
+    :param tinfo: class tinfo to which this method belong
     :param offset: virtual table offset
-    :return: address of the method
+    :return: list of possible addresses
     """
 
     address = idc.LocByName(name)
 
     if address != idaapi.BADADDR:
-        return address
+        return [address]
 
-    address = Cache.demangled_names.get(name, idaapi.BADADDR)
-    if address != idaapi.BADADDR:
-        return address + idaapi.get_imagebase()
+    raw_addresses = Cache.demangled_names.get(name)
+    if raw_addresses:
+        addresses = [ea + idaapi.get_imagebase() for ea in raw_addresses]
+        return addresses
 
     if tinfo is None or offset is None:
-        return
+        return []
 
     offset *= 8
     udt_member = idaapi.udt_member_t()
     while tinfo.is_struct():
         address = Cache.demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
         if address != idaapi.BADADDR:
-            return address + idaapi.get_imagebase()
+            return [address + idaapi.get_imagebase()]
         udt_member.offset = offset
         tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
         tinfo = udt_member.type
         offset = offset - udt_member.offset
+
+
+def choose_virtual_func_address(name, tinfo=None, offset=None):
+    addresses = get_virtual_func_addresses(name, tinfo, offset)
+    if not addresses:
+        return
+
+    if len(addresses) == 1:
+        return addresses[0]
+
+    chooser = Forms.MyChoose(
+        [[to_hex(ea), idc.Demangle(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
+        "Select Function",
+        [["Address", 10], ["Full name", 50]]
+    )
+    idx = chooser.Show(modal=True)
+    if idx != -1:
+        return addresses[idx]
 
 
 def get_func_argument_info(function, expression):

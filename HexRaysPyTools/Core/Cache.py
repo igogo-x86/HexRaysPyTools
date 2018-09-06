@@ -1,13 +1,15 @@
 # Information about explored functions
-import re
+import collections
 
 import idaapi
 import idautils
 import idc
 
+import Common
+
 
 imported_ea = set()
-demangled_names = {}
+demangled_names = collections.defaultdict(set)
 touched_functions = set()
 temporary_structure = None
 
@@ -42,21 +44,14 @@ def init_demangled_names(*args):
     """
     demangled_names.clear()
     for address, name in idautils.Names():
-        short_name = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
+        short_name = idc.Demangle(name, idc.INF_SHORT_DN)
         if short_name:
-            demangled_names[short_name.split('(')[0]] = address - idaapi.get_imagebase()
-
-            # Names can have templates and should be transformed before creating local type
-            name = re.sub(r'[<>]', '_t_', name)
-
-            # Thunk functions with name like "[thunk]:CWarmupHostProvider::Release`adjustor{8}'"
-            result = re.search(r"(\[thunk\]:)?([^`]*)(.*\{(\d+)}.*)?", short_name)
-            name, adjustor = result.group(2), result.group(4)
-            if adjustor:
-                demangled_names[name + "_adj_" + adjustor] = address - idaapi.get_imagebase()
-
+            short_name = Common.demangled_name_to_c_str(short_name)
+            demangled_names[short_name].add(address - idaapi.get_imagebase())
     print "[DEBUG] Demangled names have been initialized"
 
 
 def reset_touched_functions(*args):
+    global touched_functions
+
     touched_functions = set()

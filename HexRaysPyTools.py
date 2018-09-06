@@ -111,13 +111,13 @@ def hexrays_events_callback(*args):
             else:
                 func_offset = item.e.m
                 struct_tinfo = item.e.x.type.get_pointed_object()
-                func_ea = Helper.get_virtual_func_address(Helper.get_member_name(struct_tinfo, func_offset))
+                func_ea = Helper.choose_virtual_func_address(Helper.get_member_name(struct_tinfo, func_offset))
                 if func_ea:
                     idaapi.jumpto(func_ea)
                 return 0
 
             func_name = Helper.get_member_name(vtable_tinfo, method_offset)
-            func_ea = Helper.get_virtual_func_address(func_name, class_tinfo, vtable_offset)
+            func_ea = Helper.choose_virtual_func_address(func_name, class_tinfo, vtable_offset)
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
