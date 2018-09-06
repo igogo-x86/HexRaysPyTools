@@ -33,7 +33,7 @@ class XrefStorage(object):
         __delete_items_helper - {func_offset: set(ordinals)}
         """
         self.storage = None
-        self.__delete_items_helper = None
+        self.__delete_items_helper = defaultdict(set)
 
     def open(self):
         if not Settings.STORE_XREFS:
@@ -95,7 +95,6 @@ class XrefStorage(object):
         return len(str(self.storage))
 
     def __init_delete_helper(self):
-        self.__delete_items_helper = defaultdict(set)
         for ordinal, data in self.storage.items():
             for func_offset in data:
                 self.__delete_items_helper[func_offset].add(ordinal)
