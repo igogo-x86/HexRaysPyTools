@@ -9,6 +9,7 @@ import idc
 import HexRaysPyTools.Forms as Forms
 import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Core.Helper as Helper
+import HexRaysPyTools.Core.Classes as Classes
 import HexRaysPyTools.Api as Api
 import Settings
 from HexRaysPyTools.Core.StructureGraph import StructureGraph
@@ -596,7 +597,7 @@ class ShowClasses(idaapi.action_handler_t):
         """
         tform = idaapi.find_tform('Classes')
         if not tform:
-            class_viewer = Forms.ClassViewer()
+            class_viewer = Forms.ClassViewer(Classes.ProxyModel(), Classes.TreeModel())
             class_viewer.Show()
         else:
             idaapi.switchto_tform(tform, True)

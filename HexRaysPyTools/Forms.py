@@ -2,7 +2,6 @@ import idaapi
 # import PySide.QtGui as QtGui
 # import PySide.QtCore as QtCore
 from HexRaysPyTools.Cute import *
-import Core.Classes
 
 
 class MyChoose(idaapi.Choose2):
@@ -149,7 +148,7 @@ class StructureGraphViewer(idaapi.GraphViewer):
 
 
 class ClassViewer(idaapi.PluginForm):
-    def __init__(self):
+    def __init__(self, proxy_model, class_model):
         super(ClassViewer, self).__init__()
         self.parent = None
         self.class_tree = QtGui.QTreeView()
@@ -164,7 +163,8 @@ class ClassViewer(idaapi.PluginForm):
 
         self.menu = QtGui.QMenu(self.parent)
 
-        self.proxy_model = Core.Classes.ProxyModel()
+        self.proxy_model = proxy_model
+        self.class_model = class_model
 
     def OnCreate(self, form):
         # self.parent = self.FormToPySideWidget(form)
@@ -187,8 +187,7 @@ class ClassViewer(idaapi.PluginForm):
         hbox_layout.addWidget(label_filter)
         hbox_layout.addWidget(self.line_edit_filter)
 
-        class_model = Core.Classes.TreeModel()
-        self.proxy_model.setSourceModel(class_model)
+        self.proxy_model.setSourceModel(self.class_model)
         self.proxy_model.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self.class_tree.setModel(self.proxy_model)
         self.class_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -200,14 +199,14 @@ class ClassViewer(idaapi.PluginForm):
         self.action_collapse.triggered.connect(self.class_tree.collapseAll)
         self.action_expand.triggered.connect(self.class_tree.expandAll)
         self.action_set_arg.triggered.connect(
-            lambda: class_model.set_first_argument_type(
+            lambda: self.class_model.set_first_argument_type(
                 map(self.proxy_model.mapToSource, self.class_tree.selectedIndexes())
             )
         )
-        self.action_rollback.triggered.connect(lambda: class_model.rollback())
-        self.action_refresh.triggered.connect(lambda: class_model.refresh())
-        self.action_commit.triggered.connect(lambda: class_model.commit())
-        class_model.refreshed.connect(self.class_tree.expandAll)
+        self.action_rollback.triggered.connect(lambda: self.class_model.rollback())
+        self.action_refresh.triggered.connect(lambda: self.class_model.refresh())
+        self.action_commit.triggered.connect(lambda: self.class_model.commit())
+        self.class_model.refreshed.connect(self.class_tree.expandAll)
 
         self.menu.addAction(self.action_collapse)
         self.menu.addAction(self.action_expand)
@@ -222,7 +221,7 @@ class ClassViewer(idaapi.PluginForm):
         self.parent.setLayout(vertical_box)
 
         self.class_tree.activated[QtCore.QModelIndex].connect(
-            lambda x: class_model.open_function(self.proxy_model.mapToSource(x))
+            lambda x: self.class_model.open_function(self.proxy_model.mapToSource(x))
         )
         self.class_tree.customContextMenuRequested[QtCore.QPoint].connect(self.show_menu)
         self.line_edit_filter.textChanged[str].connect(self.proxy_model.set_regexp_filter)
