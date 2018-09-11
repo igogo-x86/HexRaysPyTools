@@ -105,7 +105,7 @@ class StructureGraph:
 
             local_tinfo = StructureGraph.get_tinfo_by_ordinal(ordinal)
             if not local_tinfo:
-                return
+                continue
             name = idc.GetLocalTypeName(ordinal)
 
             if local_tinfo.is_typeref():
