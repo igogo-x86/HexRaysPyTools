@@ -788,22 +788,33 @@ class RecastItemLeft(idaapi.action_handler_t):
                 Helper.set_funcptr_argument(funcptr_tinfo, arg_index, new_arg_tinfo)
                 return RECAST_STRUCTURE, struct_type.dstr(), expression.x.m, funcptr_tinfo
 
+            if child.op == idaapi.cot_ref:
+                arg_index, arg_tinfo = Helper.get_func_argument_info(expression, child)
+                new_arg_tinfo = None
+                if child.x.op == idaapi.cot_memref and child.x.m == 0:
+                    # func(..., &struct.field_0, ...)
+                    new_arg_tinfo = idaapi.tinfo_t()
+                    new_arg_tinfo.create_ptr(child.x.x.type)
+                elif child.x.op == idaapi.cot_memptr and child.x.m == 0:
+                    # func(..., &struct->field_0, ...)
+                    new_arg_tinfo = child.x.x.type
+                if new_arg_tinfo:
+                    func_tinfo = expression.x.type.get_pointed_object()
+                    idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
+                    return RECAST_ARGUMENT, arg_index, func_tinfo, new_arg_tinfo, expression.x.obj_ea
+
             if child and child.op == idaapi.cot_cast:
                 if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
                     idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
-                    return RECAST_STRUCTURE, child.cexpr.x.x.type.get_pointed_object().dstr(), child.cexpr.x.m, child.type
+                    structure_name = child.cexpr.x.x.type.get_pointed_object().dstr()
+                    return RECAST_STRUCTURE, structure_name, child.cexpr.x.m, child.type
 
                 if expression.x == child.cexpr:
                     return
                 arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
+                func_tinfo = expression.x.type.get_pointed_object()
                 idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
-                return (
-                    RECAST_ARGUMENT,
-                    arg_index,
-                    expression.x.type.get_pointed_object(),
-                    child.x.type,
-                    expression.x.obj_ea
-                )
+                return RECAST_ARGUMENT, arg_index, func_tinfo, child.x.type, expression.x.obj_ea
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
@@ -826,6 +837,8 @@ class RecastItemLeft(idaapi.action_handler_t):
 
         elif result[0] == RECAST_ARGUMENT:
             arg_index, func_tinfo, arg_tinfo, address = result[1:]
+            logger.debug("Recasting argument. Function at %s, arg_idx - %d, new type - %s",
+                         idaapi.get_name(address), arg_index, arg_tinfo.dstr())
             if arg_tinfo.is_array():
                 arg_tinfo.convert_array_to_ptr()
 
