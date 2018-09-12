@@ -32,6 +32,17 @@ def is_rw_ea(ea):
     return seg.perm & idaapi.SEGPERM_WRITE and seg.perm & idaapi.SEGPERM_READ
 
 
+def get_ordinal(tinfo):
+    """ Returns non-zero ordinal of tinfo if it exist in database """
+    ordinal = tinfo.get_ordinal()
+    if ordinal == 0:
+        t = idaapi.tinfo_t()
+        struct_name = tinfo.dstr().split()[-1]        # Get rid of `struct` prefix or something else
+        t.get_named_type(idaapi.cvar.idati, struct_name)
+        ordinal = t.get_ordinal()
+    return ordinal
+
+
 def get_virtual_func_addresses(name, tinfo=None, offset=None):
     """
     Returns set of possible addresses of virtual function by its name.

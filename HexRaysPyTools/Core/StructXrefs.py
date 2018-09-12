@@ -128,13 +128,7 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
             return 0
 
         # Getting information about structure, field offset, address and one line corresponding to code
-        ordinal = struct_type.get_ordinal()
-        if ordinal == 0:
-            t = idaapi.tinfo_t()
-            struct_name = struct_type.dstr().split()[-1]        # Get rid of `struct` prefix or something else
-            t.get_named_type(idaapi.cvar.idati, struct_name)
-            ordinal = t.get_ordinal()
-
+        ordinal = Helper.get_ordinal(struct_type)
         field_offset = expression.m
         ea = self.__find_ref_address(expression)
         usage_type = self.__get_type(expression)

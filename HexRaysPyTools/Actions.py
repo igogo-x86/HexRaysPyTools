@@ -428,7 +428,7 @@ class RecognizeShape(idaapi.action_handler_t):
 class CreateNewField(idaapi.action_handler_t):
     name = "my:CreateNewField"
     description = "Create New Field"
-    hotkey = None
+    hotkey = "Ctrl+F"
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -803,7 +803,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                     idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
                     return RECAST_ARGUMENT, arg_index, func_tinfo, new_arg_tinfo, expression.x.obj_ea
 
-            if child and child.op == idaapi.cot_cast:
+            if child.op == idaapi.cot_cast:
                 if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
                     idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
                     structure_name = child.cexpr.x.x.type.get_pointed_object().dstr()
@@ -1424,7 +1424,7 @@ class FindFieldXrefs(idaapi.action_handler_t):
         data = []
         offset = item.e.m
         struct_type = idaapi.remove_pointer(item.e.x.type)
-        ordinal = struct_type.get_ordinal()
+        ordinal = Helper.get_ordinal(struct_type)
         result = XrefStorage().get_structure_info(ordinal, offset)
         for xref_info in result:
             data.append([
