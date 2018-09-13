@@ -7,7 +7,6 @@ import idaapi
 import Helper
 import HexRaysPyTools.Settings as Settings
 
-
 logger = logging.getLogger(__name__)
 
 XrefInfo = namedtuple('XrefInfo', ['func_ea', 'offset', 'line', 'type'])

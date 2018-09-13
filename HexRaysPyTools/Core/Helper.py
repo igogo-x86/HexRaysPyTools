@@ -9,6 +9,7 @@ import HexRaysPyTools.Core.Const as Const
 import HexRaysPyTools.Settings as Settings
 import HexRaysPyTools.Forms as Forms
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -303,6 +304,16 @@ def load_long_str_from_idb(array_name):
     max_idx = idc.get_last_index(idc.AR_STR, id)
     result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in xrange(max_idx + 1)]
     return "".join(result)
+
+
+def decompile_function(address):
+    try:
+        cfunc = idaapi.decompile(address)
+        if cfunc:
+            return cfunc
+    except idaapi.DecompilationFailure:
+        pass
+    logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
 
 
 # ======================================================================

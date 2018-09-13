@@ -378,7 +378,7 @@ class DeepScanFunctions(idaapi.action_handler_t):
     def activate(self, ctx):
         for idx in ctx.chooser_selection:
             func_ea = idaapi.getn_func(idx - 1).startEA
-            cfunc = Api.decompile_function(func_ea)
+            cfunc = Helper.decompile_function(func_ea)
             obj = Api.VariableObject(cfunc.get_lvars()[0], 0)
             if cfunc:
                 NewDeepSearchVisitor(cfunc, 0, obj, self.temporary_structure).process()

@@ -148,7 +148,7 @@ class SearchVisitor(Api.ObjectVisitor):
             if TemporaryStructure.VirtualTable.check_address(obj_ea):
                 return TemporaryStructure.VirtualTable(offset, obj_ea, scan_obj, self.__origin)
             if Helper.is_code_ea(obj_ea):
-                cfunc = Api.decompile_function(obj_ea)
+                cfunc = Helper.decompile_function(obj_ea)
                 if cfunc:
                     tinfo = cfunc.type
                     tinfo.create_ptr(tinfo)
@@ -334,6 +334,6 @@ class DeepReturnVisitor(NewDeepSearchVisitor):
 
     def __iter_callers(self):
         for ea in self.__callers_ea:
-            cfunc = Api.decompile_function(ea)
+            cfunc = Helper.decompile_function(ea)
             if cfunc:
                 yield cfunc
