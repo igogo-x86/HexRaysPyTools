@@ -65,7 +65,7 @@ class VirtualMethod(object):
             split = value.split('(')
             if len(split) == 2:
                 value = split[0] + ' ' + self.name + '(' + split[1] + ';'
-                if idaapi.parse_decl2(idaapi.cvar.idati, value, '', tinfo, idaapi.PT_TYP):
+                if idaapi.parse_decl(tinfo, idaapi.cvar.idati, value, idaapi.PT_TYP) is not None:
                     if tinfo.is_func():
                         tinfo.create_ptr(tinfo)
                         if tinfo.dstr() != self.tinfo.dstr():
@@ -131,6 +131,8 @@ class VirtualMethod(object):
         addresses = self.addresses
         if len(addresses) > 1:
             address = Helper.choose_virtual_func_address(self.name)
+            if not address:
+                return
         elif len(addresses) == 1:
             address = addresses[0]
         else:

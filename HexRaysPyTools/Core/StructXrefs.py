@@ -53,6 +53,7 @@ class XrefStorage(object):
     def close(self):
         self.save()
         self.storage = None
+        self.__delete_items_helper = defaultdict(set)
 
     def save(self):
         if not Settings.STORE_XREFS:

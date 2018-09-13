@@ -255,7 +255,7 @@ class SearchVisitor(Api.ObjectVisitor):
                 if parents[1].x == parents[0]:
                     # *(TYPE *)(var + x) = ???
                     obj_ea = self.__extract_obj_ea(parents[1].y)
-                    return self._get_member(offset, cexpr, obj, default_tinfo, obj_ea)
+                    return self._get_member(offset, cexpr, obj, parents[1].y.type, obj_ea)
                 return self._get_member(offset, cexpr, obj, parents[1].x.type)
             elif parents_type[1] == 'call':
                 if parents[1].x == parents[0]:
