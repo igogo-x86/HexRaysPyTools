@@ -4,10 +4,10 @@ import logging
 import idaapi
 import idc
 
-import HexRaysPyTools.Core.Cache as Cache
-import HexRaysPyTools.Core.Const as Const
-import HexRaysPyTools.Settings as Settings
-import HexRaysPyTools.Forms as Forms
+import HexRaysPyTools.core.cache as cache
+import HexRaysPyTools.core.const as const
+import HexRaysPyTools.settings as settings
+import HexRaysPyTools.forms as forms
 
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def is_imported_ea(ea):
     if idc.get_segm_name(ea) == ".plt":
         return True
-    return ea in Cache.imported_ea
+    return ea in cache.imported_ea
 
 
 def is_code_ea(ea):
@@ -62,7 +62,7 @@ def get_virtual_func_addresses(name, tinfo=None, offset=None):
     if address != idaapi.BADADDR:
         return [address]
 
-    raw_addresses = Cache.demangled_names.get(name)
+    raw_addresses = cache.demangled_names.get(name)
     if raw_addresses:
         addresses = [ea + idaapi.get_imagebase() for ea in raw_addresses]
         return addresses
@@ -73,7 +73,7 @@ def get_virtual_func_addresses(name, tinfo=None, offset=None):
     offset *= 8
     udt_member = idaapi.udt_member_t()
     while tinfo.is_struct():
-        address = Cache.demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
+        address = cache.demangled_names.get(tinfo.dstr() + '::' + name, idaapi.BADADDR)
         if address != idaapi.BADADDR:
             return [address + idaapi.get_imagebase()]
         udt_member.offset = offset
@@ -90,7 +90,7 @@ def choose_virtual_func_address(name, tinfo=None, offset=None):
     if len(addresses) == 1:
         return addresses[0]
 
-    chooser = Forms.MyChoose(
+    chooser = forms.MyChoose(
         [[to_hex(ea), idc.Demangle(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
         "Select Function",
         [["Address", 10], ["Full name", 50]]
@@ -165,9 +165,9 @@ def get_fields_at_offset(tinfo, offset):
             udt_member = udt_data[idx]
             if udt_member.offset == offset * 8:
                 if udt_member.type.is_ptr():
-                    result.append(idaapi.get_unk_type(Const.EA_SIZE))
+                    result.append(idaapi.get_unk_type(const.EA_SIZE))
                     result.append(udt_member.type)
-                    result.append(idaapi.dummy_ptrtype(Const.EA_SIZE, False))
+                    result.append(idaapi.dummy_ptrtype(const.EA_SIZE, False))
                 elif not udt_member.type.is_udt():
                     result.append(udt_member.type)
             if udt_member.type.is_array():
@@ -183,7 +183,7 @@ def is_legal_type(tinfo):
     tinfo.clr_const()
     if tinfo.is_ptr() and tinfo.get_pointed_object().is_forward_decl():
         return tinfo.get_pointed_object().get_size() == idaapi.BADSIZE
-    return Settings.SCAN_ANY_TYPE or bool(filter(lambda x: x.equals_to(tinfo), Const.LEGAL_TYPES))
+    return settings.SCAN_ANY_TYPE or bool(filter(lambda x: x.equals_to(tinfo), const.LEGAL_TYPES))
 
 
 def search_duplicate_fields(udt_data):
@@ -247,7 +247,7 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
         return 0
 
     def touch_all(self):
-        diff = self.functions.difference(Cache.touched_functions)
+        diff = self.functions.difference(cache.touched_functions)
         for address in diff:
             if is_imported_ea(address):
                 continue
@@ -257,12 +257,12 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
                     FunctionTouchVisitor(cfunc).process()
             except idaapi.DecompilationFailure:
                 logger.warn("IDA failed to decompile function at {}".format(to_hex(address)))
-                Cache.touched_functions.add(address)
+                cache.touched_functions.add(address)
         idaapi.decompile(self.cfunc.entry_ea)
 
     def process(self):
-        if self.cfunc.entry_ea not in Cache.touched_functions:
-            Cache.touched_functions.add(self.cfunc.entry_ea)
+        if self.cfunc.entry_ea not in cache.touched_functions:
+            cache.touched_functions.add(self.cfunc.entry_ea)
             self.apply_to(self.cfunc.body, None)
             self.touch_all()
             return True
@@ -271,7 +271,7 @@ class FunctionTouchVisitor(idaapi.ctree_parentee_t):
 
 def to_hex(ea):
     """ Formats address so it could be double clicked at console """
-    if Const.EA64:
+    if const.EA64:
         return "0x{:016X}".format(ea)
     return "0x{:08X}".format(ea)
 

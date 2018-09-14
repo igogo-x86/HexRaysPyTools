@@ -5,7 +5,7 @@ import idaapi
 import idautils
 import idc
 
-import Common
+import common
 
 
 imported_ea = set()
@@ -46,7 +46,7 @@ def init_demangled_names(*args):
     for address, name in idautils.Names():
         short_name = idc.Demangle(name, idc.INF_SHORT_DN)
         if short_name:
-            short_name = Common.demangled_name_to_c_str(short_name)
+            short_name = common.demangled_name_to_c_str(short_name)
             demangled_names[short_name].add(address - idaapi.get_imagebase())
     print "[DEBUG] Demangled names have been initialized"
 

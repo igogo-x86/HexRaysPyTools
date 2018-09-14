@@ -1,7 +1,7 @@
 import idaapi
 # import PySide.QtGui as QtGui
 # import PySide.QtCore as QtCore
-from HexRaysPyTools.Cute import *
+from HexRaysPyTools.cute import *
 
 
 class MyChoose(idaapi.Choose2):

@@ -6,18 +6,18 @@ import logging
 import idaapi
 import idc
 
-import HexRaysPyTools.Forms as Forms
-import HexRaysPyTools.Core.Const as Const
-import HexRaysPyTools.Core.Helper as Helper
-import HexRaysPyTools.Core.Classes as Classes
-import HexRaysPyTools.Api as Api
-import Settings
-from HexRaysPyTools.Core.StructureGraph import StructureGraph
-from HexRaysPyTools.Core.TemporaryStructure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.Core.VariableScanner import NewShallowSearchVisitor, NewDeepSearchVisitor, DeepReturnVisitor
-from HexRaysPyTools.Core.Helper import FunctionTouchVisitor
-from HexRaysPyTools.Core.SpaghettiCode import *
-from HexRaysPyTools.Core.StructXrefs import XrefStorage
+import HexRaysPyTools.forms as forms
+import HexRaysPyTools.core.const as const
+import HexRaysPyTools.core.helper as helper
+import HexRaysPyTools.core.classes as classes
+import HexRaysPyTools.api as api
+import settings
+from HexRaysPyTools.core.structure_graph import StructureGraph
+from HexRaysPyTools.core.temporary_structure import VirtualTable, TemporaryStructureModel
+from HexRaysPyTools.core.variable_scanner import NewShallowSearchVisitor, NewDeepSearchVisitor, DeepReturnVisitor
+from HexRaysPyTools.core.helper import FunctionTouchVisitor
+from HexRaysPyTools.core.spaghetti_code import *
+from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
 RECAST_LOCAL_VARIABLE = 0
 RECAST_GLOBAL_VARIABLE = 1
@@ -60,7 +60,7 @@ class TypeLibrary:
 
     @staticmethod
     def enable_library_ordinals(library_num):
-        idaname = "ida64" if Const.EA64 else "ida"
+        idaname = "ida64" if const.EA64 else "ida"
         if sys.platform == "win32":
             dll = ctypes.windll[idaname + ".wll"]
         elif sys.platform == "linux2":
@@ -82,7 +82,7 @@ class TypeLibrary:
             type_library = idaapi.cvar.idati.base(idx)          # idaapi.til_t type
             list_type_library.append((type_library, type_library.name, type_library.desc))
 
-        library_chooser = Forms.MyChoose(
+        library_chooser = forms.MyChoose(
             list(map(lambda x: [x[1], x[2]], list_type_library)),
             "Select Library",
             [["Library", 10 | idaapi.Choose2.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose2.CHCOL_PLAIN]],
@@ -154,8 +154,8 @@ class AddRemoveReturn(idaapi.action_handler_t):
             return
         function_details = idaapi.func_type_data_t()
         function_tinfo.get_func_details(function_details)
-        if function_details.rettype.equals_to(Const.VOID_TINFO):
-            function_details.rettype = idaapi.tinfo_t(Const.PVOID_TINFO)
+        if function_details.rettype.equals_to(const.VOID_TINFO):
+            function_details.rettype = idaapi.tinfo_t(const.PVOID_TINFO)
         else:
             function_details.rettype = idaapi.tinfo_t(idaapi.BT_VOID)
         function_tinfo.create_func(function_details)
@@ -224,7 +224,7 @@ class GetStructureBySize(idaapi.action_handler_t):
                     description = idaapi.print_tinfo(None, 0, 0, idaapi.PRTYPE_DEF, tinfo, None, None)
                     matched_types.append([str(ordinal), name, description])
 
-            type_chooser = Forms.MyChoose(
+            type_chooser = forms.MyChoose(
                 matched_types,
                 "Select Type",
                 [["Ordinal", 5 | idaapi.Choose2.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
@@ -284,13 +284,13 @@ class ShallowScanVariable(idaapi.action_handler_t):
     def check(cfunc, ctree_item):
         lvar = ctree_item.get_lvar()
         if lvar is not None:
-            return Helper.is_legal_type(lvar.type())
+            return helper.is_legal_type(lvar.type())
 
         if ctree_item.citype != idaapi.VDI_EXPR:
             return False
 
-        obj = Api.ScanObject.create(cfunc, ctree_item.e)
-        return obj and Helper.is_legal_type(obj.tinfo)
+        obj = api.ScanObject.create(cfunc, ctree_item.e)
+        return obj and helper.is_legal_type(obj.tinfo)
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
@@ -298,7 +298,7 @@ class ShallowScanVariable(idaapi.action_handler_t):
         origin = self.temporary_structure.main_offset
 
         if self.check(cfunc, hx_view.item):
-            obj = Api.ScanObject.create(cfunc, hx_view.item)
+            obj = api.ScanObject.create(cfunc, hx_view.item)
             visitor = NewShallowSearchVisitor(cfunc, origin, obj, self.temporary_structure)
             visitor.process()
 
@@ -324,7 +324,7 @@ class DeepScanVariable(idaapi.action_handler_t):
         origin = self.temporary_structure.main_offset
 
         if ShallowScanVariable.check(cfunc, hx_view.item):
-            obj = Api.ScanObject.create(cfunc, hx_view.item)
+            obj = api.ScanObject.create(cfunc, hx_view.item)
             if FunctionTouchVisitor(cfunc).process():
                 hx_view.refresh_view(True)
             visitor = NewDeepSearchVisitor(hx_view.cfunc, origin, obj, self.temporary_structure)
@@ -349,13 +349,13 @@ class DeepScanReturn(idaapi.action_handler_t):
     def check(hx_view):
         tinfo = idaapi.tinfo_t()
         hx_view.cfunc.get_func_type(tinfo)
-        return not tinfo.get_rettype().equals_to(Const.VOID_TINFO)
+        return not tinfo.get_rettype().equals_to(const.VOID_TINFO)
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
         func_ea = hx_view.cfunc.entry_ea
 
-        obj = Api.ReturnedObject(func_ea)
+        obj = api.ReturnedObject(func_ea)
         visitor = DeepReturnVisitor(hx_view.cfunc, self.temp_struct.main_offset, obj, self.temp_struct)
         visitor.process()
 
@@ -378,8 +378,8 @@ class DeepScanFunctions(idaapi.action_handler_t):
     def activate(self, ctx):
         for idx in ctx.chooser_selection:
             func_ea = idaapi.getn_func(idx - 1).startEA
-            cfunc = Helper.decompile_function(func_ea)
-            obj = Api.VariableObject(cfunc.get_lvars()[0], 0)
+            cfunc = helper.decompile_function(func_ea)
+            obj = api.VariableObject(cfunc.get_lvars()[0], 0)
             if cfunc:
                 NewDeepSearchVisitor(cfunc, 0, obj, self.temporary_structure).process()
 
@@ -406,16 +406,16 @@ class RecognizeShape(idaapi.action_handler_t):
         if not ShallowScanVariable.check(cfunc, hx_view.item):
             return
 
-        obj = Api.ScanObject.create(cfunc, hx_view.item)
+        obj = api.ScanObject.create(cfunc, hx_view.item)
         temp_struct = TemporaryStructureModel()
         visitor = NewShallowSearchVisitor(cfunc, 0, obj, temp_struct)
         visitor.process()
         tinfo = temp_struct.get_recognized_shape()
         if tinfo:
             tinfo.create_ptr(tinfo)
-            if obj.id == Api.SO_LOCAL_VARIABLE:
+            if obj.id == api.SO_LOCAL_VARIABLE:
                 hx_view.set_lvar_type(obj.lvar, tinfo)
-            elif obj.id == Api.SO_GLOBAL_OBJECT:
+            elif obj.id == api.SO_GLOBAL_OBJECT:
                 idaapi.apply_tinfo2(obj.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
             hx_view.refresh_view(True)
 
@@ -571,7 +571,7 @@ class ShowGraph(idaapi.action_handler_t):
             self.graph_view.Show()
         else:
             self.graph = StructureGraph([sel + 1 for sel in ctx.chooser_selection])
-            self.graph_view = Forms.StructureGraphViewer("Structure Graph", self.graph)
+            self.graph_view = forms.StructureGraphViewer("Structure Graph", self.graph)
             self.graph_view.Show()
 
     def update(self, ctx):
@@ -597,7 +597,7 @@ class ShowClasses(idaapi.action_handler_t):
         """
         tform = idaapi.find_tform('Classes')
         if not tform:
-            class_viewer = Forms.ClassViewer(Classes.ProxyModel(), Classes.TreeModel())
+            class_viewer = forms.ClassViewer(classes.ProxyModel(), classes.TreeModel())
             class_viewer.Show()
         else:
             idaapi.switchto_tform(tform, True)
@@ -647,7 +647,7 @@ class SelectContainingStructure(idaapi.action_handler_t):
             candidate = self.potential_negative[lvar_idx]
             structures = candidate.find_containing_structures(selected_library)
             items = map(lambda x: [str(x[0]), "0x{0:08X}".format(x[1]), x[2], x[3]], structures)
-            structure_chooser = Forms.MyChoose(
+            structure_chooser = forms.MyChoose(
                 items,
                 "Select Containing Structure",
                 [["Ordinal", 5], ["Offset", 10], ["Member_name", 20], ["Structure Name", 20]],
@@ -773,7 +773,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                 if expression.x == child:
                     return
 
-                arg_index, arg_tinfo = Helper.get_func_argument_info(expression, child)
+                arg_index, arg_tinfo = helper.get_func_argument_info(expression, child)
                 if child.op == idaapi.cot_cast:
                     # struct_ptr->func(..., (TYPE) var, ...);
                     new_arg_tinfo = child.x.type
@@ -785,11 +785,11 @@ class RecastItemLeft(idaapi.action_handler_t):
 
                 struct_type = expression.x.x.type.get_pointed_object()
                 funcptr_tinfo = expression.x.type
-                Helper.set_funcptr_argument(funcptr_tinfo, arg_index, new_arg_tinfo)
+                helper.set_funcptr_argument(funcptr_tinfo, arg_index, new_arg_tinfo)
                 return RECAST_STRUCTURE, struct_type.dstr(), expression.x.m, funcptr_tinfo
 
             if child.op == idaapi.cot_ref:
-                arg_index, arg_tinfo = Helper.get_func_argument_info(expression, child)
+                arg_index, arg_tinfo = helper.get_func_argument_info(expression, child)
                 new_arg_tinfo = None
                 if child.x.op == idaapi.cot_memref and child.x.m == 0:
                     # func(..., &struct.field_0, ...)
@@ -811,7 +811,7 @@ class RecastItemLeft(idaapi.action_handler_t):
 
                 if expression.x == child.cexpr:
                     return
-                arg_index, _ = Helper.get_func_argument_info(expression, child.cexpr)
+                arg_index, _ = helper.get_func_argument_info(expression, child.cexpr)
                 func_tinfo = expression.x.type.get_pointed_object()
                 idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
                 return RECAST_ARGUMENT, arg_index, func_tinfo, child.x.type, expression.x.obj_ea
@@ -830,7 +830,7 @@ class RecastItemLeft(idaapi.action_handler_t):
                 hx_view.refresh_view(True)
 
         elif result[0] == RECAST_GLOBAL_VARIABLE:
-            logger.debug("Recasting global. Type - %s. Address - %s", result[1].dstr(), Helper.to_hex(result[2]))
+            logger.debug("Recasting global. Type - %s. Address - %s", result[1].dstr(), helper.to_hex(result[2]))
             tinfo, address = result[1:]
             if idaapi.apply_tinfo2(address, tinfo, idaapi.TINFO_DEFINITE):
                 hx_view.refresh_view(True)
@@ -940,7 +940,7 @@ class RecastItemRight(RecastItemLeft):
 
         elif expression.x.op == idaapi.cot_obj:
             # (TYPE) g_var;
-            if Helper.is_code_ea(expression.x.obj_ea) and new_type.is_funcptr():
+            if helper.is_code_ea(expression.x.obj_ea) and new_type.is_funcptr():
                 # (TYPE) sub_XXXXXX;
                 new_type = new_type.get_pointed_object()
 
@@ -1051,7 +1051,7 @@ class RenameInside(idaapi.action_handler_t):
             if lvar.has_user_name or lvar.is_arg_var and re.search("a\d*$", lvar.name) is None:
                 parent = cfunc.body.find_parent_of(expression).to_specific_type
                 if parent.op == idaapi.cot_call:
-                    arg_index, _ = Helper.get_func_argument_info(parent, expression)
+                    arg_index, _ = helper.get_func_argument_info(parent, expression)
                     func_tinfo = parent.x.type.get_pointed_object()
                     func_data = idaapi.func_type_data_t()
                     func_tinfo.get_func_details(func_data)
@@ -1098,7 +1098,7 @@ class RenameOutside(idaapi.action_handler_t):
             parent = cfunc.body.find_parent_of(expression).to_specific_type
 
             if parent.op == idaapi.cot_call:
-                arg_index, _ = Helper.get_func_argument_info(parent, expression)
+                arg_index, _ = helper.get_func_argument_info(parent, expression)
                 func_tinfo = parent.x.type.get_pointed_object()
                 if func_tinfo.get_nargs() < arg_index:
                     return
@@ -1135,7 +1135,7 @@ class RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
         if expr.op == idaapi.cot_call and expr.x.op == idaapi.cot_obj and expr.x.obj_ea == self.__func_addr:
             arg_expr = expr.a[self.__arg_idx]
             if arg_expr.op != idaapi.cot_obj:
-                logger.error("Argument is not string at {}".format(Helper.to_hex(self._find_asm_address(expr))))
+                logger.error("Argument is not string at {}".format(helper.to_hex(self._find_asm_address(expr))))
                 return 1
             self.__add_func_name(arg_expr)
         return 0
@@ -1146,13 +1146,13 @@ class RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
             self.__rename_func()
         else:
             logger.error("Function at {} has more than one candidate for renaming: {}".format(
-                Helper.to_hex(self.__cfunc.entry_ea), ", ".join(self.__possible_names)))
+                helper.to_hex(self.__cfunc.entry_ea), ", ".join(self.__possible_names)))
 
     def __add_func_name(self, arg_expr):
         new_name = idc.get_strlit_contents(arg_expr.obj_ea)
         if not idaapi.is_valid_typename(new_name):
             logger.warn("Argument has weird name `{}` at {}".format(
-                new_name, Helper.to_hex(self._find_asm_address(arg_expr))))
+                new_name, helper.to_hex(self._find_asm_address(arg_expr))))
             return
 
         self.__possible_names.add(new_name)
@@ -1184,7 +1184,7 @@ class RenameUsingAssert(idaapi.action_handler_t):
             return False
 
         obj_ea = expression.obj_ea
-        if not Helper.is_code_ea(obj_ea) and idc.get_str_type(obj_ea) == idc.STRTYPE_C:
+        if not helper.is_code_ea(obj_ea) and idc.get_str_type(obj_ea) == idc.STRTYPE_C:
             str_potential_name = idc.get_strlit_contents(obj_ea)
             return idaapi.is_valid_typename(str_potential_name)
         return False
@@ -1199,10 +1199,10 @@ class RenameUsingAssert(idaapi.action_handler_t):
         expr_arg = ctree_item.it.to_specific_type
         expr_call = cfunc.body.find_parent_of(expr_arg).to_specific_type
 
-        arg_idx, _ = Helper.get_func_argument_info(expr_call, expr_arg)
+        arg_idx, _ = helper.get_func_argument_info(expr_call, expr_arg)
 
         assert_ea = expr_call.x.obj_ea
-        all_callers = Helper.get_funcs_calling_address(assert_ea)
+        all_callers = helper.get_funcs_calling_address(assert_ea)
 
         for caller_ea in all_callers:
             try:
@@ -1213,7 +1213,7 @@ class RenameUsingAssert(idaapi.action_handler_t):
                 RenameUsingAssertVisitor(cfunc, assert_ea, arg_idx).process()
 
             except idaapi.DecompilationFailure:
-                logger.warn("IDA failed to decompile at {}".format(Helper.to_hex(caller_ea)))
+                logger.warn("IDA failed to decompile at {}".format(helper.to_hex(caller_ea)))
 
         hx_view.refresh_view(True)
 
@@ -1239,30 +1239,30 @@ class PropagateName(idaapi.action_handler_t):
     @staticmethod
     def callback_manipulate(self, cexpr, obj):
         if self.crippled:
-            logger.debug("Skipping crippled function at {}".format(Helper.to_hex(self._cfunc.entry_ea)))
+            logger.debug("Skipping crippled function at {}".format(helper.to_hex(self._cfunc.entry_ea)))
             return
 
-        if obj.id == Api.SO_GLOBAL_OBJECT:
+        if obj.id == api.SO_GLOBAL_OBJECT:
             old_name = idaapi.get_short_name(cexpr.obj_ea)
-            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
+            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 _, name = self._data
                 new_name = PropagateName.rename(lambda x: idaapi.set_name(cexpr.obj_ea, x), name)
                 logger.debug("Renamed global variable from {} to {}".format(old_name, new_name))
-        elif obj.id == Api.SO_LOCAL_VARIABLE:
+        elif obj.id == api.SO_LOCAL_VARIABLE:
             lvar = self._cfunc.get_lvars()[cexpr.v.idx]
             old_name = lvar.name
-            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
+            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 hx_view, name = self._data
                 new_name = PropagateName.rename(lambda x: hx_view.rename_lvar(lvar, x, True), name)
                 logger.debug("Renamed local variable from {} to {}".format(old_name, new_name))
-        elif obj.id in (Api.SO_STRUCT_POINTER, Api.SO_STRUCT_REFERENCE):
+        elif obj.id in (api.SO_STRUCT_POINTER, api.SO_STRUCT_REFERENCE):
             struct_tinfo = cexpr.x.type
             offset = cexpr.m
             struct_tinfo.remove_ptr_or_array()
-            old_name = Helper.get_member_name(struct_tinfo, offset)
-            if Settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
+            old_name = helper.get_member_name(struct_tinfo, offset)
+            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
                 _, name = self._data
-                new_name = PropagateName.rename(lambda x: Helper.change_member_name(struct_tinfo.dstr(), offset, x), name)
+                new_name = PropagateName.rename(lambda x: helper.change_member_name(struct_tinfo.dstr(), offset, x), name)
                 logger.debug("Renamed struct member from {} to {}".format(old_name, new_name))
 
     @staticmethod
@@ -1281,7 +1281,7 @@ class PropagateName(idaapi.action_handler_t):
         if ctree_item.citype != idaapi.VDI_EXPR:
             return
 
-        obj = Api.ScanObject.create(cfunc, ctree_item)
+        obj = api.ScanObject.create(cfunc, ctree_item)
         if obj and not PropagateName._is_default_name(obj.name):
             return obj
 
@@ -1290,7 +1290,7 @@ class PropagateName(idaapi.action_handler_t):
         obj = self.check(hx_view.cfunc, hx_view.item)
         if obj:
             cfunc = hx_view.cfunc
-            visitor = Api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name), True)
+            visitor = api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name), True)
             visitor.set_callbacks(
                 manipulate=PropagateName.callback_manipulate,
                 start_iteration=PropagateName.callback_start,
@@ -1310,9 +1310,9 @@ class GuessAllocation(idaapi.action_handler_t):
     description = "Guess allocation"
     hotkey = None
 
-    class StructAllocChoose(Forms.MyChoose):
+    class StructAllocChoose(forms.MyChoose):
         def __init__(self, items):
-            Forms.MyChoose.__init__(
+            forms.MyChoose.__init__(
                 self, items, "Possible structure allocations",
                 [["Function", 30], ["Variable", 10], ["Line", 50], ["Type", 10]]
             )
@@ -1322,7 +1322,7 @@ class GuessAllocation(idaapi.action_handler_t):
 
         def OnGetLine(self, n):
             func_ea, var, line, alloc_type = self.items[n]
-            return [Helper.to_nice_str(func_ea), var, line, alloc_type]
+            return [helper.to_nice_str(func_ea), var, line, alloc_type]
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
@@ -1331,19 +1331,19 @@ class GuessAllocation(idaapi.action_handler_t):
     def check(cfunc, ctree_item):
         if ctree_item.citype != idaapi.VDI_EXPR:
             return
-        return Api.ScanObject.create(cfunc, ctree_item)
+        return api.ScanObject.create(cfunc, ctree_item)
 
     @staticmethod
     def callback_manipulate(self, cexpr, obj):
-        if obj.id == Api.SO_LOCAL_VARIABLE:
+        if obj.id == api.SO_LOCAL_VARIABLE:
             parent = self.parent_expr()
             if parent.op == idaapi.cot_asg:
-                alloc_obj = Api.MemoryAllocationObject.create(self._cfunc, self.parent_expr().y)
+                alloc_obj = api.MemoryAllocationObject.create(self._cfunc, self.parent_expr().y)
                 if alloc_obj:
                     self._data.append([alloc_obj.ea, obj.name, self._get_line(), "HEAP"])
             elif self.parent_expr().op == idaapi.cot_ref:
                 self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "STACK"])
-        elif obj.id == Api.SO_GLOBAL_OBJECT:
+        elif obj.id == api.SO_GLOBAL_OBJECT:
             self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "GLOBAL"])
 
     @staticmethod
@@ -1356,7 +1356,7 @@ class GuessAllocation(idaapi.action_handler_t):
         item = hx_view.item
         obj = GuessAllocation.check(hx_view.cfunc, item)
         if obj:
-            visitor = Api.RecursiveObjectUpwardsVisitor(hx_view.cfunc, obj, data=[], skip_after_object=True)
+            visitor = api.RecursiveObjectUpwardsVisitor(hx_view.cfunc, obj, data=[], skip_after_object=True)
             visitor.set_callbacks(
                 manipulate=self.callback_manipulate,
                 finish=self.callback_finish
@@ -1424,7 +1424,7 @@ class FindFieldXrefs(idaapi.action_handler_t):
         data = []
         offset = item.e.m
         struct_type = idaapi.remove_pointer(item.e.x.type)
-        ordinal = Helper.get_ordinal(struct_type)
+        ordinal = helper.get_ordinal(struct_type)
         result = XrefStorage().get_structure_info(ordinal, offset)
         for xref_info in result:
             data.append([
@@ -1433,8 +1433,8 @@ class FindFieldXrefs(idaapi.action_handler_t):
                 xref_info.line
             ])
 
-        field_name = Helper.get_member_name(struct_type, offset)
-        chooser = Forms.MyChoose(
+        field_name = helper.get_member_name(struct_type, offset)
+        chooser = forms.MyChoose(
             data,
             "Cross-references to {0}::{1}".format(struct_type.dstr(), field_name),
             [["Function", 20 | idaapi.Choose2.CHCOL_PLAIN],

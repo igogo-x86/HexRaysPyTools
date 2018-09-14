@@ -1,10 +1,10 @@
 import idc
 import idaapi
-import HexRaysPyTools.Forms
-import Helper
+import HexRaysPyTools.forms
+import helper
 
 # from PySide import QtGui, QtCore
-from HexRaysPyTools.Cute import *
+from HexRaysPyTools.cute import *
 
 all_virtual_functions = {}      # name    -> VirtualMethod
 all_virtual_tables = {}         # ordinal -> VirtualTable
@@ -19,7 +19,7 @@ class VirtualMethod(object):
         self.name_modified = False
         self.parents = [parent]
         image_base = idaapi.get_imagebase()
-        self.ra_addresses = [ea - image_base for ea in Helper.get_virtual_func_addresses(name)]
+        self.ra_addresses = [ea - image_base for ea in helper.get_virtual_func_addresses(name)]
 
         self.rowcount = 0
         self.children = []
@@ -50,7 +50,7 @@ class VirtualMethod(object):
             if len(addresses) > 1:
                 return "LIST"
             elif len(addresses) == 1:
-                return Helper.to_hex(addresses[0])
+                return helper.to_hex(addresses[0])
 
     def setData(self, column, value):
         if column == 0:
@@ -114,7 +114,7 @@ class VirtualMethod(object):
             class_tinfo.create_ptr(class_tinfo)
             first_arg_tinfo = func_data[0].type
             if (first_arg_tinfo.is_ptr() and first_arg_tinfo.get_pointed_object().is_udt()) or \
-                    Helper.is_legal_type(func_data[0].type):
+                    helper.is_legal_type(func_data[0].type):
                 func_data[0].type = class_tinfo
                 func_data[0].name = "this"
                 func_tinfo.create_func(func_data)
@@ -130,7 +130,7 @@ class VirtualMethod(object):
     def open_function(self):
         addresses = self.addresses
         if len(addresses) > 1:
-            address = Helper.choose_virtual_func_address(self.name)
+            address = helper.choose_virtual_func_address(self.name)
             if not address:
                 return
         elif len(addresses) == 1:
@@ -138,7 +138,7 @@ class VirtualMethod(object):
         else:
             return
 
-        if Helper.decompile_function(address):
+        if helper.decompile_function(address):
             idaapi.open_pseudocode(address, 0)
         else:
             idaapi.jumpto(address)
@@ -497,7 +497,7 @@ class TreeModel(QtCore.QAbstractItemModel):
         class_name = indexes[0].internalPointer().item.class_name
         if not class_name:
             classes = [[x.item.name] for x in self.tree_data]
-            class_chooser = HexRaysPyTools.Forms.MyChoose(classes, "Select Class", [["Name", 25]])
+            class_chooser = HexRaysPyTools.forms.MyChoose(classes, "Select Class", [["Name", 25]])
             idx = class_chooser.Show(True)
             if idx != -1:
                 class_name = classes[idx][0]

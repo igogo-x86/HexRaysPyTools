@@ -2,7 +2,7 @@ import re
 import logging
 import idaapi
 import idc
-import Helper
+import helper
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +170,13 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
         if diff:
             number = idaapi.make_num(diff)
             number.thisown = False
-            new_cexpr_add = Helper.my_cexpr_t(idaapi.cot_add, x=new_cexpr_call, y=number)
+            new_cexpr_add = helper.my_cexpr_t(idaapi.cot_add, x=new_cexpr_call, y=number)
             new_cexpr_add.type = return_tinfo
 
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
-                new_cexpr_cast = Helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_add)
+                new_cexpr_cast = helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_add)
                 new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
                 expression.assign(new_cexpr_cast)
@@ -186,7 +186,7 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
             if parent.op == idaapi.cot_ptr:
                 tmp_tinfo = idaapi.tinfo_t()
                 tmp_tinfo.create_ptr(parent.type)
-                new_cexpr_cast = Helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_call)
+                new_cexpr_cast = helper.my_cexpr_t(idaapi.cot_cast, x=new_cexpr_call)
                 new_cexpr_cast.thisown = False
                 new_cexpr_cast.type = tmp_tinfo
                 expression.assign(new_cexpr_cast)

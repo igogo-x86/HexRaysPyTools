@@ -4,8 +4,8 @@ from collections import namedtuple, defaultdict
 import json
 
 import idaapi
-import Helper
-import HexRaysPyTools.Settings as Settings
+import helper
+import HexRaysPyTools.settings as settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +35,11 @@ class XrefStorage(object):
         self.__delete_items_helper = defaultdict(set)
 
     def open(self):
-        if not Settings.STORE_XREFS:
+        if not settings.STORE_XREFS:
             self.storage = {}
             return
 
-        result = Helper.load_long_str_from_idb(self.ARRAY_NAME)
+        result = helper.load_long_str_from_idb(self.ARRAY_NAME)
         if result:
             try:
                 self.storage = json.loads(result, object_hook=self.json_keys_to_str)
@@ -55,11 +55,11 @@ class XrefStorage(object):
         self.__delete_items_helper = defaultdict(set)
 
     def save(self):
-        if not Settings.STORE_XREFS:
+        if not settings.STORE_XREFS:
             return
 
         if self.storage:
-            Helper.save_long_str_to_idb(self.ARRAY_NAME, json.dumps(self.storage))
+            helper.save_long_str_to_idb(self.ARRAY_NAME, json.dumps(self.storage))
 
     def update(self, function_offset, data):
         """ data - {ordinal : (code_offset, line, usage_type)} """
@@ -128,14 +128,14 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
             return 0
 
         # Getting information about structure, field offset, address and one line corresponding to code
-        ordinal = Helper.get_ordinal(struct_type)
+        ordinal = helper.get_ordinal(struct_type)
         field_offset = expression.m
         ea = self.__find_ref_address(expression)
         usage_type = self.__get_type(expression)
 
         if ea == idaapi.BADADDR or not ordinal:
             logger.warning("Failed to parse at address {0}, ordinal - {1}, type - {2}".format(
-                Helper.to_hex(ea), ordinal, struct_type.dstr()
+                helper.to_hex(ea), ordinal, struct_type.dstr()
             ))
 
         one_line = self.__get_line()
@@ -175,7 +175,7 @@ class StructXrefVisitor(idaapi.ctree_parentee_t):
         """ Returns one of the following types: 'R' - read value, 'W' - write value, 'A' - function argument"""
         child = cexpr
         for p in reversed(self.parents):
-            assert p, "Failed to get type at " + Helper.to_hex(self.__function_address)
+            assert p, "Failed to get type at " + helper.to_hex(self.__function_address)
 
             if p.cexpr.op == idaapi.cot_call:
                 return 'Arg'

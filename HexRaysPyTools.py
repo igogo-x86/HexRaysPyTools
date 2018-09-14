@@ -1,15 +1,15 @@
 import logging
-import HexRaysPyTools.Actions as Actions
-import HexRaysPyTools.Core.Cache
-from HexRaysPyTools.Core.TemporaryStructure import *
-import HexRaysPyTools.Forms as Forms
 import idaapi
-import HexRaysPyTools.Core.NegativeOffsets as NegativeOffsets
-import HexRaysPyTools.Core.Helper as Helper
-import HexRaysPyTools.Core.Cache as Cache
-import HexRaysPyTools.Core.Const as Const
-from HexRaysPyTools.Core.SpaghettiCode import SpaghettiVisitor, SwapThenElseVisitor
-from HexRaysPyTools.Core.StructXrefs import *
+
+import HexRaysPyTools.actions as actions
+from HexRaysPyTools.core.temporary_structure import *
+import HexRaysPyTools.forms as forms
+import HexRaysPyTools.core.negative_offsets as negative_offsets
+import HexRaysPyTools.core.helper as helper
+import HexRaysPyTools.core.cache as cache
+import HexRaysPyTools.core.const as const
+from HexRaysPyTools.core.spaghetti_code import SpaghettiVisitor, SwapThenElseVisitor
+from HexRaysPyTools.core.struct_xrefs import *
 
 potential_negatives = {}
 
@@ -23,57 +23,57 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if Actions.GuessAllocation.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.GuessAllocation.name, None)
+        if actions.GuessAllocation.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.GuessAllocation.name, None)
 
-        if Actions.RecastItemRight.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemRight.name, None)
+        if actions.RecastItemRight.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RecastItemRight.name, None)
 
-        if Actions.RecastItemLeft.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RecastItemLeft.name, None)
+        if actions.RecastItemLeft.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RecastItemLeft.name, None)
 
-        if Actions.RenameOther.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameOther.name, None)
+        if actions.RenameOther.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RenameOther.name, None)
 
-        if Actions.RenameInside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameInside.name, None)
+        if actions.RenameInside.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RenameInside.name, None)
 
-        if Actions.RenameOutside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameOutside.name, None)
+        if actions.RenameOutside.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RenameOutside.name, None)
 
-        if Actions.RenameUsingAssert.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.RenameUsingAssert.name, None)
+        if actions.RenameUsingAssert.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.RenameUsingAssert.name, None)
 
-        if Actions.SwapThenElse.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.SwapThenElse.name, None)
+        if actions.SwapThenElse.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.SwapThenElse.name, None)
 
-        if Actions.ShallowScanVariable.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.ShallowScanVariable.name, None)
-            idaapi.attach_action_to_popup(form, popup, Actions.DeepScanVariable.name, None)
-            idaapi.attach_action_to_popup(form, popup, Actions.RecognizeShape.name, None)
+        if actions.ShallowScanVariable.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.ShallowScanVariable.name, None)
+            idaapi.attach_action_to_popup(form, popup, actions.DeepScanVariable.name, None)
+            idaapi.attach_action_to_popup(form, popup, actions.RecognizeShape.name, None)
 
-        if Actions.CreateNewField.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.CreateNewField.name, None)
+        if actions.CreateNewField.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.CreateNewField.name, None)
 
-        if Actions.FindFieldXrefs.check(item):
-            idaapi.attach_action_to_popup(form, popup, Actions.FindFieldXrefs.name, None)
+        if actions.FindFieldXrefs.check(item):
+            idaapi.attach_action_to_popup(form, popup, actions.FindFieldXrefs.name, None)
 
-        if Actions.PropagateName.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, Actions.PropagateName.name, None)
+        if actions.PropagateName.check(hx_view.cfunc, item):
+            idaapi.attach_action_to_popup(form, popup, actions.PropagateName.name, None)
 
         if item.citype == idaapi.VDI_FUNC:
             # If we clicked on function
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                idaapi.attach_action_to_popup(form, popup, Actions.AddRemoveReturn.name, None)
-                idaapi.attach_action_to_popup(form, popup, Actions.ConvertToUsercall.name, None)
-                if Actions.DeepScanReturn.check(hx_view):
-                    idaapi.attach_action_to_popup(form, popup, Actions.DeepScanReturn.name, None)
+                idaapi.attach_action_to_popup(form, popup, actions.AddRemoveReturn.name, None)
+                idaapi.attach_action_to_popup(form, popup, actions.ConvertToUsercall.name, None)
+                if actions.DeepScanReturn.check(hx_view):
+                    idaapi.attach_action_to_popup(form, popup, actions.DeepScanReturn.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
             local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
             if local_variable.is_arg_var:
-                idaapi.attach_action_to_popup(form, popup, Actions.RemoveArgument.name, None)
+                idaapi.attach_action_to_popup(form, popup, actions.RemoveArgument.name, None)
 
         elif item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
@@ -83,14 +83,14 @@ def hexrays_events_callback(*args):
                 #     number_format.type_name,
                 #     number_format.opnum
                 # )
-                idaapi.attach_action_to_popup(form, popup, Actions.GetStructureBySize.name, None)
+                idaapi.attach_action_to_popup(form, popup, actions.GetStructureBySize.name, None)
             elif item.e.op == idaapi.cot_var:
                 # Check if we clicked on variable that is a pointer to a structure that is potentially part of
                 # containing structure
                 if item.e.v.idx in potential_negatives:
-                    idaapi.attach_action_to_popup(form, popup, Actions.SelectContainingStructure.name, None)
-                if Actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
-                    idaapi.attach_action_to_popup(form, popup, Actions.ResetContainingStructure.name, None)
+                    idaapi.attach_action_to_popup(form, popup, actions.SelectContainingStructure.name, None)
+                if actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
+                    idaapi.attach_action_to_popup(form, popup, actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
         hx_view = args[1]
@@ -111,13 +111,13 @@ def hexrays_events_callback(*args):
             else:
                 func_offset = item.e.m
                 struct_tinfo = item.e.x.type.get_pointed_object()
-                func_ea = Helper.choose_virtual_func_address(Helper.get_member_name(struct_tinfo, func_offset))
+                func_ea = helper.choose_virtual_func_address(helper.get_member_name(struct_tinfo, func_offset))
                 if func_ea:
                     idaapi.jumpto(func_ea)
                 return 0
 
-            func_name = Helper.get_member_name(vtable_tinfo, method_offset)
-            func_ea = Helper.choose_virtual_func_address(func_name, class_tinfo, vtable_offset)
+            func_name = helper.get_member_name(vtable_tinfo, method_offset)
+            func_ea = helper.choose_virtual_func_address(func_name, class_tinfo, vtable_offset)
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
@@ -132,14 +132,14 @@ def hexrays_events_callback(*args):
             # print cfunc
 
             # First search for CONTAINING_RECORD made by Ida
-            visitor = NegativeOffsets.SearchVisitor(cfunc)
+            visitor = negative_offsets.SearchVisitor(cfunc)
             visitor.apply_to(cfunc.body, None)
             negative_lvars = visitor.result
 
             # Second get saved information from comments
             lvars = cfunc.get_lvars()
             for idx in xrange(len(lvars)):
-                result = NegativeOffsets.parse_lvar_comment(lvars[idx])
+                result = negative_offsets.parse_lvar_comment(lvars[idx])
                 if result and result.tinfo.equals_to(lvars[idx].type().get_pointed_object()):
                     negative_lvars[idx] = result
 
@@ -155,11 +155,11 @@ def hexrays_events_callback(*args):
                         structure_pointer_variables[idx] = pointed_tinfo
 
             if structure_pointer_variables:
-                visitor = NegativeOffsets.AnalyseVisitor(structure_pointer_variables, potential_negatives)
+                visitor = negative_offsets.AnalyseVisitor(structure_pointer_variables, potential_negatives)
                 visitor.apply_to(cfunc.body, None)
 
             if negative_lvars:
-                visitor = NegativeOffsets.ReplaceVisitor(negative_lvars)
+                visitor = negative_offsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
         elif level_of_maturity == idaapi.CMAT_TRANS1:
@@ -195,37 +195,37 @@ class MyPlugin(idaapi.plugin_t):
             print "[ERROR] Failed to initialize Hex-Rays SDK"
             return idaapi.PLUGIN_SKIP
 
-        Cache.temporary_structure = TemporaryStructureModel()
+        cache.temporary_structure = TemporaryStructureModel()
         # Actions.register(Actions.CreateVtable)
-        Actions.register(Actions.ShowGraph)
-        Actions.register(Actions.ShowClasses)
-        Actions.register(Actions.GetStructureBySize)
-        Actions.register(Actions.RemoveArgument)
-        Actions.register(Actions.AddRemoveReturn)
-        Actions.register(Actions.ConvertToUsercall)
-        Actions.register(Actions.ShallowScanVariable, Cache.temporary_structure)
-        Actions.register(Actions.DeepScanVariable, Cache.temporary_structure)
-        Actions.register(Actions.DeepScanReturn, Cache.temporary_structure)
-        Actions.register(Actions.DeepScanFunctions, Cache.temporary_structure)
-        Actions.register(Actions.RecognizeShape)
-        Actions.register(Actions.CreateNewField)
-        Actions.register(Actions.SelectContainingStructure, potential_negatives)
-        Actions.register(Actions.ResetContainingStructure)
-        Actions.register(Actions.RecastItemRight)
-        Actions.register(Actions.RecastItemLeft)
-        Actions.register(Actions.RenameOther)
-        Actions.register(Actions.RenameInside)
-        Actions.register(Actions.RenameOutside)
-        Actions.register(Actions.RenameUsingAssert)
-        Actions.register(Actions.SwapThenElse)
-        Actions.register(Actions.FindFieldXrefs)
-        Actions.register(Actions.PropagateName)
-        Actions.register(Actions.GuessAllocation)
+        actions.register(actions.ShowGraph)
+        actions.register(actions.ShowClasses)
+        actions.register(actions.GetStructureBySize)
+        actions.register(actions.RemoveArgument)
+        actions.register(actions.AddRemoveReturn)
+        actions.register(actions.ConvertToUsercall)
+        actions.register(actions.ShallowScanVariable, cache.temporary_structure)
+        actions.register(actions.DeepScanVariable, cache.temporary_structure)
+        actions.register(actions.DeepScanReturn, cache.temporary_structure)
+        actions.register(actions.DeepScanFunctions, cache.temporary_structure)
+        actions.register(actions.RecognizeShape)
+        actions.register(actions.CreateNewField)
+        actions.register(actions.SelectContainingStructure, potential_negatives)
+        actions.register(actions.ResetContainingStructure)
+        actions.register(actions.RecastItemRight)
+        actions.register(actions.RecastItemLeft)
+        actions.register(actions.RenameOther)
+        actions.register(actions.RenameInside)
+        actions.register(actions.RenameOutside)
+        actions.register(actions.RenameUsingAssert)
+        actions.register(actions.SwapThenElse)
+        actions.register(actions.FindFieldXrefs)
+        actions.register(actions.PropagateName)
+        actions.register(actions.GuessAllocation)
 
-        idaapi.attach_action_to_menu('View/Open subviews/Local types', Actions.ShowClasses.name, idaapi.SETMENU_APP)
+        idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
-        Const.init()
+        const.init()
         XrefStorage().open()
 
         return idaapi.PLUGIN_KEEP
@@ -236,44 +236,47 @@ class MyPlugin(idaapi.plugin_t):
         if tform:
             idaapi.switchto_tform(tform, True)
         else:
-            Forms.StructureBuilder(Cache.temporary_structure).Show()
+            forms.StructureBuilder(cache.temporary_structure).Show()
 
     @staticmethod
     def term():
-        if Cache.temporary_structure:
-            Cache.temporary_structure.clear()
+        if cache.temporary_structure:
+            cache.temporary_structure.clear()
         # Actions.unregister(Actions.CreateVtable)
-        Actions.unregister(Actions.ShowGraph)
-        Actions.unregister(Actions.ShowClasses)
-        Actions.unregister(Actions.GetStructureBySize)
-        Actions.unregister(Actions.RemoveArgument)
-        Actions.unregister(Actions.AddRemoveReturn)
-        Actions.unregister(Actions.ConvertToUsercall)
-        Actions.unregister(Actions.ShallowScanVariable)
-        Actions.unregister(Actions.DeepScanVariable)
-        Actions.unregister(Actions.DeepScanReturn)
-        Actions.unregister(Actions.DeepScanFunctions)
-        Actions.unregister(Actions.RecognizeShape)
-        Actions.unregister(Actions.CreateNewField)
-        Actions.unregister(Actions.SelectContainingStructure)
-        Actions.unregister(Actions.ResetContainingStructure)
-        Actions.unregister(Actions.RecastItemRight)
-        Actions.unregister(Actions.RecastItemLeft)
-        Actions.unregister(Actions.RenameOther)
-        Actions.unregister(Actions.RenameInside)
-        Actions.unregister(Actions.RenameOutside)
-        Actions.unregister(Actions.RenameUsingAssert)
-        Actions.unregister(Actions.SwapThenElse)
-        Actions.unregister(Actions.FindFieldXrefs)
-        Actions.unregister(Actions.PropagateName)
-        Actions.unregister(Actions.GuessAllocation)
+        actions.unregister(actions.ShowGraph)
+        actions.unregister(actions.ShowClasses)
+        actions.unregister(actions.GetStructureBySize)
+        actions.unregister(actions.RemoveArgument)
+        actions.unregister(actions.AddRemoveReturn)
+        actions.unregister(actions.ConvertToUsercall)
+        actions.unregister(actions.ShallowScanVariable)
+        actions.unregister(actions.DeepScanVariable)
+        actions.unregister(actions.DeepScanReturn)
+        actions.unregister(actions.DeepScanFunctions)
+        actions.unregister(actions.RecognizeShape)
+        actions.unregister(actions.CreateNewField)
+        actions.unregister(actions.SelectContainingStructure)
+        actions.unregister(actions.ResetContainingStructure)
+        actions.unregister(actions.RecastItemRight)
+        actions.unregister(actions.RecastItemLeft)
+        actions.unregister(actions.RenameOther)
+        actions.unregister(actions.RenameInside)
+        actions.unregister(actions.RenameOutside)
+        actions.unregister(actions.RenameUsingAssert)
+        actions.unregister(actions.SwapThenElse)
+        actions.unregister(actions.FindFieldXrefs)
+        actions.unregister(actions.PropagateName)
+        actions.unregister(actions.GuessAllocation)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
 
 def PLUGIN_ENTRY():
-    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.init_demangled_names)
-    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.init_imported_ea)
-    idaapi.notify_when(idaapi.NW_OPENIDB, Cache.reset_touched_functions)
-    Helper.extend_ida()
+    settings.load_settings()
+    logging.basicConfig(format='[%(levelname)s] %(message)s\t(%(module)s:%(funcName)s)')
+    logging.root.setLevel(settings.DEBUG_MESSAGE_LEVEL)
+    idaapi.notify_when(idaapi.NW_OPENIDB, cache.init_demangled_names)
+    idaapi.notify_when(idaapi.NW_OPENIDB, cache.init_imported_ea)
+    idaapi.notify_when(idaapi.NW_OPENIDB, cache.reset_touched_functions)
+    helper.extend_ida()
     return MyPlugin()
