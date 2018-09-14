@@ -1,5 +1,9 @@
+import logging
+
 import idaapi
 import idc
+
+logger = logging.getLogger(__name__)
 
 
 class LocalType:
@@ -70,10 +74,13 @@ class StructureGraph:
             typeref_ordinal = tinfo.get_ordinal()
             if typeref_ordinal:
                 typeref_tinfo = StructureGraph.get_tinfo_by_ordinal(typeref_ordinal)
+                if typeref_tinfo is None:
+                    logger.warn("You have dependencies of deleted %s type", tinfo.dstr())
+                    return 0
+
                 if typeref_tinfo.is_typeref() or typeref_tinfo.is_udt() or typeref_tinfo.is_ptr():
                     return typeref_ordinal
-        else:
-            return 0
+        return 0
 
     @staticmethod
     def get_members_ordinals(tinfo):
