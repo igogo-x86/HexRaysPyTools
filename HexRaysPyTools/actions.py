@@ -706,7 +706,7 @@ class RecastItemLeft(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     @staticmethod
-    def check(cfunc, ctree_item):
+    def check(cfunc, ctree_item, force=False):
         if ctree_item.citype != idaapi.VDI_EXPR:
             return
 
@@ -721,7 +721,7 @@ class RecastItemLeft(idaapi.action_handler_t):
             return
 
         expression = expression.to_specific_type
-        if expression.opname == 'asg':
+        if expression.op == idaapi.cot_asg:
 
             if expression.x.opname not in ('var', 'obj', 'memptr', 'memref'):
                 return
@@ -764,63 +764,55 @@ class RecastItemLeft(idaapi.action_handler_t):
             func_tinfo = idaapi.tinfo_t()
             cfunc.get_func_type(func_tinfo)
             rettype = func_tinfo.get_rettype()
-
-            if func_tinfo.get_rettype().dstr() != child.type.dstr():
+            if rettype.dstr() != child.type.dstr():
                 # return ...;
                 # This's possible when returned type and value are both pointers to different types
                 return RECAST_RETURN, child.type, None
 
         elif expression.op == idaapi.cot_call:
-            if expression.x.op == idaapi.cot_memptr:
-                if expression.x == child:
-                    return
 
-                arg_index, arg_tinfo = helper.get_func_argument_info(expression, child)
+            if expression.x == child:
+                return
+            func_ea = expression.x.obj_ea
+            arg_index, param_tinfo = helper.get_func_argument_info(expression, child)
+            if expression.x.op == idaapi.cot_memptr:
                 if child.op == idaapi.cot_cast:
                     # struct_ptr->func(..., (TYPE) var, ...);
-                    new_arg_tinfo = child.x.type
+                    arg_tinfo = child.x.type
                 else:
                     # struct_ptr->func(..., var, ...); When `var` and `arg` are different pointers
-                    if arg_tinfo.equals_to(child.type):
+                    if param_tinfo.equals_to(child.type):
                         return
-                    new_arg_tinfo = child.type
+                    arg_tinfo = child.type
 
                 struct_type = expression.x.x.type.get_pointed_object()
                 funcptr_tinfo = expression.x.type
-                helper.set_funcptr_argument(funcptr_tinfo, arg_index, new_arg_tinfo)
+                helper.set_funcptr_argument(funcptr_tinfo, arg_index, arg_tinfo)
                 return RECAST_STRUCTURE, struct_type.dstr(), expression.x.m, funcptr_tinfo
-
             if child.op == idaapi.cot_ref:
-                arg_index, arg_tinfo = helper.get_func_argument_info(expression, child)
-                new_arg_tinfo = None
                 if child.x.op == idaapi.cot_memref and child.x.m == 0:
                     # func(..., &struct.field_0, ...)
-                    new_arg_tinfo = idaapi.tinfo_t()
-                    new_arg_tinfo.create_ptr(child.x.x.type)
+                    arg_tinfo = idaapi.tinfo_t()
+                    arg_tinfo.create_ptr(child.x.x.type)
                 elif child.x.op == idaapi.cot_memptr and child.x.m == 0:
                     # func(..., &struct->field_0, ...)
-                    new_arg_tinfo = child.x.x.type
-                if new_arg_tinfo:
-                    func_tinfo = expression.x.type.get_pointed_object()
-                    idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
-                    return RECAST_ARGUMENT, arg_index, func_tinfo, new_arg_tinfo, expression.x.obj_ea
+                    arg_tinfo = child.x.x.type
+                else:
+                    # func(..., &var, ...)
+                    arg_tinfo = child.type
+            elif child.op == idaapi.cot_cast:
+                arg_tinfo = child.x.type
+            else:
+                arg_tinfo = child.type
 
-            if child.op == idaapi.cot_cast:
-                if child.cexpr.x.op == idaapi.cot_memptr and expression.ea == idaapi.BADADDR:
-                    idaapi.update_action_label(RecastItemLeft.name, 'Recast Virtual Function')
-                    structure_name = child.cexpr.x.x.type.get_pointed_object().dstr()
-                    return RECAST_STRUCTURE, structure_name, child.cexpr.x.m, child.type
-
-                if expression.x == child.cexpr:
-                    return
-                arg_index, _ = helper.get_func_argument_info(expression, child.cexpr)
+            if force or not arg_tinfo.equals_to(param_tinfo):
                 func_tinfo = expression.x.type.get_pointed_object()
                 idaapi.update_action_label(RecastItemLeft.name, "Recast Argument")
-                return RECAST_ARGUMENT, arg_index, func_tinfo, child.x.type, expression.x.obj_ea
+                return RECAST_ARGUMENT, arg_index, func_tinfo, arg_tinfo, func_ea
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
-        result = self.check(hx_view.cfunc, hx_view.item)
+        result = self.check(hx_view.cfunc, hx_view.item, force=True)
 
         if not result:
             return
