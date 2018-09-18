@@ -25,6 +25,8 @@ def demangled_name_to_c_str(name):
             name = name.replace("operator*", "operator_PTR_")
         elif name[idx:idx + 2] == "->":
             name = name.replace("operator->", "operator_REF_")
+        elif name[idx:idx + 2] == "[]":
+            name = name.replace("operator[]", "operator_IDX_")
         elif name[idx] == "*":
             name = name.replace("operator*", "operator_PTR_")
         elif name[idx:idx + 2] == "&&":
@@ -51,6 +53,12 @@ def demangled_name_to_c_str(name):
             name = name.replace("operator*", "operator_SUB_")
         elif name[idx] == "/":
             name = name.replace("operator*", "operator_DIV_")
+        elif name[idx: idx + 4] == " new":
+            name = name.replace("operator new", "operator_NEW_")
+        elif name[idx: idx + 7] == " delete":
+            name = name.replace("operator delete", "operator_DELETE_")
+        elif name[idx] == ' ':
+            pass
         else:
             raise AssertionError("Replacement of demangled string by c-string for keyword `operatorXXX` is not yet"
                                  "implemented ({}). You can do it by yourself or create an issue".format(name))
