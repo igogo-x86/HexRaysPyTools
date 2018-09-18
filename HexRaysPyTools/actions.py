@@ -439,7 +439,7 @@ class CreateNewField(idaapi.action_handler_t):
             return
 
         item = ctree_item.it.to_specific_type
-        if item.op != idaapi.cot_memptr:
+        if item.op not in (idaapi.cot_memptr, idaapi.cot_memref):
             return
 
         parent = cfunc.body.find_parent_of(ctree_item.it).to_specific_type
@@ -448,7 +448,9 @@ class CreateNewField(idaapi.action_handler_t):
         else:
             idx = parent.y.numval()
 
-        struct_type = item.x.type.get_pointed_object()
+        struct_type = item.x.type
+        struct_type.remove_ptr_or_array()
+
         udt_member = idaapi.udt_member_t()
         udt_member.offset = item.m * 8
         struct_type.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
