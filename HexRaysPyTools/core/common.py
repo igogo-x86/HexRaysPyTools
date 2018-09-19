@@ -13,7 +13,9 @@ def demangled_name_to_c_str(name):
     idx = name.find("operator")
     if idx >= 0:
         idx += len("operator")
-        if name[idx:idx + 2] == "==":
+        if idx == len(name) and not BAD_C_NAME_PATTERN.findall(name[idx]):
+            pass
+        elif name[idx:idx + 2] == "==":
             name = name.replace("operator==", "operator_EQ_")
         elif name[idx:idx + 2] == "!=":
             name = name.replace("operator!=", "operator_NEQ_")
@@ -64,14 +66,14 @@ def demangled_name_to_c_str(name):
         elif name[idx:idx + 2] == "<<":
             name = name.replace("operator<<", "operator_LEFT_SHIFT_")
         elif name[idx:idx + 2] == ">>":
-            name = name.replace("operator>>", "operator_RIGHT_SHIFT_")
-        elif name[idx:idx] == "<":
-            name = name.replace("operator<", "operator_LESS_")
-        elif name[idx:idx] == ">":
             name = name.replace("operator>", "operator_GREATER_")
         elif name[idx:idx + 2] == "<=":
             name = name.replace("operator<=", "operator_LESS_EQUAL_")
         elif name[idx:idx + 2] == ">=":
+            name = name.replace("operator>>", "operator_RIGHT_SHIFT_")
+        elif name[idx] == "<":
+            name = name.replace("operator<", "operator_LESS_")
+        elif name[idx] == ">":
             name = name.replace("operator>=", "operator_GREATER_EQUAL_")
         elif name[idx] == "+":
             name = name.replace("operator+", "operator_ADD_")
@@ -97,6 +99,9 @@ def demangled_name_to_c_str(name):
             raise AssertionError("Replacement of demangled string by c-string for keyword `operatorXXX` is not yet"
                                  "implemented ({}). You can do it by yourself or create an issue".format(name))
 
+    name = name.replace("public:", "")
+    name = name.replace("protected:", "")
+    name = name.replace("private:", "")
     name = name.replace("~", "DESTRUCTOR_")
     name = name.replace("*", "_PTR")
     name = name.replace("<", "_t_")
