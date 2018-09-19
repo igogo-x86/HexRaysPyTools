@@ -900,7 +900,7 @@ class RecastItemRight(RecastItemLeft):
         RecastItemLeft.__init__(self)
 
     @staticmethod
-    def check(cfunc, ctree_item):
+    def check(cfunc, ctree_item, force=False):
         if ctree_item.citype != idaapi.VDI_EXPR:
             return
 
