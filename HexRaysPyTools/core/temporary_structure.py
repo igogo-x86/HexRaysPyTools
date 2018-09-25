@@ -373,6 +373,10 @@ class VirtualTable(AbstractMember):
         return functions_count
 
     @property
+    def score(self):
+        return 0x2000
+
+    @property
     def type_name(self):
         return self.vtable_name + " *"
 
