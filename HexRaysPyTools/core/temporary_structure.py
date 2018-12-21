@@ -353,6 +353,9 @@ class VirtualTable(AbstractMember):
         if helper.is_code_ea(address):
             return False
 
+        if not idaapi.get_name(address):
+            return False
+
         functions_count = 0
         while True:
             func_address = idaapi.get_64bit(address) if const.EA64 else idaapi.get_32bit(address)

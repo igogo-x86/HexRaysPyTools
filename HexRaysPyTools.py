@@ -196,7 +196,7 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         cache.temporary_structure = TemporaryStructureModel()
-        # Actions.register(Actions.CreateVtable)
+        actions.register(actions.CreateVtable)
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
         actions.register(actions.GetStructureBySize)
@@ -242,7 +242,7 @@ class MyPlugin(idaapi.plugin_t):
     def term():
         if cache.temporary_structure:
             cache.temporary_structure.clear()
-        # Actions.unregister(Actions.CreateVtable)
+        actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
         actions.unregister(actions.GetStructureBySize)
