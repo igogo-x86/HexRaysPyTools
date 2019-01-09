@@ -154,7 +154,7 @@ class VirtualFunction:
     def tinfo(self):
         try:
             decompiled_function = idaapi.decompile(self.address)
-            if decompiled_function:
+            if decompiled_function and decompiled_function.type:
                 return idaapi.tinfo_t(decompiled_function.type)
             return const.DUMMY_FUNC
         except idaapi.DecompilationFailure:
