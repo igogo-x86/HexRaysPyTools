@@ -221,15 +221,11 @@ class VirtualTable(AbstractMember):
     def populate(self):
         address = self.address
         while True:
-            if const.EA64:
-                func_address = idaapi.get_64bit(address)
-            else:
-                func_address = idaapi.get_32bit(address)
-
-            if helper.is_code_ea(func_address):
-                self.virtual_functions.append(VirtualFunction(func_address, address - self.address))
-            elif helper.is_imported_ea(func_address):
-                self.virtual_functions.append(ImportedVirtualFunction(func_address, address - self.address))
+            ptr = helper.get_ptr(address)
+            if helper.is_code_ea(ptr):
+                self.virtual_functions.append(VirtualFunction(ptr, address - self.address))
+            elif helper.is_imported_ea(ptr):
+                self.virtual_functions.append(ImportedVirtualFunction(ptr, address - self.address))
             else:
                 break
             address += const.EA_SIZE
@@ -358,7 +354,7 @@ class VirtualTable(AbstractMember):
 
         functions_count = 0
         while True:
-            func_address = idaapi.get_64bit(address) if const.EA64 else idaapi.get_32bit(address)
+            func_address = helper.get_ptr(address)
             # print "[INFO] Address 0x{0:08X}".format(func_address)
             if helper.is_code_ea(func_address) or helper.is_imported_ea(func_address):
                 functions_count += 1
