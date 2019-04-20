@@ -37,10 +37,10 @@ def get_ptr(ea):
     """ Reads ptr at specified address. """
     if const.EA64:
         return idaapi.get_64bit(ea)
-    else:
-        if idaapi.cvar.inf.procname == "ARM":
-            ea &= -2    # Clear thumb switch
-    return idaapi.get_32bit(ea)
+    ptr = idaapi.get_32bit(ea)
+    if idaapi.cvar.inf.procname == "ARM":
+        ptr &= -2    # Clear thumb bit
+    return ptr
 
 
 def get_ordinal(tinfo):
