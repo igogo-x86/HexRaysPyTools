@@ -140,6 +140,13 @@ def set_funcptr_argument(funcptr_tinfo, index, arg_tinfo):
     funcptr_tinfo.create_ptr(func_tinfo)
 
 
+def set_func_return(func_tinfo, return_tinfo):
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    func_data.rettype = return_tinfo
+    func_tinfo.create_func(func_data)
+
+
 def get_nice_pointed_object(tinfo):
     """
     Returns nice pointer name (if exist) or None.

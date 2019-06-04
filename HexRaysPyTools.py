@@ -2,6 +2,7 @@ import logging
 import idaapi
 
 import HexRaysPyTools.actions as actions
+from HexRaysPyTools.new_actions import event_mediator
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
@@ -25,12 +26,6 @@ def hexrays_events_callback(*args):
 
         if actions.GuessAllocation.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.GuessAllocation.name, None)
-
-        if actions.RecastItemRight.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RecastItemRight.name, None)
-
-        if actions.RecastItemLeft.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RecastItemLeft.name, None)
 
         if actions.RenameOther.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.RenameOther.name, None)
@@ -196,6 +191,7 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         cache.temporary_structure = TemporaryStructureModel()
+        event_mediator.initialize()
         actions.register(actions.CreateVtable)
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
@@ -203,16 +199,14 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.RemoveArgument)
         actions.register(actions.AddRemoveReturn)
         actions.register(actions.ConvertToUsercall)
-        actions.register(actions.ShallowScanVariable, cache.temporary_structure)
-        actions.register(actions.DeepScanVariable, cache.temporary_structure)
         actions.register(actions.DeepScanReturn, cache.temporary_structure)
         actions.register(actions.DeepScanFunctions, cache.temporary_structure)
         actions.register(actions.RecognizeShape)
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
-        actions.register(actions.RecastItemRight)
-        actions.register(actions.RecastItemLeft)
+        actions.register(actions.ShallowScanVariable, cache.temporary_structure)
+        actions.register(actions.DeepScanVariable, cache.temporary_structure)
         actions.register(actions.RenameOther)
         actions.register(actions.RenameInside)
         actions.register(actions.RenameOutside)
@@ -242,6 +236,8 @@ class MyPlugin(idaapi.plugin_t):
     def term():
         if cache.temporary_structure:
             cache.temporary_structure.clear()
+
+        event_mediator.finalize()
         actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
@@ -257,8 +253,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)
         actions.unregister(actions.ResetContainingStructure)
-        actions.unregister(actions.RecastItemRight)
-        actions.unregister(actions.RecastItemLeft)
         actions.unregister(actions.RenameOther)
         actions.unregister(actions.RenameInside)
         actions.unregister(actions.RenameOutside)
