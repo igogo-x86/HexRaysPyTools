@@ -2,7 +2,8 @@ import logging
 import idaapi
 
 import HexRaysPyTools.actions as actions
-from HexRaysPyTools.new_actions import event_mediator
+from HexRaysPyTools.callbacks import hx_event_manager, database_event_manager
+from HexRaysPyTools.new_actions import action_manager
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
@@ -191,7 +192,9 @@ class MyPlugin(idaapi.plugin_t):
             return idaapi.PLUGIN_SKIP
 
         cache.temporary_structure = TemporaryStructureModel()
-        event_mediator.initialize()
+        action_manager.initialize()
+        hx_event_manager.initialize()
+        database_event_manager.initialize()
         actions.register(actions.CreateVtable)
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
@@ -237,7 +240,7 @@ class MyPlugin(idaapi.plugin_t):
         if cache.temporary_structure:
             cache.temporary_structure.clear()
 
-        event_mediator.finalize()
+        action_manager.finalize()
         actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)

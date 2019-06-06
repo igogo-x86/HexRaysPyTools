@@ -1,11 +1,7 @@
 from collections import namedtuple
 import idaapi
-import logging
-
 import actions
 import HexRaysPyTools.core.helper as helper
-
-logger = logging.getLogger(__name__)
 
 
 RecastLocalVariable = namedtuple('RecastLocalVariable', ['recast_tinfo', 'local_variable'])
@@ -15,7 +11,7 @@ RecastReturn = namedtuple('RecastReturn', ['recast_tinfo', 'func_ea'])
 RecastStructure = namedtuple('RecastStructure', ['recast_tinfo', 'structure_name', 'field_offset'])
 
 
-class RecastItemLeft(actions.Action):
+class RecastItemLeft(actions.PopupAction):
 
     description = "Recast Item"
     hotkey = "Shift+L"
@@ -304,5 +300,5 @@ class RecastItemRight(RecastItemLeft):
                     return RecastLocalVariable(char_array_tinfo, variable)
 
 
-actions.event_mediator.register_popup_action(idaapi.hxe_populating_popup, RecastItemLeft())
-actions.event_mediator.register_popup_action(idaapi.hxe_populating_popup, RecastItemRight())
+actions.action_manager.register(RecastItemLeft())
+actions.action_manager.register(RecastItemRight())
