@@ -270,31 +270,6 @@ class GetStructureBySize(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class DeepScanFunctions(idaapi.action_handler_t):
-
-    name = "my:DeepScanFunctions"
-    description = "Scan First Argument"
-    hotkey = None
-
-    def __init__(self, temporary_structure):
-        self.temporary_structure = temporary_structure
-        idaapi.action_handler_t.__init__(self)
-
-    def activate(self, ctx):
-        for idx in ctx.chooser_selection:
-            func_ea = idaapi.getn_func(idx - 1).startEA
-            cfunc = helper.decompile_function(func_ea)
-            obj = api.VariableObject(cfunc.get_lvars()[0], 0)
-            if cfunc:
-                NewDeepSearchVisitor(cfunc, 0, obj, self.temporary_structure).process()
-
-    def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_FUNCS:
-            idaapi.attach_action_to_popup(ctx.widget, None, self.name)
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
-
-
 class CreateNewField(idaapi.action_handler_t):
     name = "my:CreateNewField"
     description = "Create New Field"

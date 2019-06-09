@@ -121,7 +121,30 @@ class DeepScanReturn(Scanner):
         visitor.process()
 
 
+class DeepScanFunctions(actions.Action):
+    description = "Scan First Argument"
+    hotkey = None
+
+    def __init__(self):
+        super(DeepScanFunctions, self).__init__()
+
+    def activate(self, ctx):
+        for idx in ctx.chooser_selection:
+            func_ea = idaapi.getn_func(idx - 1).startEA
+            cfunc = helper.decompile_function(func_ea)
+            obj = api.VariableObject(cfunc.get_lvars()[0], 0)
+            if cfunc:
+                NewDeepSearchVisitor(cfunc, 0, obj, cache.temporary_structure).process()
+
+    def update(self, ctx):
+        if ctx.form_type == idaapi.BWN_FUNCS:
+            idaapi.attach_action_to_popup(ctx.widget, None, self.name)
+            return idaapi.AST_ENABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_FORM
+
+
 actions.action_manager.register(ShallowScanVariable())
 actions.action_manager.register(DeepScanVariable())
 actions.action_manager.register(RecognizeShape())
 actions.action_manager.register(DeepScanReturn())
+actions.action_manager.register(DeepScanFunctions())
