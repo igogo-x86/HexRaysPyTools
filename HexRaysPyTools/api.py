@@ -28,6 +28,8 @@ class ScanObject(object):
                 if arg.e:
                     result.ea = ScanObject.get_expression_address(cfunc, arg.e)
                 return result
+            if arg.citype != idaapi.VDI_EXPR:
+                return None
             cexpr = arg.e
         else:
             cexpr = arg
