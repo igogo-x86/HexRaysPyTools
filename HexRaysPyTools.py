@@ -57,8 +57,6 @@ def hexrays_events_callback(*args):
             if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
                 idaapi.attach_action_to_popup(form, popup, actions.AddRemoveReturn.name, None)
                 idaapi.attach_action_to_popup(form, popup, actions.ConvertToUsercall.name, None)
-                if actions.DeepScanReturn.check(hx_view):
-                    idaapi.attach_action_to_popup(form, popup, actions.DeepScanReturn.name, None)
 
         elif item.citype == idaapi.VDI_LVAR:
             # If we clicked on argument
@@ -197,7 +195,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.RemoveArgument)
         actions.register(actions.AddRemoveReturn)
         actions.register(actions.ConvertToUsercall)
-        actions.register(actions.DeepScanReturn, cache.temporary_structure)
         actions.register(actions.DeepScanFunctions, cache.temporary_structure)
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
@@ -241,7 +238,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.RemoveArgument)
         actions.unregister(actions.AddRemoveReturn)
         actions.unregister(actions.ConvertToUsercall)
-        actions.unregister(actions.DeepScanReturn)
         actions.unregister(actions.DeepScanFunctions)
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)

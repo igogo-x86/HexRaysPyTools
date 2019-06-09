@@ -270,35 +270,6 @@ class GetStructureBySize(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class DeepScanReturn(idaapi.action_handler_t):
-    name = "my:DeepScanReturn"
-    description = "Deep Scan Returned Variables"
-    hotkey = None
-
-    def __init__(self, temporary_structure):
-        self.temp_struct = temporary_structure
-        idaapi.action_handler_t.__init__(self)
-
-    @staticmethod
-    def check(hx_view):
-        tinfo = idaapi.tinfo_t()
-        hx_view.cfunc.get_func_type(tinfo)
-        return not tinfo.get_rettype().equals_to(const.VOID_TINFO)
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        func_ea = hx_view.cfunc.entry_ea
-
-        obj = api.ReturnedObject(func_ea)
-        visitor = DeepReturnVisitor(hx_view.cfunc, self.temp_struct.main_offset, obj, self.temp_struct)
-        visitor.process()
-
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
-
-
 class DeepScanFunctions(idaapi.action_handler_t):
 
     name = "my:DeepScanFunctions"

@@ -3,7 +3,7 @@ import actions
 import HexRaysPyTools.api as api
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.helper as helper
-from ..core.variable_scanner import NewShallowSearchVisitor, NewDeepSearchVisitor
+from ..core.variable_scanner import NewShallowSearchVisitor, NewDeepSearchVisitor, DeepReturnVisitor
 from ..core.temporary_structure import TemporaryStructureModel
 
 
@@ -96,6 +96,32 @@ class RecognizeShape(Scanner):
             hx_view.refresh_view(True)
 
 
+class DeepScanReturn(Scanner):
+    description = "Deep Scan Returned Variables"
+    hotkey = None
+
+    def __init__(self):
+        super(DeepScanReturn, self).__init__()
+
+    def check(self, *args):
+        form, popup, hx_view = args
+        cfunc, ctree_item = hx_view.cfunc, hx_view.item
+        if ctree_item.citype != idaapi.VDI_FUNC:
+            return False
+        tinfo = idaapi.tinfo_t()
+        hx_view.cfunc.get_func_type(tinfo)
+        return helper.is_legal_type(tinfo.get_rettype())
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        func_ea = hx_view.cfunc.entry_ea
+        obj = api.ReturnedObject(func_ea)
+        origin = cache.temporary_structure.main_offset
+        visitor = DeepReturnVisitor(hx_view.cfunc, origin, obj, cache.temporary_structure)
+        visitor.process()
+
+
 actions.action_manager.register(ShallowScanVariable())
 actions.action_manager.register(DeepScanVariable())
 actions.action_manager.register(RecognizeShape())
+actions.action_manager.register(DeepScanReturn())
