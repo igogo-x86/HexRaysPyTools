@@ -44,8 +44,6 @@ def hexrays_events_callback(*args):
             idaapi.attach_action_to_popup(form, popup, actions.SwapThenElse.name, None)
 
         if actions.ShallowScanVariable.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.ShallowScanVariable.name, None)
-            idaapi.attach_action_to_popup(form, popup, actions.DeepScanVariable.name, None)
             idaapi.attach_action_to_popup(form, popup, actions.RecognizeShape.name, None)
 
         if actions.CreateNewField.check(hx_view.cfunc, item):
@@ -208,8 +206,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
-        actions.register(actions.ShallowScanVariable, cache.temporary_structure)
-        actions.register(actions.DeepScanVariable, cache.temporary_structure)
         actions.register(actions.RenameOther)
         actions.register(actions.RenameInside)
         actions.register(actions.RenameOutside)
@@ -241,6 +237,7 @@ class MyPlugin(idaapi.plugin_t):
             cache.temporary_structure.clear()
 
         action_manager.finalize()
+        hx_event_manager.finalize()
         actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
@@ -248,8 +245,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.RemoveArgument)
         actions.unregister(actions.AddRemoveReturn)
         actions.unregister(actions.ConvertToUsercall)
-        actions.unregister(actions.ShallowScanVariable)
-        actions.unregister(actions.DeepScanVariable)
         actions.unregister(actions.DeepScanReturn)
         actions.unregister(actions.DeepScanFunctions)
         actions.unregister(actions.RecognizeShape)
