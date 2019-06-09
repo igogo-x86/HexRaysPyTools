@@ -11,7 +11,7 @@ RecastReturn = namedtuple('RecastReturn', ['recast_tinfo', 'func_ea'])
 RecastStructure = namedtuple('RecastStructure', ['recast_tinfo', 'structure_name', 'field_offset'])
 
 
-class RecastItemLeft(actions.PopupAction):
+class RecastItemLeft(actions.HexRaysPopupAction):
 
     description = "Recast Item"
     hotkey = "Shift+L"
@@ -127,8 +127,7 @@ class RecastItemLeft(actions.PopupAction):
     def set_label(self, label):
         idaapi.update_action_label(self.name, label)
 
-    def check(self, *args):
-        form, popup, hx_view = args
+    def check(self, hx_view):
         cfunc, ctree_item = hx_view.cfunc, hx_view.item
 
         ri = self.extract_recast_info(cfunc, ctree_item)
@@ -204,11 +203,6 @@ class RecastItemLeft(actions.PopupAction):
         hx_view.refresh_view(True)
         return 0
 
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
-
 
 class RecastItemRight(RecastItemLeft):
 
@@ -220,7 +214,6 @@ class RecastItemRight(RecastItemLeft):
         super(RecastItemRight, self).__init__()
 
     def extract_recast_info(self, cfunc, ctree_item):
-
         if ctree_item.citype != idaapi.VDI_EXPR:
             return
 

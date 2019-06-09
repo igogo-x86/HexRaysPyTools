@@ -72,7 +72,7 @@ class PopupRequestHandler(EventHandler):
         self.__action = action
 
     def handle(self, event, *args):
-        if self.__action.check(*args):
-            form, popup = args[0:2]
+        form, popup, hx_view = args
+        if self.__action.check(hx_view):
             idaapi.attach_action_to_popup(form, popup, self.__action.name, None)
         return 0

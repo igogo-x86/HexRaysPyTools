@@ -7,7 +7,7 @@ from ..core.variable_scanner import NewShallowSearchVisitor, NewDeepSearchVisito
 from ..core.temporary_structure import TemporaryStructureModel
 
 
-class Scanner(actions.PopupAction):
+class Scanner(actions.HexRaysPopupAction):
     """
     Abstract class containing common check of whether object can be scanned or not.
     Concrete class implement actual scan process in activate method
@@ -19,15 +19,9 @@ class Scanner(actions.PopupAction):
         obj = api.ScanObject.create(cfunc, ctree_item)
         return obj and helper.is_legal_type(obj.tinfo)
 
-    def check(self, *args):
-        form, popup, hx_view = args
+    def check(self, hx_view):
         cfunc, ctree_item = hx_view.cfunc, hx_view.item
         return self._can_be_scanned(cfunc, ctree_item)
-
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class ShallowScanVariable(Scanner):
@@ -70,7 +64,6 @@ class DeepScanVariable(Scanner):
 
 class RecognizeShape(Scanner):
     description = "Recognize Shape"
-    hotkey = None
 
     def __init__(self):
         super(RecognizeShape, self).__init__()
@@ -98,13 +91,11 @@ class RecognizeShape(Scanner):
 
 class DeepScanReturn(Scanner):
     description = "Deep Scan Returned Variables"
-    hotkey = None
 
     def __init__(self):
         super(DeepScanReturn, self).__init__()
 
-    def check(self, *args):
-        form, popup, hx_view = args
+    def check(self, hx_view):
         cfunc, ctree_item = hx_view.cfunc, hx_view.item
         if ctree_item.citype != idaapi.VDI_FUNC:
             return False
@@ -123,7 +114,6 @@ class DeepScanReturn(Scanner):
 
 class DeepScanFunctions(actions.Action):
     description = "Scan First Argument"
-    hotkey = None
 
     def __init__(self):
         super(DeepScanFunctions, self).__init__()
