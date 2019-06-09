@@ -324,41 +324,6 @@ class DeepScanFunctions(idaapi.action_handler_t):
         return idaapi.AST_DISABLE_FOR_FORM
 
 
-class RecognizeShape(idaapi.action_handler_t):
-
-    name = "my:RecognizeShape"
-    description = "Recognize Shape"
-    hotkey = None
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        cfunc = hx_view.cfunc
-
-        if not ShallowScanVariable.check(cfunc, hx_view.item):
-            return
-
-        obj = api.ScanObject.create(cfunc, hx_view.item)
-        temp_struct = TemporaryStructureModel()
-        visitor = NewShallowSearchVisitor(cfunc, 0, obj, temp_struct)
-        visitor.process()
-        tinfo = temp_struct.get_recognized_shape()
-        if tinfo:
-            tinfo.create_ptr(tinfo)
-            if obj.id == api.SO_LOCAL_VARIABLE:
-                hx_view.set_lvar_type(obj.lvar, tinfo)
-            elif obj.id == api.SO_GLOBAL_OBJECT:
-                idaapi.apply_tinfo2(obj.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
-            hx_view.refresh_view(True)
-
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
-
-
 class CreateNewField(idaapi.action_handler_t):
     name = "my:CreateNewField"
     description = "Create New Field"
