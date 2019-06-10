@@ -1,13 +1,9 @@
-import logging
-import idaapi
-
 import HexRaysPyTools.actions as actions
 from HexRaysPyTools.callbacks import hx_event_manager, database_event_manager
 from HexRaysPyTools.new_actions import action_manager
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
-import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.const as const
 from HexRaysPyTools.core.spaghetti_code import SpaghettiVisitor, SwapThenElseVisitor
@@ -52,19 +48,7 @@ def hexrays_events_callback(*args):
         if actions.PropagateName.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.PropagateName.name, None)
 
-        if item.citype == idaapi.VDI_FUNC:
-            # If we clicked on function
-            if not hx_view.cfunc.entry_ea == idaapi.BADADDR:  # Probably never happen
-                idaapi.attach_action_to_popup(form, popup, actions.AddRemoveReturn.name, None)
-                idaapi.attach_action_to_popup(form, popup, actions.ConvertToUsercall.name, None)
-
-        elif item.citype == idaapi.VDI_LVAR:
-            # If we clicked on argument
-            local_variable = hx_view.item.get_lvar()          # idaapi.lvar_t
-            if local_variable.is_arg_var:
-                idaapi.attach_action_to_popup(form, popup, actions.RemoveArgument.name, None)
-
-        elif item.citype == idaapi.VDI_EXPR:
+        if item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
                 # number_format = item.e.n.nf                       # idaapi.number_format_t
                 # print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
@@ -192,9 +176,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
         actions.register(actions.GetStructureBySize)
-        actions.register(actions.RemoveArgument)
-        actions.register(actions.AddRemoveReturn)
-        actions.register(actions.ConvertToUsercall)
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
@@ -234,9 +215,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
         actions.unregister(actions.GetStructureBySize)
-        actions.unregister(actions.RemoveArgument)
-        actions.unregister(actions.AddRemoveReturn)
-        actions.unregister(actions.ConvertToUsercall)
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)
         actions.unregister(actions.ResetContainingStructure)
