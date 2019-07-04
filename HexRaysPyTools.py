@@ -24,18 +24,6 @@ def hexrays_events_callback(*args):
         if actions.GuessAllocation.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.GuessAllocation.name, None)
 
-        if actions.RenameOther.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RenameOther.name, None)
-
-        if actions.RenameInside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RenameInside.name, None)
-
-        if actions.RenameOutside.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RenameOutside.name, None)
-
-        if actions.RenameUsingAssert.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.RenameUsingAssert.name, None)
-
         if actions.SwapThenElse.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.SwapThenElse.name, None)
 
@@ -179,10 +167,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
-        actions.register(actions.RenameOther)
-        actions.register(actions.RenameInside)
-        actions.register(actions.RenameOutside)
-        actions.register(actions.RenameUsingAssert)
         actions.register(actions.SwapThenElse)
         actions.register(actions.FindFieldXrefs)
         actions.register(actions.PropagateName)
@@ -218,10 +202,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)
         actions.unregister(actions.ResetContainingStructure)
-        actions.unregister(actions.RenameOther)
-        actions.unregister(actions.RenameInside)
-        actions.unregister(actions.RenameOutside)
-        actions.unregister(actions.RenameUsingAssert)
         actions.unregister(actions.SwapThenElse)
         actions.unregister(actions.FindFieldXrefs)
         actions.unregister(actions.PropagateName)

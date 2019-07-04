@@ -134,6 +134,24 @@ def set_func_argument(func_tinfo, index, arg_tinfo):
     func_tinfo.create_func(func_data)
 
 
+def get_func_arg_name(func_tinfo, arg_idx):
+    # type: (idaapi.tinfo_t, int) -> str
+
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    if arg_idx < func_tinfo.get_nargs():
+        return func_data[arg_idx].name
+
+
+def set_func_arg_name(func_tinfo, arg_idx, name):
+    # type: (idaapi.tinfo_t, int, str) -> None
+
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    func_data[arg_idx].name = name
+    func_tinfo.create_func(func_data)
+
+
 def set_funcptr_argument(funcptr_tinfo, index, arg_tinfo):
     func_tinfo = funcptr_tinfo.get_pointed_object()
     set_func_argument(func_tinfo, index, arg_tinfo)
