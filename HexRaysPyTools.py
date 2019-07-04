@@ -21,9 +21,6 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if actions.GuessAllocation.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.GuessAllocation.name, None)
-
         if actions.SwapThenElse.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.SwapThenElse.name, None)
 
@@ -166,7 +163,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.ResetContainingStructure)
         actions.register(actions.SwapThenElse)
         actions.register(actions.FindFieldXrefs)
-        actions.register(actions.GuessAllocation)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -200,7 +196,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.ResetContainingStructure)
         actions.unregister(actions.SwapThenElse)
         actions.unregister(actions.FindFieldXrefs)
-        actions.unregister(actions.GuessAllocation)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
