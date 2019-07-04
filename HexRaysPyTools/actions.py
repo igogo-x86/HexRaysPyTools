@@ -11,19 +11,10 @@ import HexRaysPyTools.core.const as const
 import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.core.classes as classes
 import HexRaysPyTools.api as api
-import settings
 from HexRaysPyTools.core.structure_graph import StructureGraph
 from HexRaysPyTools.core.temporary_structure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.core.variable_scanner import NewShallowSearchVisitor, NewDeepSearchVisitor, DeepReturnVisitor
-from HexRaysPyTools.core.helper import FunctionTouchVisitor
 from HexRaysPyTools.core.spaghetti_code import *
 from HexRaysPyTools.core.struct_xrefs import XrefStorage
-
-RECAST_LOCAL_VARIABLE = 0
-RECAST_GLOBAL_VARIABLE = 1
-RECAST_ARGUMENT = 2
-RECAST_RETURN = 3
-RECAST_STRUCTURE = 4
 
 logger = logging.getLogger(__name__)
 
@@ -455,88 +446,6 @@ class ResetContainingStructure(idaapi.action_handler_t):
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
-
-
-class PropagateName(idaapi.action_handler_t):
-    name = "my:PropagateName"
-    description = "Propagate name"
-    hotkey = "P"
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-
-    @staticmethod
-    def callback_start(self):
-        hx_view, _ = self._data
-        hx_view.switch_to(self._cfunc, False)
-
-    @staticmethod
-    def callback_manipulate(self, cexpr, obj):
-        if self.crippled:
-            logger.debug("Skipping crippled function at {}".format(helper.to_hex(self._cfunc.entry_ea)))
-            return
-
-        if obj.id == api.SO_GLOBAL_OBJECT:
-            old_name = idaapi.get_short_name(cexpr.obj_ea)
-            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
-                _, name = self._data
-                new_name = PropagateName.rename(lambda x: idaapi.set_name(cexpr.obj_ea, x), name)
-                logger.debug("Renamed global variable from {} to {}".format(old_name, new_name))
-        elif obj.id == api.SO_LOCAL_VARIABLE:
-            lvar = self._cfunc.get_lvars()[cexpr.v.idx]
-            old_name = lvar.name
-            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
-                hx_view, name = self._data
-                new_name = PropagateName.rename(lambda x: hx_view.rename_lvar(lvar, x, True), name)
-                logger.debug("Renamed local variable from {} to {}".format(old_name, new_name))
-        elif obj.id in (api.SO_STRUCT_POINTER, api.SO_STRUCT_REFERENCE):
-            struct_tinfo = cexpr.x.type
-            offset = cexpr.m
-            struct_tinfo.remove_ptr_or_array()
-            old_name = helper.get_member_name(struct_tinfo, offset)
-            if settings.PROPAGATE_THROUGH_ALL_NAMES or PropagateName._is_default_name(old_name):
-                _, name = self._data
-                new_name = PropagateName.rename(lambda x: helper.change_member_name(struct_tinfo.dstr(), offset, x), name)
-                logger.debug("Renamed struct member from {} to {}".format(old_name, new_name))
-
-    @staticmethod
-    def rename(rename_func, name):
-        while not rename_func(name):
-            name = "_" + name
-        return name
-
-    @staticmethod
-    def _is_default_name(string):
-        return re.match(r"[av]\d+$", string) is not None or \
-               re.match(r"this|[qd]?word|field_|off_", string) is not None
-
-    @staticmethod
-    def check(cfunc, ctree_item):
-        if ctree_item.citype != idaapi.VDI_EXPR:
-            return
-
-        obj = api.ScanObject.create(cfunc, ctree_item)
-        if obj and not PropagateName._is_default_name(obj.name):
-            return obj
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        obj = self.check(hx_view.cfunc, hx_view.item)
-        if obj:
-            cfunc = hx_view.cfunc
-            visitor = api.RecursiveObjectDownwardsVisitor(cfunc, obj, (hx_view, obj.name), True)
-            visitor.set_callbacks(
-                manipulate=PropagateName.callback_manipulate,
-                start_iteration=PropagateName.callback_start,
-                finish=lambda x: hx_view.switch_to(cfunc, True)
-            )
-            visitor.process()
-            hx_view.refresh_view(True)
-
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class GuessAllocation(idaapi.action_handler_t):

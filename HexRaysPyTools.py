@@ -33,9 +33,6 @@ def hexrays_events_callback(*args):
         if actions.FindFieldXrefs.check(item):
             idaapi.attach_action_to_popup(form, popup, actions.FindFieldXrefs.name, None)
 
-        if actions.PropagateName.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.PropagateName.name, None)
-
         if item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
                 # number_format = item.e.n.nf                       # idaapi.number_format_t
@@ -169,7 +166,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.ResetContainingStructure)
         actions.register(actions.SwapThenElse)
         actions.register(actions.FindFieldXrefs)
-        actions.register(actions.PropagateName)
         actions.register(actions.GuessAllocation)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
@@ -204,7 +200,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.ResetContainingStructure)
         actions.unregister(actions.SwapThenElse)
         actions.unregister(actions.FindFieldXrefs)
-        actions.unregister(actions.PropagateName)
         actions.unregister(actions.GuessAllocation)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
