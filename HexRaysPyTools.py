@@ -1,3 +1,4 @@
+import logging
 import HexRaysPyTools.actions as actions
 from HexRaysPyTools.callbacks import callback_manager, action_manager
 from HexRaysPyTools.core.temporary_structure import *
@@ -5,7 +6,8 @@ import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.const as const
-from HexRaysPyTools.core.struct_xrefs import *
+import HexRaysPyTools.settings as settings
+from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
 potential_negatives = {}
 
@@ -21,9 +23,6 @@ def hexrays_events_callback(*args):
 
         if actions.CreateNewField.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.CreateNewField.name, None)
-
-        if actions.FindFieldXrefs.check(item):
-            idaapi.attach_action_to_popup(form, popup, actions.FindFieldXrefs.name, None)
 
         if item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
@@ -139,7 +138,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
-        actions.register(actions.FindFieldXrefs)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -171,7 +169,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)
         actions.unregister(actions.ResetContainingStructure)
-        actions.unregister(actions.FindFieldXrefs)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
