@@ -10,10 +10,8 @@ import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.const as const
 import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.core.classes as classes
-import HexRaysPyTools.api as api
 from HexRaysPyTools.core.structure_graph import StructureGraph
 from HexRaysPyTools.core.temporary_structure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.core.spaghetti_code import *
 from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
 logger = logging.getLogger(__name__)
@@ -446,41 +444,6 @@ class ResetContainingStructure(idaapi.action_handler_t):
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
-
-
-class SwapThenElse(idaapi.action_handler_t):
-    name = "my:SwapIfElse"
-    description = "Swap then/else"
-    hotkey = "Shift+S"
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-
-    @staticmethod
-    def check(cfunc, ctree_item):
-        if ctree_item.citype != idaapi.VDI_EXPR:
-            return False
-
-        insn = ctree_item.it.to_specific_type
-
-        if insn.op != idaapi.cit_if or insn.cif.ielse is None:
-            return False
-
-        return insn.op == idaapi.cit_if and insn.cif.ielse
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        if self.check(hx_view.cfunc, hx_view.item):
-            insn = hx_view.item.it.to_specific_type
-            inverse_if(insn.cif)
-            hx_view.refresh_ctext()
-
-            InversionInfo(hx_view.cfunc.entry_ea).switch_inverted(insn.ea)
-
-    def update(self, ctx):
-        if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
 
 
 class FindFieldXrefs(idaapi.action_handler_t):

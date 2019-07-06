@@ -5,7 +5,6 @@ import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.const as const
-from HexRaysPyTools.core.spaghetti_code import SpaghettiVisitor, SwapThenElseVisitor
 from HexRaysPyTools.core.struct_xrefs import *
 
 potential_negatives = {}
@@ -19,9 +18,6 @@ def hexrays_events_callback(*args):
     if hexrays_event == idaapi.hxe_populating_popup:
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
-
-        if actions.SwapThenElse.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.SwapThenElse.name, None)
 
         if actions.CreateNewField.check(hx_view.cfunc, item):
             idaapi.attach_action_to_popup(form, popup, actions.CreateNewField.name, None)
@@ -116,19 +112,6 @@ def hexrays_events_callback(*args):
                 visitor = negative_offsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
-        elif level_of_maturity == idaapi.CMAT_TRANS1:
-
-            visitor = SwapThenElseVisitor(cfunc.entry_ea)
-            visitor.apply_to(cfunc.body, None)
-
-        elif level_of_maturity == idaapi.CMAT_TRANS2:
-            # print '=' * 40
-            # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
-            # print '=' * 40
-            # print cfunc
-            visitor = SpaghettiVisitor()
-            visitor.apply_to(cfunc.body, None)
-
         elif level_of_maturity == idaapi.CMAT_FINAL:
             StructXrefVisitor(cfunc).process()
 
@@ -159,7 +142,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.CreateNewField)
         actions.register(actions.SelectContainingStructure, potential_negatives)
         actions.register(actions.ResetContainingStructure)
-        actions.register(actions.SwapThenElse)
         actions.register(actions.FindFieldXrefs)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
@@ -192,7 +174,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.CreateNewField)
         actions.unregister(actions.SelectContainingStructure)
         actions.unregister(actions.ResetContainingStructure)
-        actions.unregister(actions.SwapThenElse)
         actions.unregister(actions.FindFieldXrefs)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()

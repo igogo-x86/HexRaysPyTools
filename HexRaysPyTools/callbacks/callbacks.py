@@ -15,7 +15,7 @@ class CallbackManager(object):
 
     def finalize(self):
         idaapi.remove_hexrays_callback(self.__handle_hexrays_event)
-        idaapi.notify_when(self.__flags | idaapi.NW_REMOVE)
+        idaapi.notify_when(self.__flags, idaapi.NW_REMOVE)
 
     def register(self, event, handler):
         if isinstance(handler, DatabaseEventHandler):
