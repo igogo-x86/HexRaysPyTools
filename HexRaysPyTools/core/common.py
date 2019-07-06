@@ -10,9 +10,9 @@ def demangled_name_to_c_str(name):
     """
     if not BAD_C_NAME_PATTERN.findall(name):
         return name
-    idx = name.find("operator")
+    idx = name.find("::operator")
     if idx >= 0:
-        idx += len("operator")
+        idx += len("::operator")
         if idx == len(name) and not BAD_C_NAME_PATTERN.findall(name[idx]):
             pass
         elif name[idx:idx + 2] == "==":
