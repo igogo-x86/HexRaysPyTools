@@ -1,5 +1,6 @@
 import idaapi
-from ..callbacks import hx_event_manager, PopupRequestHandler
+
+from .callbacks import callback_manager, HexRaysEventHandler
 
 
 class ActionManager(object):
@@ -9,7 +10,7 @@ class ActionManager(object):
     def register(self, action):
         self.__actions.append(action)
         if isinstance(action, HexRaysPopupAction):
-            hx_event_manager.register_handler(idaapi.hxe_populating_popup, PopupRequestHandler(action))
+            callback_manager.register(idaapi.hxe_populating_popup, HexRaysPopupRequestHandler(action))
 
     def initialize(self):
         for action in self.__actions:
@@ -72,3 +73,20 @@ class HexRaysPopupAction(Action):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
             return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
+
+
+class HexRaysPopupRequestHandler(HexRaysEventHandler):
+    """
+    This is wrapper around HexRaysPopupAction which allows to dynamically decide whether to add Action to popup
+    menu or not.
+    Register this in CallbackManager.
+    """
+    def __init__(self, action):
+        super(HexRaysPopupRequestHandler, self).__init__()
+        self.__action = action
+
+    def handle(self, event, *args):
+        form, popup, hx_view = args
+        if self.__action.check(hx_view):
+            idaapi.attach_action_to_popup(form, popup, self.__action.name, None)
+        return 0

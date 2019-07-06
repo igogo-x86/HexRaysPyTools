@@ -1,6 +1,5 @@
 import HexRaysPyTools.actions as actions
-from HexRaysPyTools.callbacks import hx_event_manager, database_event_manager
-from HexRaysPyTools.new_actions import action_manager
+from HexRaysPyTools.callbacks import callback_manager, action_manager
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.negative_offsets as negative_offsets
@@ -152,8 +151,7 @@ class MyPlugin(idaapi.plugin_t):
 
         cache.temporary_structure = TemporaryStructureModel()
         action_manager.initialize()
-        hx_event_manager.initialize()
-        database_event_manager.initialize()
+        callback_manager.initialize()
         actions.register(actions.CreateVtable)
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
@@ -186,7 +184,7 @@ class MyPlugin(idaapi.plugin_t):
             cache.temporary_structure.clear()
 
         action_manager.finalize()
-        hx_event_manager.finalize()
+        callback_manager.finalize()
         actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)

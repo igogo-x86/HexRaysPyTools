@@ -1,4 +1,5 @@
-from actions import action_manager, Action, HexRaysPopupAction
+from actions import *
+from callbacks import *
 import function_signature_modifiers
 import recasts
 import renames
