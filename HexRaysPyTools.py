@@ -112,9 +112,6 @@ def hexrays_events_callback(*args):
                 visitor = negative_offsets.ReplaceVisitor(negative_lvars)
                 visitor.apply_to(cfunc.body, None)
 
-        elif level_of_maturity == idaapi.CMAT_FINAL:
-            StructXrefVisitor(cfunc).process()
-
     return 0
 
 
