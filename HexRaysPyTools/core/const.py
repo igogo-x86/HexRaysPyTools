@@ -1,8 +1,7 @@
 import idaapi
-import idc
 
-EA64 = idc.__EA64__
-EA_SIZE = 8 if EA64 else 4
+EA64 = None
+EA_SIZE = None
 
 COT_ARITHMETIC = (idaapi.cot_num, idaapi.cot_fnum, idaapi.cot_add, idaapi.cot_fadd, idaapi.cot_sub, idaapi.cot_fsub,
                   idaapi.cot_mul, idaapi.cot_fmul, idaapi.cot_fdiv)
@@ -32,7 +31,10 @@ def init():
     """ All tinfo should be reinitialized between session. Otherwise they could have wrong type """
     global VOID_TINFO, PVOID_TINFO, CONST_PVOID_TINFO, BYTE_TINFO, PBYTE_TINFO, LEGAL_TYPES, X_WORD_TINFO, \
         PX_WORD_TINFO, DUMMY_FUNC, CONST_PCHAR_TINFO, CHAR_TINFO, PCHAR_TINFO, CONST_VOID_TINFO, \
-        WORD_TINFO, PWORD_TINFO
+        WORD_TINFO, PWORD_TINFO, EA64, EA_SIZE
+
+    EA64 = idaapi.get_inf_structure().is_64bit()
+    EA_SIZE = 8 if EA64 else 4
 
     VOID_TINFO = idaapi.tinfo_t(idaapi.BT_VOID)
     PVOID_TINFO.create_ptr(VOID_TINFO)
