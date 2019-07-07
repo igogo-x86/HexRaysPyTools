@@ -3,6 +3,7 @@ from callbacks import *
 import function_signature_modifiers
 import guess_allocation
 import negative_offsets
+import new_field_creation
 import recasts
 import renames
 import scanners

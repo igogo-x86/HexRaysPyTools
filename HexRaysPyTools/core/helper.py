@@ -341,6 +341,28 @@ def load_long_str_from_idb(array_name):
     return "".join(result)
 
 
+def create_padding_udt_member(offset, size):
+    # type: (long, long) -> idaapi.udt_member_t
+    """ Creates internal IDA structure with name gap_XXX and appropriate size and offset """
+
+    udt_member = idaapi.udt_member_t()
+    udt_member.name = "gap_{0:X}".format(offset)
+    udt_member.offset = offset
+    udt_member.size = size
+
+    if size == 1:
+        udt_member.type = const.BYTE_TINFO
+    else:
+        array_data = idaapi.array_type_data_t()
+        array_data.base = 0
+        array_data.elem_type = const.BYTE_TINFO
+        array_data.nelems = size
+        tmp_tinfo = idaapi.tinfo_t()
+        tmp_tinfo.create_array(array_data)
+        udt_member.type = tmp_tinfo
+    return udt_member
+
+
 def decompile_function(address):
     try:
         cfunc = idaapi.decompile(address)

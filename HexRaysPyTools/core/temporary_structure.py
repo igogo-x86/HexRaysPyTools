@@ -534,7 +534,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for item in filter(lambda x: x.enabled, self.items[start:stop]):    # Filter disabled members
             gap_size = item.offset - offset
             if gap_size:
-                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset - origin, gap_size))
+                udt_data.push_back(helper.create_padding_udt_member(offset - origin, gap_size))
             if item.is_array:
                 array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
                 if array_size:
@@ -678,29 +678,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         if idx != -1:
             return result[idx][1]
         return None
-
-    @staticmethod
-    def get_padding_member(offset, size):
-        udt_member = idaapi.udt_member_t()
-        if size == 1:
-            udt_member.name = "gap_{0:X}".format(offset)
-            udt_member.type = const.BYTE_TINFO
-            udt_member.size = const.BYTE_TINFO.get_size()
-            udt_member.offset = offset
-            return udt_member
-
-        array_data = idaapi.array_type_data_t()
-        array_data.base = 0
-        array_data.elem_type = const.BYTE_TINFO
-        array_data.nelems = size
-        tmp_tinfo = idaapi.tinfo_t()
-        tmp_tinfo.create_array(array_data)
-
-        udt_member.name = "gap_{0:X}".format(offset)
-        udt_member.type = tmp_tinfo
-        udt_member.size = size
-        udt_member.offset = offset
-        return udt_member
 
     # SLOTS #
 

@@ -16,9 +16,6 @@ def hexrays_events_callback(*args):
         form, popup, hx_view = args[1:]
         item = hx_view.item  # current ctree_item_t
 
-        if actions.CreateNewField.check(hx_view.cfunc, item):
-            idaapi.attach_action_to_popup(form, popup, actions.CreateNewField.name, None)
-
         if item.citype == idaapi.VDI_EXPR:
             if item.e.op == idaapi.cot_num:
                 # number_format = item.e.n.nf                       # idaapi.number_format_t
@@ -83,7 +80,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
         actions.register(actions.GetStructureBySize)
-        actions.register(actions.CreateNewField)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -112,7 +108,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
         actions.unregister(actions.GetStructureBySize)
-        actions.unregister(actions.CreateNewField)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
