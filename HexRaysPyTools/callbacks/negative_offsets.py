@@ -1,13 +1,24 @@
 import re
 import logging
 import idaapi
-import idc
-import helper
+
+import actions
+import callbacks
+import HexRaysPyTools.core.helper as helper
+import HexRaysPyTools.core.type_library as type_library
+import HexRaysPyTools.forms as forms
 
 logger = logging.getLogger(__name__)
+potential_negatives = {}
 
 
-def parse_lvar_comment(lvar):
+def _has_magic_comment(lvar):
+    # type: (idaapi.lvar_t) -> bool
+    # FIXME: Use internal IDA storage for CONTAINING_RECORD macro
+    return bool(re.search("```.*```", lvar.cmt))
+
+
+def _parse_magic_comment(lvar):
     if lvar.type().is_ptr():
         m = re.search('```(.+)```', lvar.cmt)
         if m:
@@ -227,7 +238,8 @@ class SearchVisitor(idaapi.ctree_parentee_t):
 
 
 class AnalyseVisitor(idaapi.ctree_parentee_t):
-    def __init__(self, candidates, potential_negatives):
+    def __init__(self, candidates):
+        global potential_negatives
         super(AnalyseVisitor, self).__init__()
         self.candidates = candidates
         self.potential_negatives = potential_negatives
@@ -253,3 +265,121 @@ class AnalyseVisitor(idaapi.ctree_parentee_t):
                     self.potential_negatives[idx] = NegativeLocalCandidate(self.candidates[idx], number)
 
         return 0
+
+
+class PotentialNegativeCollector(callbacks.HexRaysEventHandler):
+    def __init__(self):
+        super(PotentialNegativeCollector, self).__init__()
+
+    def handle(self, event, *args):
+        global potential_negatives
+
+        cfunc, level_of_maturity = args
+        if level_of_maturity == idaapi.CMAT_BUILT:
+            # First search for CONTAINING_RECORD made by Ida
+            visitor = SearchVisitor(cfunc)
+            visitor.apply_to(cfunc.body, None)
+            negative_lvars = visitor.result
+
+            # Second get saved information from comments
+            lvars = cfunc.get_lvars()
+            for idx in xrange(len(lvars)):
+                result = _parse_magic_comment(lvars[idx])
+                if result and result.tinfo.equals_to(lvars[idx].type().get_pointed_object()):
+                    negative_lvars[idx] = result
+
+            # Third analyze local variables that are a structure pointers and have references going beyond
+            # structure boundaries. This variables will be considered as potential pointers to substructure
+            # and will get a special menu on right click
+
+            # First collect all structure pointers
+            structure_pointer_variables = {}
+            for idx in set(range(len(lvars))) - set(negative_lvars.keys()):
+                if lvars[idx].type().is_ptr():
+                    pointed_tinfo = lvars[idx].type().get_pointed_object()
+                    if pointed_tinfo.is_udt():
+                        structure_pointer_variables[idx] = pointed_tinfo
+
+            # Then use them in order to find all potential negative offset situations
+            if structure_pointer_variables:
+                visitor = AnalyseVisitor(structure_pointer_variables)
+                visitor.apply_to(cfunc.body, None)
+
+            # If negative offsets were found, then we replace them with CONTAINING_RECORD macro
+            if negative_lvars:
+                visitor = ReplaceVisitor(negative_lvars)
+                visitor.apply_to(cfunc.body, None)
+
+
+callbacks.callback_manager.register(idaapi.hxe_maturity, PotentialNegativeCollector())
+
+
+class ResetContainingStructure(actions.HexRaysPopupAction):
+    description = "Reset Containing Structure"
+
+    def __init__(self):
+        super(ResetContainingStructure, self).__init__()
+
+    def check(self, hx_view):
+        ctree_item = hx_view.item
+        if ctree_item.citype != idaapi.VDI_EXPR or ctree_item.e.op != idaapi.cot_var:
+            return False
+        return _has_magic_comment(hx_view.cfunc.get_lvars()[ctree_item.e.v.idx])
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        lvar = hx_view.cfunc.get_lvars()[hx_view.item.e.v.idx]
+        hx_view.set_lvar_cmt(lvar, re.sub("```.*```", '', lvar.cmt))
+        hx_view.refresh_view(True)
+
+
+actions.action_manager.register(ResetContainingStructure())
+
+
+class SelectContainingStructure(actions.HexRaysPopupAction):
+    description = "Select Containing Structure"
+
+    def __init__(self):
+        super(SelectContainingStructure, self).__init__()
+
+    def check(self, hx_view):
+        ctree_item = hx_view.item
+        if ctree_item.citype != idaapi.VDI_EXPR or ctree_item.e.op != idaapi.cot_var:
+            return False
+        return ctree_item.e.v.idx in potential_negatives
+
+    def activate(self, ctx):
+        global potential_negatives
+
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        result = type_library.choose_til()
+        if not result:
+            return
+
+        selected_library, max_ordinal, is_local_types = result
+        lvar_idx = hx_view.item.e.v.idx
+        candidate = potential_negatives[lvar_idx]
+        structures = candidate.find_containing_structures(selected_library)
+        items = map(lambda x: [str(x[0]), "0x{0:08X}".format(x[1]), x[2], x[3]], structures)
+        structure_chooser = forms.MyChoose(
+            items,
+            "Select Containing Structure",
+            [["Ordinal", 5], ["Offset", 10], ["Member_name", 20], ["Structure Name", 20]],
+            165
+        )
+        selected_idx = structure_chooser.Show(modal=True)
+        if selected_idx != -1:
+            if not is_local_types:
+                type_library.import_type(selected_library, items[selected_idx][3])
+            lvar = hx_view.cfunc.get_lvars()[lvar_idx]
+            lvar_cmt = re.sub("```.*```", '', lvar.cmt)
+            hx_view.set_lvar_cmt(
+                lvar,
+                lvar_cmt + "```{0}+{1}```".format(
+                    structures[selected_idx][3],
+                    structures[selected_idx][1])
+            )
+            hx_view.refresh_view(True)
+
+
+actions.action_manager.register(SelectContainingStructure())

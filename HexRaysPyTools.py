@@ -3,18 +3,13 @@ import HexRaysPyTools.actions as actions
 from HexRaysPyTools.callbacks import callback_manager, action_manager
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
-import HexRaysPyTools.core.negative_offsets as negative_offsets
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.const as const
 import HexRaysPyTools.settings as settings
 from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
-potential_negatives = {}
-
 
 def hexrays_events_callback(*args):
-    global potential_negatives
-
     hexrays_event = args[0]
 
     if hexrays_event == idaapi.hxe_populating_popup:
@@ -33,13 +28,6 @@ def hexrays_events_callback(*args):
                 #     number_format.opnum
                 # )
                 idaapi.attach_action_to_popup(form, popup, actions.GetStructureBySize.name, None)
-            elif item.e.op == idaapi.cot_var:
-                # Check if we clicked on variable that is a pointer to a structure that is potentially part of
-                # containing structure
-                if item.e.v.idx in potential_negatives:
-                    idaapi.attach_action_to_popup(form, popup, actions.SelectContainingStructure.name, None)
-                if actions.ResetContainingStructure.check(hx_view.cfunc.get_lvars()[item.e.v.idx]):
-                    idaapi.attach_action_to_popup(form, popup, actions.ResetContainingStructure.name, None)
 
     elif hexrays_event == idaapi.hxe_double_click:
         hx_view = args[1]
@@ -71,46 +59,6 @@ def hexrays_events_callback(*args):
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
 
-    elif hexrays_event == idaapi.hxe_maturity:
-        cfunc, level_of_maturity = args[1:]
-
-        if level_of_maturity == idaapi.CMAT_BUILT:
-            # print '=' * 40
-            # print '=' * 15, "LEVEL", level_of_maturity, '=' * 16
-            # print '=' * 40
-            # print cfunc
-
-            # First search for CONTAINING_RECORD made by Ida
-            visitor = negative_offsets.SearchVisitor(cfunc)
-            visitor.apply_to(cfunc.body, None)
-            negative_lvars = visitor.result
-
-            # Second get saved information from comments
-            lvars = cfunc.get_lvars()
-            for idx in xrange(len(lvars)):
-                result = negative_offsets.parse_lvar_comment(lvars[idx])
-                if result and result.tinfo.equals_to(lvars[idx].type().get_pointed_object()):
-                    negative_lvars[idx] = result
-
-            # Third make an analysis of local variables that a structure pointers and have reference that pass
-            # through structure boundaries. This variables will be considered as potential pointers to substructure
-            # and will get a menu on right click that helps to select Containing Structure from different libraries
-
-            structure_pointer_variables = {}
-            for idx in set(range(len(lvars))) - set(negative_lvars.keys()):
-                if lvars[idx].type().is_ptr():
-                    pointed_tinfo = lvars[idx].type().get_pointed_object()
-                    if pointed_tinfo.is_udt():
-                        structure_pointer_variables[idx] = pointed_tinfo
-
-            if structure_pointer_variables:
-                visitor = negative_offsets.AnalyseVisitor(structure_pointer_variables, potential_negatives)
-                visitor.apply_to(cfunc.body, None)
-
-            if negative_lvars:
-                visitor = negative_offsets.ReplaceVisitor(negative_lvars)
-                visitor.apply_to(cfunc.body, None)
-
     return 0
 
 
@@ -136,8 +84,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.ShowClasses)
         actions.register(actions.GetStructureBySize)
         actions.register(actions.CreateNewField)
-        actions.register(actions.SelectContainingStructure, potential_negatives)
-        actions.register(actions.ResetContainingStructure)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -167,8 +113,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.ShowClasses)
         actions.unregister(actions.GetStructureBySize)
         actions.unregister(actions.CreateNewField)
-        actions.unregister(actions.SelectContainingStructure)
-        actions.unregister(actions.ResetContainingStructure)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 

@@ -1,5 +1,3 @@
-import ctypes
-import sys
 import re
 import logging
 
@@ -7,13 +5,10 @@ import idaapi
 import idc
 
 import HexRaysPyTools.forms as forms
-import HexRaysPyTools.core.const as const
-import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.core.classes as classes
 import HexRaysPyTools.core.type_library as type_library
 from HexRaysPyTools.core.structure_graph import StructureGraph
 from HexRaysPyTools.core.temporary_structure import VirtualTable, TemporaryStructureModel
-from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
 logger = logging.getLogger(__name__)
 
@@ -313,69 +308,3 @@ class CreateVtable(idaapi.action_handler_t):
             idaapi.detach_action_from_popup(ctx.widget, self.name)
             return idaapi.AST_DISABLE
         return idaapi.AST_DISABLE_FOR_FORM
-
-
-class SelectContainingStructure(idaapi.action_handler_t):
-
-    name = "my:SelectContainingStructure"
-    description = "Select Containing Structure"
-    hotkey = None
-
-    def __init__(self, potential_negatives):
-        idaapi.action_handler_t.__init__(self)
-        self.potential_negative = potential_negatives
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        result = type_library.choose_til()
-        if result:
-            selected_library, max_ordinal, is_local_types = result
-            lvar_idx = hx_view.item.e.v.idx
-            candidate = self.potential_negative[lvar_idx]
-            structures = candidate.find_containing_structures(selected_library)
-            items = map(lambda x: [str(x[0]), "0x{0:08X}".format(x[1]), x[2], x[3]], structures)
-            structure_chooser = forms.MyChoose(
-                items,
-                "Select Containing Structure",
-                [["Ordinal", 5], ["Offset", 10], ["Member_name", 20], ["Structure Name", 20]],
-                165
-            )
-            selected_idx = structure_chooser.Show(modal=True)
-            if selected_idx != -1:
-                if not is_local_types:
-                    type_library.import_type(selected_library, items[selected_idx][3])
-                lvar = hx_view.cfunc.get_lvars()[lvar_idx]
-                lvar_cmt = re.sub("```.*```", '', lvar.cmt)
-                hx_view.set_lvar_cmt(
-                    lvar,
-                    lvar_cmt + "```{0}+{1}```".format(
-                        structures[selected_idx][3],
-                        structures[selected_idx][1])
-                )
-                hx_view.refresh_view(True)
-
-    def update(self, ctx):
-        return idaapi.AST_ENABLE_ALWAYS
-
-
-class ResetContainingStructure(idaapi.action_handler_t):
-
-    name = "my:ResetContainingStructure"
-    description = "Reset Containing Structure"
-    hotkey = None
-
-    def __init__(self):
-        idaapi.action_handler_t.__init__(self)
-
-    @staticmethod
-    def check(lvar):
-        return True if re.search("```.*```", lvar.cmt) else False
-
-    def activate(self, ctx):
-        hx_view = idaapi.get_widget_vdui(ctx.widget)
-        lvar = hx_view.cfunc.get_lvars()[hx_view.item.e.v.idx]
-        hx_view.set_lvar_cmt(lvar, re.sub("```.*```", '', lvar.cmt))
-        hx_view.refresh_view(True)
-
-    def update(self, ctx):
-        return idaapi.AST_ENABLE_ALWAYS
