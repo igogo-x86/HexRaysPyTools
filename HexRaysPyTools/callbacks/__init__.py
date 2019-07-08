@@ -3,6 +3,7 @@ from callbacks import *
 import form_requests
 import function_signature_modifiers
 import guess_allocation
+import member_double_click
 import negative_offsets
 import new_field_creation
 import recasts
