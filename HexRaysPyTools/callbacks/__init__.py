@@ -1,5 +1,6 @@
 from actions import *
 from callbacks import *
+import form_requests
 import function_signature_modifiers
 import guess_allocation
 import negative_offsets

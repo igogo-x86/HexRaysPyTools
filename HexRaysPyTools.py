@@ -61,10 +61,7 @@ class MyPlugin(idaapi.plugin_t):
         action_manager.initialize()
         callback_manager.initialize()
         actions.register(actions.CreateVtable)
-        actions.register(actions.ShowGraph)
-        actions.register(actions.ShowClasses)
 
-        idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
         const.init()
@@ -88,8 +85,6 @@ class MyPlugin(idaapi.plugin_t):
         action_manager.finalize()
         callback_manager.finalize()
         actions.unregister(actions.CreateVtable)
-        actions.unregister(actions.ShowGraph)
-        actions.unregister(actions.ShowClasses)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
