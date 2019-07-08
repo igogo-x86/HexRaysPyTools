@@ -14,7 +14,7 @@ class MyPlugin(idaapi.plugin_t):
     comment = "Plugin for automatic classes reconstruction"
     help = "See https://github.com/igogo-x86/HexRaysPyTools/blob/master/readme.md"
     wanted_name = "HexRaysPyTools"
-    wanted_hotkey = "Alt-F8"
+    wanted_hotkey = ""
 
     @staticmethod
     def init():
@@ -31,12 +31,8 @@ class MyPlugin(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     @staticmethod
-    def run(arg):
-        tform = idaapi.find_tform("Structure Builder")
-        if tform:
-            idaapi.switchto_tform(tform, True)
-        else:
-            forms.StructureBuilder(cache.temporary_structure).Show()
+    def run():
+        pass
 
     @staticmethod
     def term():

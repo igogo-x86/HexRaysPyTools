@@ -1,9 +1,10 @@
 import idaapi
 
 import actions
+import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.classes as classes
 from HexRaysPyTools.core.structure_graph import StructureGraph
-from HexRaysPyTools.forms import StructureGraphViewer, ClassViewer
+from HexRaysPyTools.forms import StructureGraphViewer, ClassViewer, StructureBuilder
 
 
 class ShowGraph(actions.Action):
@@ -55,3 +56,26 @@ class ShowClasses(actions.Action):
 show_classes = ShowClasses()
 actions.action_manager.register(show_classes)
 idaapi.attach_action_to_menu('View/Open subviews/Local types', show_classes.name, idaapi.SETMENU_APP)
+
+
+class ShowStructureBuilder(actions.HexRaysPopupAction):
+    description = "Show Structure Builder"
+    hotkey = "Alt+F8"
+
+    def __init__(self):
+        super(ShowStructureBuilder, self).__init__()
+
+    def check(self, hx_view):
+        return True
+
+    def activate(self, ctx):
+        tform = idaapi.find_tform("Structure Builder")
+        if tform:
+            idaapi.switchto_tform(tform, True)
+        else:
+            StructureBuilder(cache.temporary_structure).Show()
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+actions.action_manager.register(ShowStructureBuilder())
