@@ -1,5 +1,4 @@
 import logging
-import HexRaysPyTools.actions as actions
 from HexRaysPyTools.callbacks import callback_manager, action_manager
 from HexRaysPyTools.core.temporary_structure import *
 import HexRaysPyTools.forms as forms
@@ -60,7 +59,6 @@ class MyPlugin(idaapi.plugin_t):
         cache.temporary_structure = TemporaryStructureModel()
         action_manager.initialize()
         callback_manager.initialize()
-        actions.register(actions.CreateVtable)
 
         idaapi.install_hexrays_callback(hexrays_events_callback)
 
@@ -84,7 +82,6 @@ class MyPlugin(idaapi.plugin_t):
 
         action_manager.finalize()
         callback_manager.finalize()
-        actions.unregister(actions.CreateVtable)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 

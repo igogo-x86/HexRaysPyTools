@@ -1,35 +1,15 @@
-import logging
-
 import idaapi
 
-from HexRaysPyTools.core.temporary_structure import VirtualTable, TemporaryStructureModel
-
-logger = logging.getLogger(__name__)
-
-
-def register(action, *args):
-    idaapi.register_action(
-        idaapi.action_desc_t(
-            action.name,
-            action.description,
-            action(*args),
-            action.hotkey
-        )
-    )
+import actions
+from HexRaysPyTools.core.temporary_structure import VirtualTable
 
 
-def unregister(action):
-    idaapi.unregister_action(action.name)
-
-
-class CreateVtable(idaapi.action_handler_t):
-
-    name = "my:CreateVtable"
+class CreateVtable(actions.Action):
     description = "Create Virtual Table"
     hotkey = "V"
 
     def __init__(self):
-        idaapi.action_handler_t.__init__(self)
+        super(CreateVtable, self).__init__()
 
     @staticmethod
     def check(ea):
@@ -49,3 +29,5 @@ class CreateVtable(idaapi.action_handler_t):
             idaapi.detach_action_from_popup(ctx.widget, self.name)
             return idaapi.AST_DISABLE
         return idaapi.AST_DISABLE_FOR_FORM
+
+actions.action_manager.register(CreateVtable())
