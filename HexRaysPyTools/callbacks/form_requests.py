@@ -31,6 +31,8 @@ class ShowGraph(actions.Action):
             return idaapi.AST_ENABLE_FOR_FORM
         return idaapi.AST_DISABLE_FOR_FORM
 
+actions.action_manager.register(ShowGraph())
+
 
 class ShowClasses(actions.Action):
     description = "Classes"
@@ -50,7 +52,6 @@ class ShowClasses(actions.Action):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
-
-actions.action_manager.register(ShowGraph())
-actions.action_manager.register(ShowClasses())
-idaapi.attach_action_to_menu('View/Open subviews/Local types', ShowClasses.name, idaapi.SETMENU_APP)
+show_classes = ShowClasses()
+actions.action_manager.register(show_classes)
+idaapi.attach_action_to_menu('View/Open subviews/Local types', show_classes.name, idaapi.SETMENU_APP)
