@@ -11,22 +11,7 @@ from HexRaysPyTools.core.struct_xrefs import XrefStorage
 
 def hexrays_events_callback(*args):
     hexrays_event = args[0]
-
-    if hexrays_event == idaapi.hxe_populating_popup:
-        form, popup, hx_view = args[1:]
-        item = hx_view.item  # current ctree_item_t
-
-        if item.citype == idaapi.VDI_EXPR:
-            if item.e.op == idaapi.cot_num:
-                # number_format = item.e.n.nf                       # idaapi.number_format_t
-                # print "(number) flags: {0:#010X}, type_name: {1}, opnum: {2}".format(
-                #     number_format.flags,
-                #     number_format.type_name,
-                #     number_format.opnum
-                # )
-                idaapi.attach_action_to_popup(form, popup, actions.GetStructureBySize.name, None)
-
-    elif hexrays_event == idaapi.hxe_double_click:
+    if hexrays_event == idaapi.hxe_double_click:
         hx_view = args[1]
         item = hx_view.item
         if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
@@ -55,7 +40,6 @@ def hexrays_events_callback(*args):
             if func_ea:
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
-
     return 0
 
 
@@ -79,7 +63,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.register(actions.CreateVtable)
         actions.register(actions.ShowGraph)
         actions.register(actions.ShowClasses)
-        actions.register(actions.GetStructureBySize)
 
         idaapi.attach_action_to_menu('View/Open subviews/Local types', actions.ShowClasses.name, idaapi.SETMENU_APP)
         idaapi.install_hexrays_callback(hexrays_events_callback)
@@ -107,7 +90,6 @@ class MyPlugin(idaapi.plugin_t):
         actions.unregister(actions.CreateVtable)
         actions.unregister(actions.ShowGraph)
         actions.unregister(actions.ShowClasses)
-        actions.unregister(actions.GetStructureBySize)
         idaapi.term_hexrays_plugin()
         XrefStorage().close()
 
