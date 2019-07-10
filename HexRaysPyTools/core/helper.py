@@ -373,19 +373,14 @@ def decompile_function(address):
     logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
 
 
-# ======================================================================
-# Functions that extends IDA Pro capabilities
-# ======================================================================
-
-
-def _find_asm_address(self, cexpr):
+def find_asm_address(cexpr, parents):
     """ Returns most close virtual address corresponding to cexpr """
 
     ea = cexpr.ea
     if ea != idaapi.BADADDR:
         return ea
 
-    for p in reversed(self.parents):
+    for p in reversed(parents):
         if p.ea != idaapi.BADADDR:
             return p.ea
 
@@ -414,7 +409,3 @@ def my_cexpr_t(*args, **kwargs):
         if 'z' in kwargs:
             cexpr._set_z(kwargs['z'])
     return cexpr
-
-
-def extend_ida():
-    idaapi.ctree_parentee_t._find_asm_address = _find_asm_address

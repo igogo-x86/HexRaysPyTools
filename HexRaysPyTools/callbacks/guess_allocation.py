@@ -34,9 +34,9 @@ class _GuessAllocationVisitor(api.RecursiveObjectUpwardsVisitor):
                 if alloc_obj:
                     self._data.append([alloc_obj.ea, obj.name, self._get_line(), "HEAP"])
             elif self.parent_expr().op == idaapi.cot_ref:
-                self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "STACK"])
+                self._data.append([helper.find_asm_address(cexpr, self.parents), obj.name, self._get_line(), "STACK"])
         elif obj.id == api.SO_GLOBAL_OBJECT:
-            self._data.append([self._find_asm_address(cexpr), obj.name, self._get_line(), "GLOBAL"])
+            self._data.append([helper.find_asm_address(cexpr, self.parents), obj.name, self._get_line(), "GLOBAL"])
 
     def _finish(self):
         chooser = _StructAllocChoose(self._data)

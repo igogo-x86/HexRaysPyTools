@@ -244,7 +244,10 @@ class ObjectVisitor(idaapi.ctree_parentee_t):
         self.__manipulate(cexpr, obj)
 
     def __manipulate(self, cexpr, obj):
-        logger.debug("Expression {} at {} Id - {}".format(cexpr.opname, to_hex(self._find_asm_address(cexpr)), obj.id))
+        logger.debug("Expression {} at {} Id - {}".format(
+            cexpr.opname,
+            to_hex(helper.find_asm_address(cexpr, self.parents)),
+            obj.id))
 
 
 class ObjectDownwardsVisitor(ObjectVisitor):
@@ -272,7 +275,7 @@ class ObjectDownwardsVisitor(ObjectVisitor):
             if obj.is_target(x_cexpr):
                 if self.__is_object_overwritten(x_cexpr, obj, y_cexpr):
                     logger.info("Removed object {} from scanning at {}".format(
-                        obj, to_hex(self._find_asm_address(x_cexpr))))
+                        obj, to_hex(helper.find_asm_address(x_cexpr, self.parents))))
                     self._objects.remove(obj)
                 return 0
             elif obj.is_target(y_cexpr):
@@ -297,7 +300,7 @@ class ObjectDownwardsVisitor(ObjectVisitor):
             cexpr = cexpr.y
             if cexpr.op == idaapi.cot_cast:
                 cexpr = cexpr.x
-        return self._init_obj.is_target(cexpr) and self._find_asm_address(cexpr) == self._start_ea
+        return self._init_obj.is_target(cexpr) and helper.find_asm_address(cexpr, self.parents) == self._start_ea
 
     def __is_object_overwritten(self, x_cexpr, obj, y_cexpr):
         if len(self._objects) < 2:
@@ -379,7 +382,7 @@ class ObjectUpwardsVisitor(ObjectVisitor):
         super(ObjectUpwardsVisitor, self).process()
 
     def _is_initial_object(self, cexpr):
-        return self._init_obj.is_target(cexpr) and self._find_asm_address(cexpr) == self._start_ea
+        return self._init_obj.is_target(cexpr) and helper.find_asm_address(cexpr, self.parents) == self._start_ea
 
     def __add_object_assignment(self, from_obj, to_obj):
         if from_obj in self._tree:

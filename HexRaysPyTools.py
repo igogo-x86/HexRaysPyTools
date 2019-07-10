@@ -4,7 +4,6 @@ import idaapi
 
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.const as const
-import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.settings as settings
 from HexRaysPyTools.callbacks import hx_callback_manager, action_manager
 from HexRaysPyTools.core.struct_xrefs import XrefStorage
@@ -48,5 +47,4 @@ def PLUGIN_ENTRY():
     logging.basicConfig(format='[%(levelname)s] %(message)s\t(%(module)s:%(funcName)s)')
     logging.root.setLevel(settings.DEBUG_MESSAGE_LEVEL)
     idaapi.notify_when(idaapi.NW_OPENIDB, cache.initialize_cache)
-    helper.extend_ida()
     return MyPlugin()

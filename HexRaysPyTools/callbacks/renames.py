@@ -173,7 +173,8 @@ class _RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
         if expr.op == idaapi.cot_call and expr.x.op == idaapi.cot_obj and expr.x.obj_ea == self.__func_addr:
             arg_expr = expr.a[self.__arg_idx]
             if arg_expr.op != idaapi.cot_obj:
-                logger.error("Argument is a not string at {}".format(helper.to_hex(self._find_asm_address(expr))))
+                cexpr_ea = helper.find_asm_address(expr, self.parents)
+                logger.error("Argument is a not string at {}".format(helper.to_hex(cexpr_ea)))
                 return 1
             self.__add_func_name(arg_expr)
         return 0
@@ -193,7 +194,7 @@ class _RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
         new_name = idc.get_strlit_contents(arg_expr.obj_ea)
         if not idaapi.is_valid_typename(new_name):
             logger.warn("Argument has a weird name `{}` at {}".format(
-                new_name, helper.to_hex(self._find_asm_address(arg_expr))))
+                new_name, helper.to_hex(helper.find_asm_address(arg_expr, self.parents))))
             return
 
         self.__possible_names.add(new_name)
