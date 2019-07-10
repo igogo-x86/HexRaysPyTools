@@ -311,7 +311,7 @@ class PotentialNegativeCollector(callbacks.HexRaysEventHandler):
                 visitor.apply_to(cfunc.body, None)
 
 
-callbacks.callback_manager.register(idaapi.hxe_maturity, PotentialNegativeCollector())
+callbacks.hx_callback_manager.register(idaapi.hxe_maturity, PotentialNegativeCollector())
 
 
 class ResetContainingStructure(actions.HexRaysPopupAction):

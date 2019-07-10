@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def is_imported_ea(ea):
     if idc.get_segm_name(ea) == ".plt":
         return True
-    return ea in cache.imported_ea
+    return ea + idaapi.get_imagebase() in cache.imported_ea
 
 
 def is_code_ea(ea):

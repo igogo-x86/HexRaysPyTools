@@ -1,6 +1,6 @@
 import idaapi
 
-from .callbacks import callback_manager, HexRaysEventHandler
+from .callbacks import hx_callback_manager, HexRaysEventHandler
 
 
 class ActionManager(object):
@@ -10,7 +10,7 @@ class ActionManager(object):
     def register(self, action):
         self.__actions.append(action)
         if isinstance(action, HexRaysPopupAction):
-            callback_manager.register(idaapi.hxe_populating_popup, HexRaysPopupRequestHandler(action))
+            hx_callback_manager.register(idaapi.hxe_populating_popup, HexRaysPopupRequestHandler(action))
 
     def initialize(self):
         for action in self.__actions:

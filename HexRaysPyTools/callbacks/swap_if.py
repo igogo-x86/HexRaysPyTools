@@ -183,4 +183,4 @@ class SilentIfSwapper(callbacks.HexRaysEventHandler):
             visitor.apply_to(cfunc.body, None)
 
 
-callbacks.callback_manager.register(idaapi.hxe_maturity, SilentIfSwapper())
+callbacks.hx_callback_manager.register(idaapi.hxe_maturity, SilentIfSwapper())

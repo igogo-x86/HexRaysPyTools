@@ -38,4 +38,4 @@ class MemberDoubleClick(callbacks.HexRaysEventHandler):
                 idaapi.open_pseudocode(func_ea, 0)
                 return 1
 
-callbacks.callback_manager.register(idaapi.hxe_double_click, MemberDoubleClick())
+callbacks.hx_callback_manager.register(idaapi.hxe_double_click, MemberDoubleClick())

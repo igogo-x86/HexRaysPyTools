@@ -104,4 +104,4 @@ class StructXrefCollector(callbacks.HexRaysEventHandler):
             StructXrefCollectorVisitor(cfunc, struct_xrefs.XrefStorage()).process()
 
 
-callbacks.callback_manager.register(idaapi.hxe_maturity, StructXrefCollector())
+callbacks.hx_callback_manager.register(idaapi.hxe_maturity, StructXrefCollector())
