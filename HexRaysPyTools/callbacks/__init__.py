@@ -11,5 +11,6 @@ import renames
 import scanners
 import structs_by_size
 import struct_xref_collector
+import struct_xref_representation
 import swap_if
 import virtual_table_creation

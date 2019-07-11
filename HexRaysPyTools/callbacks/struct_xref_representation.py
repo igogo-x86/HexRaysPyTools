@@ -19,14 +19,12 @@ class FindFieldXrefs(actions.HexRaysPopupAction):
 
     def activate(self, ctx):
         hx_view = idaapi.get_widget_vdui(ctx.widget)
-        item = hx_view.item
-
-        if not self.check(item):
+        if not self.check(hx_view):
             return
 
         data = []
-        offset = item.e.m
-        struct_type = idaapi.remove_pointer(item.e.x.type)
+        offset = hx_view.item.e.m
+        struct_type = idaapi.remove_pointer(hx_view.item.e.x.type)
         ordinal = helper.get_ordinal(struct_type)
         result = struct_xrefs.XrefStorage().get_structure_info(ordinal, offset)
         for xref_info in result:
@@ -50,3 +48,5 @@ class FindFieldXrefs(actions.HexRaysPopupAction):
 
         xref = result[idx]
         idaapi.open_pseudocode(xref.func_ea + xref.offset, False)
+
+actions.action_manager.register(FindFieldXrefs())
