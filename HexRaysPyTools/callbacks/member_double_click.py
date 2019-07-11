@@ -11,7 +11,7 @@ class MemberDoubleClick(callbacks.HexRaysEventHandler):
     def handle(self, event, *args):
         hx_view = args[0]
         item = hx_view.item
-        if item.citype == idaapi.VDI_EXPR and item.e.op == idaapi.cot_memptr:
+        if item.citype == idaapi.VDI_EXPR and item.e.op in (idaapi.cot_memptr, idaapi.cot_memref):
             # Look if we double clicked on expression that is member pointer. Then get tinfo_t of  the structure.
             # After that remove pointer and get member name with the same offset
             if item.e.x.op == idaapi.cot_memref and item.e.x.x.op == idaapi.cot_memptr:
@@ -20,7 +20,9 @@ class MemberDoubleClick(callbacks.HexRaysEventHandler):
                 class_tinfo = item.e.x.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.x.m
             elif item.e.x.op == idaapi.cot_memptr:
-                vtable_tinfo = item.e.x.type.get_pointed_object()
+                vtable_tinfo = item.e.x.type
+                if vtable_tinfo.is_ptr():
+                    vtable_tinfo = vtable_tinfo.get_pointed_object()
                 method_offset = item.e.m
                 class_tinfo = item.e.x.x.type.get_pointed_object()
                 vtable_offset = item.e.x.m
