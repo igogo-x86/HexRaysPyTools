@@ -27,7 +27,7 @@ def _should_be_renamed(old_name, new_name):
 
 def _is_default_name(string):
     return re.match(r"[av]\d+$", string) is not None or \
-           re.match(r"this|[qd]?word|field_|off_", string) is not None
+           re.match(r"[qd]?word|field_|off_", string) is not None
 
 
 class RenameOther(actions.HexRaysPopupAction):
@@ -157,7 +157,7 @@ class RenameOutside(actions.HexRaysPopupAction):
         func_tinfo = parent.x.type.get_pointed_object()
         arg_name = helper.get_func_arg_name(func_tinfo, arg_index)
         if arg_name and _should_be_renamed(lvar.name, arg_name):
-            return lvar, arg_name
+            return lvar, arg_name.lstrip("_")
 
 
 class _RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
