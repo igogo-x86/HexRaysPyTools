@@ -1,4 +1,3 @@
-# Information about explored functions
 import collections
 
 import idaapi
@@ -7,17 +6,25 @@ import idc
 
 import common
 
-
+# All virtual addresses where imported by module function pointers are stored
 imported_ea = set()
+
+# Map from demangled and simplified to C-language compatible names of functions to their addresses
 demangled_names = collections.defaultdict(set)
+
+# Functions that went through "touching" decompilation. This is done before Deep Scanning and
+# enhance arguments parsing for subroutines called by scanned functions.
 touched_functions = set()
-temporary_structure = None
+
+# This is where all information about structure being reconstructed stored
+# TODO: Make some way to store several structures and switch between them. See issue #22 (3)
+temporary_structure = None      # type: temporary_structure.TemporaryStructureModel
 
 
-def init_imported_ea(*args):
+def _init_imported_ea():
 
     def imp_cb(ea, name, ord):
-        imported_ea.add(ea)
+        imported_ea.add(ea - idaapi.get_imagebase())
         # True -> Continue enumeration
         # False -> Stop enumeration
         return True
@@ -37,10 +44,10 @@ def init_imported_ea(*args):
     print "[Info] Done..."
 
 
-def init_demangled_names(*args):
+def _init_demangled_names():
     """
-    Creates dictionary of demangled names => address, that will be used further at double click on methods got from
-    symbols.
+    Creates dictionary of demangled names => set of address, that will be used further when user makes double click
+    on methods in Decompiler output.
     """
     demangled_names.clear()
     for address, name in idautils.Names():
@@ -51,7 +58,15 @@ def init_demangled_names(*args):
     print "[DEBUG] Demangled names have been initialized"
 
 
-def reset_touched_functions(*args):
+def _reset_touched_functions(*args):
     global touched_functions
 
     touched_functions = set()
+
+
+def initialize_cache(*args):
+    global temporary_structure
+
+    _init_demangled_names()
+    _init_imported_ea()
+    _reset_touched_functions()

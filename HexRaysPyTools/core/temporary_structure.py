@@ -5,7 +5,6 @@ import re
 import itertools
 # import PySide.QtCore as QtCore
 # import PySide.QtGui as QtGui
-import cache
 from HexRaysPyTools.cute import *
 import const
 import helper
@@ -64,7 +63,7 @@ class AbstractMember:
     def switch_array_flag(self):
         self.is_array ^= True
 
-    def activate(self):
+    def activate(self, temp_struct):
         pass
 
     def set_enabled(self, enable):
@@ -208,7 +207,7 @@ class VirtualTable(AbstractMember):
 
         def OnEditLine(self, n):
             """ Scan menu """
-            self.__virtual_table.scan_virtual_function(n)
+            self.__virtual_table.scan_virtual_function(n, self.__temp_struct)
 
     def __init__(self, offset, address, scanned_variable=None, origin=0):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
@@ -283,9 +282,9 @@ class VirtualTable(AbstractMember):
             print cdecl_typedef
             print "*" * 100
 
-    def show_virtual_functions(self):
+    def show_virtual_functions(self, temp_struct):
         function_chooser = self.VirtualTableChoose(
-            [function.get_information() for function in self.virtual_functions], cache.temporary_structure, self)
+            [function.get_information() for function in self.virtual_functions], temp_struct, self)
 
         idx = function_chooser.Show(True)
         if idx != -1:
@@ -293,7 +292,7 @@ class VirtualTable(AbstractMember):
             virtual_function.visited = True
             virtual_function.show_location()
 
-    def scan_virtual_function(self, index):
+    def scan_virtual_function(self, index, temp_struct):
         if helper.is_imported_ea(self.virtual_functions[index].address):
             print "[INFO] Ignoring import function at 0x{0:08X}".format(self.address)
             return
@@ -306,16 +305,15 @@ class VirtualTable(AbstractMember):
             function = idaapi.decompile(self.virtual_functions[index].address)
         if function.arguments and function.arguments[0].is_arg_var and helper.is_legal_type(function.arguments[0].tif):
             print "[Info] Scanning virtual function at 0x{0:08X}".format(function.entry_ea)
-            # TODO: Remove usage `temporary_structure' as global
             obj = api.VariableObject(function.get_lvars()[0], 0)
-            scanner = variable_scanner.NewDeepSearchVisitor(function, self.offset, obj, cache.temporary_structure)
+            scanner = variable_scanner.NewDeepSearchVisitor(function, self.offset, obj, temp_struct)
             scanner.process()
         else:
             print "[Warning] Bad type of first argument in virtual function at 0x{0:08X}".format(function.entry_ea)
 
-    def scan_virtual_functions(self):
+    def scan_virtual_functions(self, temp_struct):
         for idx in xrange(len(self.virtual_functions)):
-            self.scan_virtual_function(idx)
+            self.scan_virtual_function(idx, temp_struct)
 
     def get_udt_member(self, offset=0):
         udt_member = idaapi.udt_member_t()
@@ -339,8 +337,8 @@ class VirtualTable(AbstractMember):
     def switch_array_flag(self):
         pass
 
-    def activate(self):
-        self.show_virtual_functions()
+    def activate(self, temp_struct):
+        self.show_virtual_functions(temp_struct)
 
     @staticmethod
     def check_address(address):
@@ -406,7 +404,7 @@ class Member(AbstractMember):
         udt_member.size = self.size
         return udt_member
 
-    def activate(self):
+    def activate(self, temp_struct):
         new_type_declaration = idaapi.askstr(0x100, self.type_name, "Enter type:")
         if new_type_declaration is None:
             return
@@ -534,7 +532,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for item in filter(lambda x: x.enabled, self.items[start:stop]):    # Filter disabled members
             gap_size = item.offset - offset
             if gap_size:
-                udt_data.push_back(TemporaryStructureModel.get_padding_member(offset - origin, gap_size))
+                udt_data.push_back(helper.create_padding_udt_member(offset - origin, gap_size))
             if item.is_array:
                 array_size = self.calculate_array_size(bisect.bisect_left(self.items, item))
                 if array_size:
@@ -679,29 +677,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             return result[idx][1]
         return None
 
-    @staticmethod
-    def get_padding_member(offset, size):
-        udt_member = idaapi.udt_member_t()
-        if size == 1:
-            udt_member.name = "gap_{0:X}".format(offset)
-            udt_member.type = const.BYTE_TINFO
-            udt_member.size = const.BYTE_TINFO.get_size()
-            udt_member.offset = offset
-            return udt_member
-
-        array_data = idaapi.array_type_data_t()
-        array_data.base = 0
-        array_data.elem_type = const.BYTE_TINFO
-        array_data.nelems = size
-        tmp_tinfo = idaapi.tinfo_t()
-        tmp_tinfo.create_array(array_data)
-
-        udt_member.name = "gap_{0:X}".format(offset)
-        udt_member.type = tmp_tinfo
-        udt_member.size = size
-        udt_member.offset = offset
-        return udt_member
-
     # SLOTS #
 
     def finalize(self):
@@ -839,4 +814,4 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
         # Double click on type. If type is virtual table than opens windows with virtual methods
         elif index.column() == 1:
-            self.items[index.row()].activate()
+            self.items[index.row()].activate(self)

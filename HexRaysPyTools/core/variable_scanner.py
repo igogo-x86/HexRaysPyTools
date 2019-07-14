@@ -124,7 +124,8 @@ class SearchVisitor(api.ObjectVisitor):
         super(SearchVisitor, self)._manipulate(cexpr, obj)
 
         if obj.tinfo and not helper.is_legal_type(obj.tinfo):
-            logger.warn("Variable obj.name has weird type at {}".format(helper.to_hex(self._find_asm_address(cexpr))))
+            cexpr_ea = helper.find_asm_address(cexpr, self.parents)
+            logger.warn("Variable obj.name has weird type at {}".format(helper.to_hex(cexpr_ea)))
             return
         if cexpr.type.is_ptr():
             member = self.__extract_member_from_pointer(cexpr, obj)
@@ -136,13 +137,13 @@ class SearchVisitor(api.ObjectVisitor):
             self.__temporary_structure.add_row(member)
 
     def _get_member(self, offset, cexpr, obj, tinfo=None, obj_ea=None):
+        cexpr_ea = helper.find_asm_address(cexpr, self.parents)
         if offset < 0:
-            logger.error("Considered to be imposible: offset - {}, obj - {}".format(
-                offset, helper.to_hex(self._find_asm_address(cexpr))))
+            logger.error("Considered to be impossible: offset - {}, obj - {}".format(
+                offset, helper.to_hex(cexpr_ea)))
             raise AssertionError
 
         applicable = not self.crippled
-        cexpr_ea = self._find_asm_address(cexpr)
         scan_obj = ScannedObject.create(obj, cexpr_ea, self.__origin, applicable)
         if obj_ea:
             if temporary_structure.VirtualTable.check_address(obj_ea):
@@ -159,9 +160,6 @@ class SearchVisitor(api.ObjectVisitor):
 
         if not tinfo or tinfo.equals_to(const.VOID_TINFO) or tinfo.equals_to(const.CONST_VOID_TINFO):
             return temporary_structure.VoidMember(offset, scan_obj, self.__origin)
-
-        if tinfo.equals_to(const.CHAR_TINFO):
-            return temporary_structure.VoidMember(offset, scan_obj, self.__origin, char=True)
 
         if tinfo.equals_to(const.CONST_PCHAR_TINFO):
             tinfo = const.PCHAR_TINFO

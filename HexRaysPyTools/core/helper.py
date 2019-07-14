@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def is_imported_ea(ea):
     if idc.get_segm_name(ea) == ".plt":
         return True
-    return ea in cache.imported_ea
+    return ea + idaapi.get_imagebase() in cache.imported_ea
 
 
 def is_code_ea(ea):
@@ -134,10 +134,35 @@ def set_func_argument(func_tinfo, index, arg_tinfo):
     func_tinfo.create_func(func_data)
 
 
+def get_func_arg_name(func_tinfo, arg_idx):
+    # type: (idaapi.tinfo_t, int) -> str
+
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    if arg_idx < func_tinfo.get_nargs():
+        return func_data[arg_idx].name
+
+
+def set_func_arg_name(func_tinfo, arg_idx, name):
+    # type: (idaapi.tinfo_t, int, str) -> None
+
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    func_data[arg_idx].name = name
+    func_tinfo.create_func(func_data)
+
+
 def set_funcptr_argument(funcptr_tinfo, index, arg_tinfo):
     func_tinfo = funcptr_tinfo.get_pointed_object()
     set_func_argument(func_tinfo, index, arg_tinfo)
     funcptr_tinfo.create_ptr(func_tinfo)
+
+
+def set_func_return(func_tinfo, return_tinfo):
+    func_data = idaapi.func_type_data_t()
+    func_tinfo.get_func_details(func_data)
+    func_data.rettype = return_tinfo
+    func_tinfo.create_func(func_data)
 
 
 def get_nice_pointed_object(tinfo):
@@ -316,6 +341,28 @@ def load_long_str_from_idb(array_name):
     return "".join(result)
 
 
+def create_padding_udt_member(offset, size):
+    # type: (long, long) -> idaapi.udt_member_t
+    """ Creates internal IDA structure with name gap_XXX and appropriate size and offset """
+
+    udt_member = idaapi.udt_member_t()
+    udt_member.name = "gap_{0:X}".format(offset)
+    udt_member.offset = offset
+    udt_member.size = size
+
+    if size == 1:
+        udt_member.type = const.BYTE_TINFO
+    else:
+        array_data = idaapi.array_type_data_t()
+        array_data.base = 0
+        array_data.elem_type = const.BYTE_TINFO
+        array_data.nelems = size
+        tmp_tinfo = idaapi.tinfo_t()
+        tmp_tinfo.create_array(array_data)
+        udt_member.type = tmp_tinfo
+    return udt_member
+
+
 def decompile_function(address):
     try:
         cfunc = idaapi.decompile(address)
@@ -326,19 +373,14 @@ def decompile_function(address):
     logger.warn("IDA failed to decompile function at 0x{address:08X}".format(address=address))
 
 
-# ======================================================================
-# Functions that extends IDA Pro capabilities
-# ======================================================================
-
-
-def _find_asm_address(self, cexpr):
+def find_asm_address(cexpr, parents):
     """ Returns most close virtual address corresponding to cexpr """
 
     ea = cexpr.ea
     if ea != idaapi.BADADDR:
         return ea
 
-    for p in reversed(self.parents):
+    for p in reversed(parents):
         if p.ea != idaapi.BADADDR:
             return p.ea
 
@@ -367,7 +409,3 @@ def my_cexpr_t(*args, **kwargs):
         if 'z' in kwargs:
             cexpr._set_z(kwargs['z'])
     return cexpr
-
-
-def extend_ida():
-    idaapi.ctree_parentee_t._find_asm_address = _find_asm_address
