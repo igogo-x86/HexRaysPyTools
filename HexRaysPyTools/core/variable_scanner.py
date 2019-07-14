@@ -161,9 +161,6 @@ class SearchVisitor(api.ObjectVisitor):
         if not tinfo or tinfo.equals_to(const.VOID_TINFO) or tinfo.equals_to(const.CONST_VOID_TINFO):
             return temporary_structure.VoidMember(offset, scan_obj, self.__origin)
 
-        if tinfo.equals_to(const.CHAR_TINFO):
-            return temporary_structure.VoidMember(offset, scan_obj, self.__origin, char=True)
-
         if tinfo.equals_to(const.CONST_PCHAR_TINFO):
             tinfo = const.PCHAR_TINFO
         elif tinfo.equals_to(const.CONST_PVOID_TINFO):
