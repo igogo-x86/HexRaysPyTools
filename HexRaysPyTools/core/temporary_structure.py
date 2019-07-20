@@ -17,7 +17,7 @@ from HexRaysPyTools.forms import MyChoose
 SCORE_TABLE = dict((v, k) for k, v in enumerate(
     ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', '_BYTE **', 'const char **',
      'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
-     '_WORD *', '_WORD **',
+     '_WORD *', '_WORD **', '_QWORD', '_QWORD *',
      'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int **', 'char **', 'int *', 'void **',
      'int', '_DWORD *', 'char', '_DWORD', '_WORD', 'void *', 'char *']
 ))
@@ -35,7 +35,7 @@ def parse_vtable_name(address):
         return "Vtable_" + name, False
     name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DN))
     assert name, "Virtual table must have either legal c-type name or mangled name"
-    return common.demangled_name_to_c_str(name), True
+    return common.demangled_name_to_c_str(name).replace("const_", "").replace("::_vftable", "_vtbl"), True
 
 
 class AbstractMember:
@@ -213,7 +213,7 @@ class VirtualTable(AbstractMember):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
         self.virtual_functions = []
-        self.name = "vtable" + ("_{0:X}".format(self.offset) if self.offset else '')
+        self.name = "__vftable" + ("_{0:X}".format(self.offset) if self.offset else "")
         self.vtable_name, self.have_nice_name = parse_vtable_name(address)
         self.populate()
 
@@ -440,6 +440,7 @@ class VoidMember(Member):
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
+    default_name = "CHANGE_MY_NAME"
 
     def __init__(self, *args):
         """
@@ -453,7 +454,6 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.headers = ["Offset", "Type", "Name"]
         self.items = []
         self.collisions = []
-        self.structure_name = "CHANGE_MY_NAME"
 
     # OVERLOADED METHODS #
 
@@ -519,6 +519,16 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     # HELPER METHODS #
 
+    def get_name(self):
+        candidate_name = None
+        for field in self.items:
+            if isinstance(field, VirtualTable) and field.have_nice_name:
+                if candidate_name:
+                    print "[WARNING] Structure has 2 or more virtual tables. It's name set to default"
+                    return self.default_name
+                candidate_name = field.vtable_name.replace("_vtbl", "")
+        return candidate_name if candidate_name else self.default_name
+
     def pack(self, start=0, stop=None):
         if self.collisions[start:stop].count(True):
             print "[Warning] Collisions detected"
@@ -544,7 +554,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
         cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
-                                   final_tinfo, self.structure_name, None)
+                                   final_tinfo, self.get_name(), None)
         cdecl = idaapi.asktext(0x10000, '#pragma pack(push, 1)\n' + cdecl, "The following new type will be created")
 
         if cdecl:
