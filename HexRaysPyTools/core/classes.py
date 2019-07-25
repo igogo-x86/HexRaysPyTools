@@ -1,10 +1,10 @@
-import idc
+from PyQt5 import QtCore, QtGui
+
 import idaapi
+
 import HexRaysPyTools.forms
 import helper
 
-# from PySide import QtGui, QtCore
-from HexRaysPyTools.cute import *
 
 all_virtual_functions = {}      # name    -> VirtualMethod
 all_virtual_tables = {}         # ordinal -> VirtualTable
@@ -407,7 +407,7 @@ class TreeItem:
 class TreeModel(QtCore.QAbstractItemModel):
     # TODO: Add higlighting if eip in function, consider setting breakpoints
 
-    refreshed = QtCore.Signal()
+    refreshed = QtCore.pyqtSignal()
 
     def __init__(self):
         super(TreeModel, self).__init__()
@@ -526,7 +526,7 @@ class TreeModel(QtCore.QAbstractItemModel):
             index.internalPointer().item.open_function()
 
 
-class ProxyModel(QtGui.QSortFilterProxyModel):
+class ProxyModel(QtCore.QSortFilterProxyModel):
     def __init__(self):
         super(ProxyModel, self).__init__()
         self.filter_by_function = False

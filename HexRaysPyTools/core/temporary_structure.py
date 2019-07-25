@@ -1,16 +1,15 @@
 import bisect
-import idc
-import idaapi
-import re
 import itertools
-# import PySide.QtCore as QtCore
-# import PySide.QtGui as QtGui
-from HexRaysPyTools.cute import *
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+import idaapi
+import idc
+
+import common
 import const
 import helper
 import variable_scanner
 import HexRaysPyTools.api as api
-import common
 from HexRaysPyTools.forms import MyChoose
 
 
@@ -514,7 +513,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def flags(self, index):
         if index.column() == 2:
-            return super(TemporaryStructureModel, self).flags(index) | QtGui.QAbstractItemView.DoubleClicked
+            return super(TemporaryStructureModel, self).flags(index) | QtWidgets.QAbstractItemView.DoubleClicked
         return super(TemporaryStructureModel, self).flags(index)
 
     # HELPER METHODS #
@@ -562,11 +561,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             previous_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
 
             if previous_ordinal:
-                reply = QtGui.QMessageBox.question(
+                reply = QtWidgets.QMessageBox.question(
                     None,
                     "HexRaysPyTools",
                     "Structure already exist. Do you want to overwrite it?",
-                    QtGui.QMessageBox.Yes | QtGui.QMessageBox.No
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
                 )
                 if reply == QtGui.QMessageBox.Yes:
                     idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
