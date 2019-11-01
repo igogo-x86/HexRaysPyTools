@@ -65,14 +65,13 @@ class HexRaysPopupAction(Action):
         # type: (idaapi.action_activation_ctx_t) -> None
         raise NotImplementedError
 
-    def check(self, hx_view):
-        # type: (idaapi.vdui_t) -> bool
+    def check(self, hx_view: idaapi.vdui_t):
         raise NotImplementedError
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+            return idaapi.AST_ENABLE_FOR_WIDGET
+        return idaapi.AST_DISABLE_FOR_WIDGET
 
 
 class HexRaysPopupRequestHandler(HexRaysEventHandler):

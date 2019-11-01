@@ -1,9 +1,9 @@
 import logging
 import idaapi
 import idc
-import const
-import helper
-import temporary_structure
+from . import const
+from . import helper
+from . import temporary_structure
 import HexRaysPyTools.api as api
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class ScannedVariableObject(ScannedObject):
         if hx_view:
             logger.debug("Applying tinfo to variable {0} in function {1}".format(self.name, self.function_name))
             # Finding lvar of new window that have the same name that saved one and applying tinfo_t
-            lvar = filter(lambda x: x == self.__lvar, hx_view.cfunc.get_lvars())
+            lvar = [x for x in hx_view.cfunc.get_lvars() if x == self.__lvar]
             if lvar:
                 logger.debug("Successful")
                 hx_view.set_lvar_type(lvar[0], tinfo)
@@ -180,8 +180,8 @@ class SearchVisitor(api.ObjectVisitor):
         pass
 
     def __extract_member_from_pointer(self, cexpr, obj):
-        parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
-        parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
+        parents_type = [idaapi.get_ctype_name(x.cexpr.op) for x in list(self.parents)[:0:-1]]
+        parents = [x.cexpr for x in list(self.parents)[:0:-1]]
 
         logger.debug("Parsing expression {}. Parents - {}".format(obj.name, parents_type))
 
@@ -214,8 +214,8 @@ class SearchVisitor(api.ObjectVisitor):
         return self.__extract_member(cexpr, obj, offset, parents, parents_type)
 
     def __extract_member_from_xword(self, cexpr, obj):
-        parents_type = map(lambda x: idaapi.get_ctype_name(x.cexpr.op), list(self.parents)[:0:-1])
-        parents = map(lambda x: x.cexpr, list(self.parents)[:0:-1])
+        parents_type = [idaapi.get_ctype_name(x.cexpr.op) for x in list(self.parents)[:0:-1]]
+        parents = [x.cexpr for x in list(self.parents)[:0:-1]]
 
         logger.debug("Parsing expression {}. Parents - {}".format(obj.name, parents_type))
 
@@ -323,7 +323,7 @@ class DeepReturnVisitor(NewDeepSearchVisitor):
 
     def __prepare_scanner(self):
         try:
-            cfunc = self.__iter_callers().next()
+            cfunc = next(self.__iter_callers())
         except StopIteration:
             return False
 

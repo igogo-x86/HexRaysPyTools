@@ -1,8 +1,8 @@
 import logging
 import idaapi
 import idc
-from core.helper import to_hex
-import core.helper as helper
+from .core.helper import to_hex
+from .core import helper
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +413,7 @@ class RecursiveObjectVisitor(ObjectVisitor):
         self.crippled = False
         self._arg_idx = -1
         self._debug_scan_tree = {}
-        self.__debug_scan_tree_root = idc.Name(self._cfunc.entry_ea)
+        self.__debug_scan_tree_root = idc.get_name(self._cfunc.entry_ea)
         self.__debug_message = []
 
     def visit_expr(self, cexpr):
@@ -478,8 +478,8 @@ class RecursiveObjectVisitor(ObjectVisitor):
         return False
 
     def _add_scan_tree_info(self, func_ea, arg_idx):
-        head_node = (idc.Name(self._cfunc.entry_ea), self._arg_idx)
-        tail_node = (idc.Name(func_ea), arg_idx)
+        head_node = (idc.get_name(self._cfunc.entry_ea), self._arg_idx)
+        tail_node = (idc.get_name(func_ea), arg_idx)
         if head_node in self._debug_scan_tree:
             self._debug_scan_tree[head_node].add(tail_node)
         else:

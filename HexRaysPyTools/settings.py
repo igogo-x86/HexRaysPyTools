@@ -1,10 +1,10 @@
 import os
-import ConfigParser
+import configparser
 import idc
 
 import logging
 
-CONFIG_FILE_PATH = os.path.join(idc.GetIdaDirectory(), 'cfg', 'HexRaysPyTools.cfg')
+CONFIG_FILE_PATH = os.path.join(idc.idadir(), 'cfg', 'HexRaysPyTools.cfg')
 
 DEBUG_MESSAGE_LEVEL = logging.INFO
 # Whether propagate names (Propagate name feature) through all names or only defaults like v11, a3, this, field_4
@@ -20,7 +20,6 @@ SCAN_ANY_TYPE = False
 def add_default_settings(config):
     updated = False
     if not config.has_option("DEFAULT", "DEBUG_MESSAGE_LEVEL"):
-        print DEBUG_MESSAGE_LEVEL
         config.set(None, 'DEBUG_MESSAGE_LEVEL', str(DEBUG_MESSAGE_LEVEL))
         updated = True
     if not config.has_option("DEFAULT", "PROPAGATE_THROUGH_ALL_NAMES"):
@@ -38,14 +37,14 @@ def add_default_settings(config):
             with open(CONFIG_FILE_PATH, "w") as f:
                 config.write(f)
         except IOError:
-            print "[ERROR] Failed to write or update config file at {}. Default settings will be used instead.\n" \
-                  "Consider running IDA Pro under administrator once".format(CONFIG_FILE_PATH)
+            print("[ERROR] Failed to write or update config file at {}. Default settings will be used instead.\n" \
+                  "Consider running IDA Pro under administrator once".format(CONFIG_FILE_PATH))
 
 
 def load_settings():
     global DEBUG_MESSAGE_LEVEL, PROPAGATE_THROUGH_ALL_NAMES, STORE_XREFS, SCAN_ANY_TYPE
 
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     if os.path.isfile(CONFIG_FILE_PATH):
         config.read(CONFIG_FILE_PATH)
 

@@ -3,9 +3,9 @@ from PyQt5 import QtCore, QtWidgets
 import idaapi
 
 
-class MyChoose(idaapi.Choose2):
+class MyChoose(idaapi.Choose):
     def __init__(self, items, title, cols, icon=-1):
-        idaapi.Choose2.__init__(self, title, cols, flags=idaapi.Choose2.CH_MODAL, icon=icon)
+        idaapi.Choose.__init__(self, title, cols, flags=idaapi.CH_MODAL, icon=icon)
         self.items = items
 
     def OnClose(self):
@@ -199,7 +199,7 @@ class ClassViewer(idaapi.PluginForm):
         self.action_expand.triggered.connect(self.class_tree.expandAll)
         self.action_set_arg.triggered.connect(
             lambda: self.class_model.set_first_argument_type(
-                map(self.proxy_model.mapToSource, self.class_tree.selectedIndexes())
+                list(map(self.proxy_model.mapToSource, self.class_tree.selectedIndexes()))
             )
         )
         self.action_rollback.triggered.connect(lambda: self.class_model.rollback())
@@ -234,11 +234,11 @@ class ClassViewer(idaapi.PluginForm):
 
     def show_menu(self, point):
         self.action_set_arg.setEnabled(True)
-        indexes = map(
+        indexes = list(map(
             self.proxy_model.mapToSource,
-            filter(lambda x: x.column() == 0, self.class_tree.selectedIndexes())
-        )
+            [x for x in self.class_tree.selectedIndexes() if x.column() == 0]
+        ))
         if len(indexes) > 1:
-            if filter(lambda x: len(x.internalPointer().children) > 0, indexes):
+            if [x for x in indexes if len(x.internalPointer().children) > 0]:
                 self.action_set_arg.setEnabled(False)
         self.menu.exec_(self.class_tree.mapToGlobal(point))

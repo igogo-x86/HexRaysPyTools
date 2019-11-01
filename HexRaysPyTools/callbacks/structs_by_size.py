@@ -1,6 +1,6 @@
 import idaapi
 
-import actions
+from . import actions
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.type_library as type_library
 
@@ -11,7 +11,7 @@ def _choose_structure_by_size(size):
         selected_library, max_ordinal, is_local_type = result
         matched_types = []
         tinfo = idaapi.tinfo_t()
-        for ordinal in xrange(1, max_ordinal):
+        for ordinal in range(1, max_ordinal):
             tinfo.create_typedef(selected_library, ordinal)
             if tinfo.get_size() == size:
                 name = tinfo.dstr()
@@ -21,7 +21,7 @@ def _choose_structure_by_size(size):
         type_chooser = forms.MyChoose(
             matched_types,
             "Select Type",
-            [["Ordinal", 5 | idaapi.Choose2.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
+            [["Ordinal", 5 | idaapi.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
             165
         )
         selected_type = type_chooser.Show(True)

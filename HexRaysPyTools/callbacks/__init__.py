@@ -1,16 +1,16 @@
-from actions import *
-from callbacks import *
-import form_requests
-import function_signature_modifiers
-import guess_allocation
-import member_double_click
-import negative_offsets
-import new_field_creation
-import recasts
-import renames
-import scanners
-import structs_by_size
-import struct_xref_collector
-import struct_xref_representation
-import swap_if
-import virtual_table_creation
+from .actions import *
+from .callbacks import *
+from . import form_requests
+from . import function_signature_modifiers
+from . import guess_allocation
+from . import member_double_click
+from . import negative_offsets
+from . import new_field_creation
+from . import recasts
+from . import renames
+from . import scanners
+from . import structs_by_size
+from . import struct_xref_collector
+from . import struct_xref_representation
+from . import swap_if
+from . import virtual_table_creation

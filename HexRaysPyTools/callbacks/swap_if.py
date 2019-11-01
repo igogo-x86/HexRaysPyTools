@@ -1,8 +1,8 @@
 import idaapi
 import idc
 
-import actions
-import callbacks
+from . import actions
+from . import callbacks
 
 
 def inverse_if_condition(cif):
@@ -26,14 +26,14 @@ _ARRAY_STORAGE_PREFIX = "$HexRaysPyTools:IfThenElse:"
 def has_inverted(func_ea):
     # Find if function has any swapped THEN-ELSE branches
     internal_name = _ARRAY_STORAGE_PREFIX + hex(int(func_ea - idaapi.get_imagebase()))
-    internal_id = idc.GetArrayId(internal_name)
+    internal_id = idc.get_array_id(internal_name)
     return internal_id != -1
 
 
 def get_inverted(func_ea):
     # Returns set of relative virtual addresses which are tied to IF and swapped
     internal_name = _ARRAY_STORAGE_PREFIX + hex(int(func_ea - idaapi.get_imagebase()))
-    internal_id = idc.GetArrayId(internal_name)
+    internal_id = idc.get_array_id(internal_name)
     array = idc.GetArrayElement(idc.AR_STR, internal_id, 0)
     return set(map(int, array.split()))
 
@@ -43,7 +43,7 @@ def invert(func_ea, if_ea):
     iv_rva = if_ea - idaapi.get_imagebase()
     func_rva = func_ea - idaapi.get_imagebase()
     internal_name = _ARRAY_STORAGE_PREFIX + hex(int(func_rva))
-    internal_id = idc.GetArrayId(internal_name)
+    internal_id = idc.get_array_id(internal_name)
     if internal_id == -1:
         internal_id = idc.CreateArray(internal_name)
         idc.SetArrayString(internal_id, 0, str(iv_rva))
@@ -87,8 +87,8 @@ class SwapThenElse(actions.HexRaysPopupAction):
 
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_PSEUDOCODE:
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+            return idaapi.AST_ENABLE_FOR_WIDGET
+        return idaapi.AST_DISABLE_FOR_WIDGET
 
 
 actions.action_manager.register(SwapThenElse())
@@ -175,7 +175,7 @@ class SilentIfSwapper(callbacks.HexRaysEventHandler):
         cfunc, level_of_maturity = args
         if level_of_maturity == idaapi.CMAT_TRANS1 and has_inverted(cfunc.entry_ea):
             # Make RVA from VA of IF instructions that should be inverted
-            inverted = map(lambda n: n + idaapi.get_imagebase(), get_inverted(cfunc.entry_ea))
+            inverted = [n + idaapi.get_imagebase() for n in get_inverted(cfunc.entry_ea)]
             visitor = SwapThenElseVisitor(inverted)
             visitor.apply_to(cfunc.body, None)
         elif level_of_maturity == idaapi.CMAT_TRANS2:

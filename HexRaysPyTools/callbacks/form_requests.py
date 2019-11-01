@@ -1,6 +1,6 @@
 import idaapi
 
-import actions
+from . import actions
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.classes as classes
 from HexRaysPyTools.core.structure_graph import StructureGraph
@@ -17,8 +17,8 @@ class ShowGraph(actions.Action):
         self.graph_view = None
 
     def activate(self, ctx):
-        form = self.graph_view.GetTForm() if self.graph_view else None
-        if form:
+        widget = self.graph_view.GetWidget() if self.graph_view else None
+        if widget:
             self.graph_view.change_selected([sel + 1 for sel in ctx.chooser_selection])
             self.graph_view.Show()
         else:
@@ -29,8 +29,9 @@ class ShowGraph(actions.Action):
     def update(self, ctx):
         if ctx.widget_type == idaapi.BWN_LOCTYPS:
             idaapi.attach_action_to_popup(ctx.widget, None, self.name)
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+            return idaapi.AST_ENABLE_FOR_WIDGET
+        return idaapi.AST_DISABLE_FOR_WIDGET
+
 
 actions.action_manager.register(ShowGraph())
 
@@ -43,15 +44,16 @@ class ShowClasses(actions.Action):
         super(ShowClasses, self).__init__()
 
     def activate(self, ctx):
-        tform = idaapi.find_tform('Classes')
+        tform = idaapi.find_widget('Classes')
         if not tform:
             class_viewer = ClassViewer(classes.ProxyModel(), classes.TreeModel())
             class_viewer.Show()
         else:
-            idaapi.switchto_tform(tform, True)
+            idaapi.activate_widget(tform, True)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
 
 show_classes = ShowClasses()
 actions.action_manager.register(show_classes)
@@ -69,13 +71,14 @@ class ShowStructureBuilder(actions.HexRaysPopupAction):
         return True
 
     def activate(self, ctx):
-        tform = idaapi.find_tform("Structure Builder")
+        tform = idaapi.find_widget("Structure Builder")
         if tform:
-            idaapi.switchto_tform(tform, True)
+            idaapi.activate_widget(tform, True)
         else:
             StructureBuilder(cache.temporary_structure).Show()
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
 
 actions.action_manager.register(ShowStructureBuilder())
