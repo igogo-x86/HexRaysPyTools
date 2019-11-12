@@ -338,8 +338,7 @@ def load_long_str_from_idb(array_name):
         return None
     max_idx = idc.get_last_index(idc.AR_STR, id)
     result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in range(max_idx + 1)]
-    return "".join(result)
-
+    return b"".join(result).decode("utf-8")
 
 def create_padding_udt_member(offset, size):
     # type: (long, long) -> idaapi.udt_member_t
