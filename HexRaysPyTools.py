@@ -31,7 +31,7 @@ class MyPlugin(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     @staticmethod
-    def run():
+    def run(*args):
         pass
 
     @staticmethod

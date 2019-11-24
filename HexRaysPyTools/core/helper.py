@@ -22,10 +22,10 @@ def is_imported_ea(ea):
 def is_code_ea(ea):
     if idaapi.cvar.inf.procname == "ARM":
         # In case of ARM code in THUMB mode we sometimes get pointers with thumb bit set
-        flags = idaapi.getFlags(ea & -2)  # flags_t
+        flags = idaapi.get_full_flags(ea & -2)  # flags_t
     else:
-        flags = idaapi.getFlags(ea)
-    return idaapi.isCode(flags)
+        flags = idaapi.get_full_flags(ea)
+    return idaapi.is_code(flags)
 
 
 def is_rw_ea(ea):
@@ -87,7 +87,7 @@ def get_virtual_func_addresses(name, tinfo=None, offset=None):
         if address != idaapi.BADADDR:
             return [address + idaapi.get_imagebase()]
         udt_member.offset = offset
-        tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+        tinfo.find_udt_member(udt_member, idaapi.STRMEM_OFFSET)
         tinfo = udt_member.type
         offset = offset - udt_member.offset
 
@@ -101,7 +101,7 @@ def choose_virtual_func_address(name, tinfo=None, offset=None):
         return addresses[0]
 
     chooser = forms.MyChoose(
-        [[to_hex(ea), idc.Demangle(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
+        [[to_hex(ea), idc.demangle_name(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
         "Select Function",
         [["Address", 10], ["Full name", 50]]
     )
@@ -124,7 +124,7 @@ def get_func_argument_info(function, expression):
             if idx < func_tinfo.get_nargs():
                 return idx, func_tinfo.get_nth_arg(idx)
             return idx, None
-    print "[ERROR] Wrong usage of 'Helper.get_func_argument_info()'"
+    print("[ERROR] Wrong usage of 'Helper.get_func_argument_info()'")
 
 
 def set_func_argument(func_tinfo, index, arg_tinfo):
@@ -194,7 +194,7 @@ def get_fields_at_offset(tinfo, offset):
     tinfo.get_udt_details(udt_data)
     udt_member = idaapi.udt_member_t()
     udt_member.offset = offset * 8
-    idx = tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+    idx = tinfo.find_udt_member(udt_member, idaapi.STRMEM_OFFSET)
     if idx != -1:
         while idx < tinfo.get_udt_nmembers() and udt_data[idx].offset <= offset * 8:
             udt_member = udt_data[idx]
@@ -206,10 +206,10 @@ def get_fields_at_offset(tinfo, offset):
                 elif not udt_member.type.is_udt():
                     result.append(udt_member.type)
             if udt_member.type.is_array():
-                if (offset - udt_member.offset / 8) % udt_member.type.get_array_element().get_size() == 0:
+                if (offset - udt_member.offset // 8) % udt_member.type.get_array_element().get_size() == 0:
                     result.append(udt_member.type.get_array_element())
             elif udt_member.type.is_udt():
-                result.extend(get_fields_at_offset(udt_member.type, offset - udt_member.offset / 8))
+                result.extend(get_fields_at_offset(udt_member.type, offset - udt_member.offset // 8))
             idx += 1
     return result
 
@@ -218,7 +218,7 @@ def is_legal_type(tinfo):
     tinfo.clr_const()
     if tinfo.is_ptr() and tinfo.get_pointed_object().is_forward_decl():
         return tinfo.get_pointed_object().get_size() == idaapi.BADSIZE
-    return settings.SCAN_ANY_TYPE or bool(filter(lambda x: x.equals_to(tinfo), const.LEGAL_TYPES))
+    return settings.SCAN_ANY_TYPE or bool([x for x in const.LEGAL_TYPES if x.equals_to(tinfo)])
 
 
 def search_duplicate_fields(udt_data):
@@ -227,13 +227,13 @@ def search_duplicate_fields(udt_data):
     default_dict = collections.defaultdict(list)
     for idx, udt_member in enumerate(udt_data):
         default_dict[udt_member.name].append(idx)
-    return [indices for indices in default_dict.values() if len(indices) > 1]
+    return [indices for indices in list(default_dict.values()) if len(indices) > 1]
 
 
 def get_member_name(tinfo, offset):
     udt_member = idaapi.udt_member_t()
     udt_member.offset = offset * 8
-    tinfo.find_udt_member(idaapi.STRMEM_OFFSET, udt_member)
+    tinfo.find_udt_member(udt_member, idaapi.STRMEM_OFFSET)
     return udt_member.name
 
 
@@ -265,7 +265,7 @@ def get_funcs_calling_address(ea):
         if xref_func_ea != idaapi.BADADDR:
             xrefs.add(xref_func_ea)
         else:
-            print "[Warning] Function not found at 0x{0:08X}".format(xref_ea)
+            print("[Warning] Function not found at 0x{0:08X}".format(xref_ea))
         xref_ea = idaapi.get_next_cref_to(ea, xref_ea)
     return xrefs
 
@@ -314,7 +314,7 @@ def to_hex(ea):
 def to_nice_str(ea):
     """ Shows address as function name + offset """
     func_start_ea = idc.get_func_attr(ea, idc.FUNCATTR_START)
-    func_name = idc.Name(func_start_ea)
+    func_name = idc.get_name(func_start_ea)
     offset = ea - func_start_ea
     return "{}+0x{:X}".format(func_name, offset)
 
@@ -326,7 +326,7 @@ def save_long_str_to_idb(array_name, value):
         idc.delete_array(id)
     id = idc.create_array(array_name)
     r = []
-    for idx in xrange(len(value) / 1024 + 1):
+    for idx in range(len(value) // 1024 + 1):
         s = value[idx * 1024: (idx + 1) * 1024]
         r.append(s)
         idc.set_array_string(id, idx, s)
@@ -337,9 +337,8 @@ def load_long_str_from_idb(array_name):
     if id == -1:
         return None
     max_idx = idc.get_last_index(idc.AR_STR, id)
-    result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in xrange(max_idx + 1)]
-    return "".join(result)
-
+    result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in range(max_idx + 1)]
+    return b"".join(result).decode("utf-8")
 
 def create_padding_udt_member(offset, size):
     # type: (long, long) -> idaapi.udt_member_t

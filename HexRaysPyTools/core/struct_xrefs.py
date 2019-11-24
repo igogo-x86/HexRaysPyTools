@@ -3,7 +3,7 @@ import json
 import logging
 
 import idaapi
-import helper
+from . import helper
 import HexRaysPyTools.settings as settings
 
 logger = logging.getLogger(__name__)
@@ -62,10 +62,10 @@ class XrefStorage(object):
 
     def update(self, function_offset, data):
         """ data - {ordinal : (code_offset, line, usage_type)} """
-        for ordinal, info in data.items():
+        for ordinal, info in list(data.items()):
             self.__update_ordinal_info(ordinal, function_offset, info)
 
-        deleted_ordinals = self.__delete_items_helper[function_offset].difference(data.keys())
+        deleted_ordinals = self.__delete_items_helper[function_offset].difference(list(data.keys()))
         for ordinal in deleted_ordinals:
             self.__remove_ordinal_info(ordinal, function_offset)
 
@@ -76,7 +76,7 @@ class XrefStorage(object):
         if ordinal not in self.storage:
             return result
 
-        for func_offset, info in self.storage[ordinal].items():
+        for func_offset, info in list(self.storage[ordinal].items()):
             if struct_offset in info:
                 func_ea = func_offset + idaapi.get_imagebase()
                 for xref_info in info[struct_offset]:
@@ -87,14 +87,14 @@ class XrefStorage(object):
     @staticmethod
     def json_keys_to_str(x):
         if isinstance(x, dict):
-            return {int(k): v for k, v in x.items()}
+            return {int(k): v for k, v in list(x.items())}
         return x
 
     def __len__(self):
         return len(str(self.storage))
 
     def __init_delete_helper(self):
-        for ordinal, data in self.storage.items():
+        for ordinal, data in list(self.storage.items()):
             for func_offset in data:
                 self.__delete_items_helper[func_offset].add(ordinal)
 

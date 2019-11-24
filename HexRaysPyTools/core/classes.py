@@ -3,7 +3,7 @@ from PyQt5 import QtCore, QtGui
 import idaapi
 
 import HexRaysPyTools.forms
-import helper
+from . import helper
 
 
 all_virtual_functions = {}      # name    -> VirtualMethod
@@ -54,7 +54,7 @@ class VirtualMethod(object):
 
     def setData(self, column, value):
         if column == 0:
-            if idaapi.isident(value) and self.name != value:
+            if idaapi.is_ident(value) and self.name != value:
                 self.name = value
                 self.name_modified = True
                 for parent in self.parents:
@@ -125,7 +125,7 @@ class VirtualMethod(object):
                     for parent in self.parents:
                         parent.modified = True
             else:
-                print "[Warning] function {0} probably have wrong type".format(self.name)
+                print("[Warning] function {0} probably have wrong type".format(self.name))
 
     def open_function(self):
         addresses = self.addresses
@@ -184,7 +184,7 @@ class VirtualTable(object):
                 for current_function, other_function in zip(self.virtual_functions, udt_data):
                     current_function.update(other_function.name, other_function.type)
             else:
-                print "[ERROR] Something have been modified in Local types. Please refresh this view"
+                print("[ERROR] Something have been modified in Local types. Please refresh this view")
 
     def update_local_type(self):
         if self.modified:
@@ -200,7 +200,7 @@ class VirtualTable(object):
                 final_tinfo.set_numbered_type(idaapi.cvar.idati, self.ordinal, idaapi.NTF_REPLACE, self.name)
                 self.modified = False
             else:
-                print "[ERROR] Something have been modified in Local types. Please refresh this view"
+                print("[ERROR] Something have been modified in Local types. Please refresh this view")
 
     def set_first_argument_type(self, class_name):
         for function in self.virtual_functions:
@@ -238,7 +238,7 @@ class VirtualTable(object):
 
     def setData(self, column, value):
         if column == 0:
-            if idaapi.isident(value) and self.name != value:
+            if idaapi.is_ident(value) and self.name != value:
                 self.name = value
                 self.modified = True
                 return True
@@ -301,10 +301,10 @@ class Class(object):
                             if not possible_func_udt.type.is_funcptr():
                                 break
                         else:
-                            vtables[field_udt.offset / 8] = possible_vtable
+                            vtables[field_udt.offset // 8] = possible_vtable
         if vtables:
             class_ = Class(tinfo.dstr(), tinfo, ordinal)
-            for offset, vtable_tinfo in vtables.iteritems():
+            for offset, vtable_tinfo in vtables.items():
                 vtables[offset] = VirtualTable.create(vtable_tinfo, class_)
             class_.vtables = vtables
             return class_
@@ -316,17 +316,17 @@ class Class(object):
                 if class_:
                     self.name = class_.name
                     self.modified = False
-                    for offset, vtable in class_.vtables.iteritems():
+                    for offset, vtable in class_.vtables.items():
                         self.vtables[offset].update()
                 else:
                     # TODO: drop class
                     raise IndexError
         except IndexError:
-            print "[ERROR] Something have been modified in Local types. Please refresh this view"
+            print("[ERROR] Something have been modified in Local types. Please refresh this view")
 
     def update_local_type(self):
         if self.modified:
-            for vtable in self.vtables.values():
+            for vtable in list(self.vtables.values()):
                 vtable.update_local_type()
             udt_data = idaapi.udt_type_data_t()
             tinfo = idaapi.tinfo_t()
@@ -340,8 +340,8 @@ class Class(object):
             self.vtables[0].set_first_argument_type(class_name)
 
     def has_function(self, regexp):
-        for vtable in self.vtables.values():
-            if filter(lambda func: regexp.indexIn(func.name) >= 0, vtable.virtual_functions):
+        for vtable in list(self.vtables.values()):
+            if [func for func in vtable.virtual_functions if regexp.indexIn(func.name) >= 0]:
                 return True
         return False
 
@@ -351,7 +351,7 @@ class Class(object):
 
     def setData(self, column, value):
         if column == 0:
-            if idaapi.isident(value) and self.name != value:
+            if idaapi.is_ident(value) and self.name != value:
                 self.name = value
                 self.modified = True
                 return True
@@ -378,7 +378,7 @@ class Class(object):
 
     @property
     def children(self):
-        return self.vtables.values()
+        return list(self.vtables.values())
 
     @property
     def tinfo(self):
@@ -424,14 +424,14 @@ class TreeModel(QtCore.QAbstractItemModel):
         all_virtual_tables.clear()
 
         classes = []
-        for ordinal in xrange(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
+        for ordinal in range(1, idaapi.get_ordinal_qty(idaapi.cvar.idati)):
             result = Class.create_class(ordinal)
             if result:
                 classes.append(result)
 
         for class_row, class_ in enumerate(classes):
             class_item = TreeItem(class_, class_row, None)
-            for vtable_row, vtable in class_.vtables.iteritems():
+            for vtable_row, vtable in class_.vtables.items():
                 vtable_item = TreeItem(vtable, vtable_row, class_item)
                 vtable_item.children = [TreeItem(function, 0, vtable_item) for function in vtable.virtual_functions]
                 class_item.children.append(vtable_item)
@@ -493,7 +493,7 @@ class TreeModel(QtCore.QAbstractItemModel):
             return self.headers[section]
 
     def set_first_argument_type(self, indexes):
-        indexes = filter(lambda x: x.column() == 0, indexes)
+        indexes = [x for x in indexes if x.column() == 0]
         class_name = indexes[0].internalPointer().item.class_name
         if not class_name:
             classes = [[x.item.name] for x in self.tree_data]

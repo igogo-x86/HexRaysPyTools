@@ -4,7 +4,7 @@ import logging
 import idaapi
 import idc
 
-import actions
+from . import actions
 import HexRaysPyTools.api as api
 import HexRaysPyTools.core.helper as helper
 import HexRaysPyTools.settings as settings

@@ -1,5 +1,5 @@
 import idaapi
-import actions
+from . import actions
 import HexRaysPyTools.api as api
 import HexRaysPyTools.core.cache as cache
 import HexRaysPyTools.core.helper as helper
@@ -129,8 +129,8 @@ class DeepScanFunctions(actions.Action):
     def update(self, ctx):
         if ctx.form_type == idaapi.BWN_FUNCS:
             idaapi.attach_action_to_popup(ctx.widget, None, self.name)
-            return idaapi.AST_ENABLE_FOR_FORM
-        return idaapi.AST_DISABLE_FOR_FORM
+            return idaapi.AST_ENABLE_FOR_WIDGET
+        return idaapi.AST_DISABLE_FOR_WIDGET
 
 
 actions.action_manager.register(ShallowScanVariable())

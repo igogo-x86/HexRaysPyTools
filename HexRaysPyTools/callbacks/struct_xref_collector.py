@@ -3,7 +3,7 @@ import time
 
 import idaapi
 
-import callbacks
+from . import callbacks
 import HexRaysPyTools.core.struct_xrefs as struct_xrefs
 import HexRaysPyTools.core.helper as helper
 
@@ -57,7 +57,7 @@ class StructXrefCollectorVisitor(idaapi.ctree_parentee_t):
         self.apply_to(self.__cfunc.body, None)
         self.__storage.update(self.__function_address - idaapi.get_imagebase(), self.__result)
 
-        storage_mb_size = len(self.__storage) * 1.0 / 1024 ** 2
+        storage_mb_size = len(self.__storage) * 1.0 // 1024 ** 2
         logger.debug("Xref processing: %f seconds passed, storage size - %.2f MB ", (time.time() - t), storage_mb_size)
 
     def __find_ref_address(self, cexpr):

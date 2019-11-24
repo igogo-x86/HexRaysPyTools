@@ -1,6 +1,6 @@
 import idaapi
 
-import actions
+from . import actions
 from HexRaysPyTools.core.temporary_structure import VirtualTable
 
 
@@ -28,6 +28,7 @@ class CreateVtable(actions.Action):
                 return idaapi.AST_ENABLE
             idaapi.detach_action_from_popup(ctx.widget, self.name)
             return idaapi.AST_DISABLE
-        return idaapi.AST_DISABLE_FOR_FORM
+        return idaapi.AST_DISABLE_FOR_WIDGET
+
 
 actions.action_manager.register(CreateVtable())

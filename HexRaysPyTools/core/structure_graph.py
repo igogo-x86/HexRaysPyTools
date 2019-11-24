@@ -41,7 +41,7 @@ class LocalType:
 class StructureGraph:
     # TODO:Enum types display
     def __init__(self, ordinal_list=None):
-        self.ordinal_list = ordinal_list if ordinal_list else xrange(1, idc.GetMaxLocalType())
+        self.ordinal_list = ordinal_list if ordinal_list else range(1, idc.get_ordinal_qty())
         self.local_types = {}
         self.edges = []
         self.final_edges = []
@@ -96,7 +96,7 @@ class StructureGraph:
 
     @staticmethod
     def get_tinfo_by_ordinal(ordinal):
-        local_typestring = idc.GetLocalTinfo(ordinal)
+        local_typestring = idc.get_local_tinfo(ordinal)
         if local_typestring:
             p_type, fields = local_typestring
             local_tinfo = idaapi.tinfo_t()
@@ -105,7 +105,7 @@ class StructureGraph:
         return None
 
     def initialize_nodes(self):
-        for ordinal in xrange(1, idc.GetMaxLocalType()):
+        for ordinal in range(1, idc.get_ordinal_qty()):
             # if ordinal == 15:
             #     import pydevd
             #     pydevd.settrace("localhost", port=12345, stdoutToServer=True, stderrToServer=True)
@@ -113,7 +113,7 @@ class StructureGraph:
             local_tinfo = StructureGraph.get_tinfo_by_ordinal(ordinal)
             if not local_tinfo:
                 continue
-            name = idc.GetLocalTypeName(ordinal)
+            name = idc.get_numbered_type_name(ordinal)
 
             if local_tinfo.is_typeref():
                 typeref_ordinal = local_tinfo.get_ordinal()
@@ -149,12 +149,12 @@ class StructureGraph:
             self.local_types[ordinal].is_selected = True
 
     def calculate_edges(self):
-        for first in self.local_types.keys():
+        for first in list(self.local_types.keys()):
             for second in self.local_types[first].members_ordinals:
                 self.edges.append((first, second))
 
-        self.downward_edges = {key: [] for key in self.local_types.keys()}
-        self.upward_edges = {key: [] for key in self.local_types.keys()}
+        self.downward_edges = {key: [] for key in list(self.local_types.keys())}
+        self.upward_edges = {key: [] for key in list(self.local_types.keys())}
 
         for key, value in self.edges:
             self.downward_edges[key].append(value)

@@ -1,6 +1,6 @@
 import idaapi
 
-import callbacks
+from . import callbacks
 import HexRaysPyTools.core.helper as helper
 
 

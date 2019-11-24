@@ -1,6 +1,6 @@
 import idaapi
 
-import actions
+from . import actions
 import HexRaysPyTools.api as api
 import HexRaysPyTools.forms as forms
 import HexRaysPyTools.core.helper as helper
