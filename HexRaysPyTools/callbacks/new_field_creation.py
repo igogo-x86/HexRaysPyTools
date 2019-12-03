@@ -120,7 +120,7 @@ class CreateNewField(actions.HexRaysPopupAction):
             logger.error("Bad field name")
             return
 
-        result = idc.ParseType(type_name, 0)
+        result = idc.parse_decl(type_name, 0)
         if result is None:
             logger.error("Failed to parse member type. It should be like `TYPE_NAME NAME[SIZE]` (Array is optional)")
             return

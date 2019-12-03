@@ -408,7 +408,7 @@ class Member(AbstractMember):
         if new_type_declaration is None:
             return
 
-        result = idc.ParseType(new_type_declaration, 0)
+        result = idc.parse_decl(new_type_declaration, 0)
         if result is None:
             return
         _, tp, fld = result
