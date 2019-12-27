@@ -152,7 +152,7 @@ class VirtualMethod(object):
         if self.tinfo_modified:
             self.tinfo_modified = False
             if len(addresses) == 1:
-                idaapi.apply_tinfo2(addresses[0], self.tinfo.get_pointed_object(), idaapi.TINFO_DEFINITE)
+                idaapi.apply_tinfo(addresses[0], self.tinfo.get_pointed_object(), idaapi.TINFO_DEFINITE)
 
     def __eq__(self, other):
         return self.addresses == other.addresses
