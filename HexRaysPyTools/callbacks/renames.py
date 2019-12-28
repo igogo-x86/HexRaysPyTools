@@ -92,7 +92,7 @@ class RenameInside(actions.HexRaysPopupAction):
         if result:
             func_tinfo, address, arg_index, name = result
             helper.set_func_arg_name(func_tinfo, arg_index, name)
-            idaapi.apply_tinfo2(address, func_tinfo, idaapi.TINFO_DEFINITE)
+            idaapi.apply_tinfo(address, func_tinfo, idaapi.TINFO_DEFINITE)
             hx_view.refresh_view(True)
 
     @staticmethod

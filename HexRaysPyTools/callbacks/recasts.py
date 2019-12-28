@@ -159,13 +159,13 @@ class RecastItemLeft(actions.HexRaysPopupAction):
             hx_view.set_lvar_type(ri.local_variable, ri.recast_tinfo)
 
         elif isinstance(ri, RecastGlobalVariable):
-            idaapi.apply_tinfo2(ri.global_variable_ea, ri.recast_tinfo, idaapi.TINFO_DEFINITE)
+            idaapi.apply_tinfo(ri.global_variable_ea, ri.recast_tinfo, idaapi.TINFO_DEFINITE)
 
         elif isinstance(ri, RecastArgument):
             if ri.recast_tinfo.is_array():
                 ri.recast_tinfo.convert_array_to_ptr()
             helper.set_func_argument(ri.func_tinfo, ri.arg_idx, ri.recast_tinfo)
-            idaapi.apply_tinfo2(ri.func_ea, ri.func_tinfo, idaapi.TINFO_DEFINITE)
+            idaapi.apply_tinfo(ri.func_ea, ri.func_tinfo, idaapi.TINFO_DEFINITE)
 
         elif isinstance(ri, RecastReturn):
             cfunc = helper.decompile_function(ri.func_ea)
@@ -175,7 +175,7 @@ class RecastItemLeft(actions.HexRaysPopupAction):
             func_tinfo = idaapi.tinfo_t()
             cfunc.get_func_type(func_tinfo)
             helper.set_func_return(func_tinfo, ri.recast_tinfo)
-            idaapi.apply_tinfo2(cfunc.entry_ea, func_tinfo, idaapi.TINFO_DEFINITE)
+            idaapi.apply_tinfo(cfunc.entry_ea, func_tinfo, idaapi.TINFO_DEFINITE)
 
         elif isinstance(ri, RecastStructure):
             tinfo = idaapi.tinfo_t()

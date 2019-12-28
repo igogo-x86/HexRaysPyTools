@@ -85,7 +85,7 @@ class RecognizeShape(Scanner):
             if obj.id == api.SO_LOCAL_VARIABLE:
                 hx_view.set_lvar_type(obj.lvar, tinfo)
             elif obj.id == api.SO_GLOBAL_OBJECT:
-                idaapi.apply_tinfo2(obj.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
+                idaapi.apply_tinfo(obj.obj_ea, tinfo, idaapi.TINFO_DEFINITE)
             hx_view.refresh_view(True)
 
 
