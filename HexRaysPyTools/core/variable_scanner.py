@@ -77,7 +77,7 @@ class ScannedGlobalObject(ScannedObject):
 
     def apply_type(self, tinfo):
         if self._applicable:
-            idaapi.set_tinfo2(self.__obj_ea, tinfo)
+            idaapi.set_tinfo(self.__obj_ea, tinfo)
 
 
 class ScannedVariableObject(ScannedObject):

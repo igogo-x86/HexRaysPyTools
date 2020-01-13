@@ -120,7 +120,7 @@ class DeepScanFunctions(actions.Action):
 
     def activate(self, ctx):
         for idx in ctx.chooser_selection:
-            func_ea = idaapi.getn_func(idx - 1).startEA
+            func_ea = idaapi.getn_func(idx - 1).start_ea
             cfunc = helper.decompile_function(func_ea)
             obj = api.VariableObject(cfunc.get_lvars()[0], 0)
             if cfunc:

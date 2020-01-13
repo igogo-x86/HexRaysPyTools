@@ -34,7 +34,7 @@ def get_inverted(func_ea):
     # Returns set of relative virtual addresses which are tied to IF and swapped
     internal_name = _ARRAY_STORAGE_PREFIX + hex(int(func_ea - idaapi.get_imagebase()))
     internal_id = idc.get_array_id(internal_name)
-    array = idc.GetArrayElement(idc.AR_STR, internal_id, 0)
+    array = idc.get_array_element(idc.AR_STR, internal_id, 0)
     return set(map(int, array.split()))
 
 
@@ -45,19 +45,19 @@ def invert(func_ea, if_ea):
     internal_name = _ARRAY_STORAGE_PREFIX + hex(int(func_rva))
     internal_id = idc.get_array_id(internal_name)
     if internal_id == -1:
-        internal_id = idc.CreateArray(internal_name)
-        idc.SetArrayString(internal_id, 0, str(iv_rva))
+        internal_id = idc.create_array(internal_name)
+        idc.set_array_string(internal_id, 0, str(iv_rva))
     else:
         inverted = get_inverted(func_ea)
         try:
             inverted.remove(iv_rva)
             if not inverted:
-                idc.DeleteArray(internal_id)
+                idc.delete_array(internal_id)
 
         except KeyError:
             inverted.add(iv_rva)
 
-        idc.SetArrayString(internal_id, 0, " ".join(map(str, inverted)))
+        idc.set_array_string(internal_id, 0, " ".join(map(str, inverted)))
 
 
 class SwapThenElse(actions.HexRaysPopupAction):

@@ -32,7 +32,7 @@ def parse_vtable_name(address):
             return name, True
         print("[Warning] Weird virtual table name -", name)
         return "Vtable_" + name, False
-    name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DN))
+    name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DEMNAMES))
     assert name, "Virtual table must have either legal c-type name or mangled name"
     return common.demangled_name_to_c_str(name).replace("const_", "").replace("::_vftable", "_vtbl"), True
 
@@ -145,7 +145,7 @@ class VirtualFunction:
         name = idaapi.get_name(self.address)
         if idaapi.is_valid_typename(name):
             return name
-        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
+        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DEMNAMES))
         return common.demangled_name_to_c_str(name)
 
     @property
@@ -172,7 +172,7 @@ class ImportedVirtualFunction(VirtualFunction):
     def tinfo(self):
         print("[INFO] Ignoring import function at 0x{0:08X}".format(self.address))
         tinfo = idaapi.tinfo_t()
-        if idaapi.guess_tinfo2(self.address, tinfo):
+        if idaapi.guess_tinfo(tinfo, self.address):
             return tinfo
         return const.DUMMY_FUNC
 
@@ -359,13 +359,13 @@ class VirtualTable(AbstractMember):
             else:
                 segment = idaapi.getseg(func_address)
                 if segment and segment.perm & idaapi.SEGPERM_EXEC:
-                    idc.MakeUnknown(func_address, 1, idaapi.DOUNK_SIMPLE)
-                    if idc.MakeFunction(func_address):
+                    idc.del_items(func_address, 1, idaapi.DELIT_SIMPLE)
+                    if idc.add_func(func_address):
                         functions_count += 1
                         address += const.EA_SIZE
                         continue
                 break
-            idaapi.autoWait()
+            idaapi.auto_wait()
         return functions_count
 
     @property
@@ -404,7 +404,7 @@ class Member(AbstractMember):
         return udt_member
 
     def activate(self, temp_struct):
-        new_type_declaration = idaapi.askstr(0x100, self.type_name, "Enter type:")
+        new_type_declaration = idaapi.ask_str(self.type_name, 0x100, "Enter type:")
         if new_type_declaration is None:
             return
 
@@ -567,7 +567,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     "Structure already exist. Do you want to overwrite it?",
                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
                 )
-                if reply == QtGui.QMessageBox.Yes:
+                if reply == QtWidgets.QMessageBox.Yes:
                     idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
                     ordinal = idaapi.idc_set_local_type(previous_ordinal, cdecl, idaapi.PT_TYP)
                 else:
