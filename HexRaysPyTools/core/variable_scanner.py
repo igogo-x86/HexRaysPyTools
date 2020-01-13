@@ -36,7 +36,7 @@ class ScannedObject(object):
 
     def apply_type(self, tinfo):
         """ Finally apply Class'es tinfo to this variable """
-        raise NotImplemented
+        raise NotImplementedError
 
     @staticmethod
     def create(obj, expression_address, origin, applicable):
