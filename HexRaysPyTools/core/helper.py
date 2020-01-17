@@ -67,7 +67,7 @@ def get_virtual_func_addresses(name, tinfo=None, offset=None):
     :return: list of possible addresses
     """
 
-    address = idc.LocByName(name)
+    address = idc.get_name_ea_simple(name)
 
     if address != idaapi.BADADDR:
         return [address]
@@ -101,7 +101,7 @@ def choose_virtual_func_address(name, tinfo=None, offset=None):
         return addresses[0]
 
     chooser = forms.MyChoose(
-        [[to_hex(ea), idc.demangle_name(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
+        [[to_hex(ea), idc.demangle_name(idc.get_name(ea), idc.INF_LONG_DEMNAMES)] for ea in addresses],
         "Select Function",
         [["Address", 10], ["Full name", 50]]
     )
@@ -261,7 +261,7 @@ def get_funcs_calling_address(ea):
     xref_ea = idaapi.get_first_cref_to(ea)
     xrefs = set()
     while xref_ea != idaapi.BADADDR:
-        xref_func_ea = idc.GetFunctionAttr(xref_ea, idc.FUNCATTR_START)
+        xref_func_ea = idc.get_func_attr(xref_ea, idc.FUNCATTR_START)
         if xref_func_ea != idaapi.BADADDR:
             xrefs.add(xref_func_ea)
         else:
