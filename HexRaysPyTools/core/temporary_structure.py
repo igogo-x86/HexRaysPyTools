@@ -8,7 +8,6 @@ import idc
 from . import common
 from . import const
 from . import helper
-from . import variable_scanner
 import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
 
@@ -303,6 +302,7 @@ class VirtualTable(AbstractMember):
         if helper.FunctionTouchVisitor(function).process():
             function = idaapi.decompile(self.virtual_functions[index].address)
         if function.arguments and function.arguments[0].is_arg_var and helper.is_legal_type(function.arguments[0].tif):
+            from . import variable_scanner
             print("[Info] Scanning virtual function at 0x{0:08X}".format(function.entry_ea))
             obj = api.VariableObject(function.get_lvars()[0], 0)
             scanner = variable_scanner.NewDeepSearchVisitor(function, self.offset, obj, temp_struct)

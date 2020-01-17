@@ -65,7 +65,8 @@ class HexRaysPopupAction(Action):
         # type: (idaapi.action_activation_ctx_t) -> None
         raise NotImplementedError
 
-    def check(self, hx_view: idaapi.vdui_t):
+    def check(self, hx_view):
+        # type: (idaapi.vdui_t) -> bool
         raise NotImplementedError
 
     def update(self, ctx):

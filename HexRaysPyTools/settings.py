@@ -1,8 +1,12 @@
 import os
-import configparser
+import logging
 import idc
 
-import logging
+try:
+    import configparser
+except ImportError:
+    # for python 2
+    import ConfigParser as configparser
 
 CONFIG_FILE_PATH = os.path.join(idc.idadir(), 'cfg', 'HexRaysPyTools.cfg')
 

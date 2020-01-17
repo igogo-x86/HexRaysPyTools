@@ -5,7 +5,7 @@ import idaapi
 
 class MyChoose(idaapi.Choose):
     def __init__(self, items, title, cols, icon=-1):
-        idaapi.Choose.__init__(self, title, cols, flags=idaapi.CH_MODAL, icon=icon)
+        idaapi.Choose.__init__(self, title, cols, flags=idaapi.Choose.CH_MODAL, icon=icon)
         self.items = items
 
     def OnClose(self):
