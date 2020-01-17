@@ -31,7 +31,7 @@ def parse_vtable_name(address):
             return name, True
         print("[Warning] Weird virtual table name -", name)
         return "Vtable_" + name, False
-    name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DN))
+    name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DEMNAMES))
     assert name, "Virtual table must have either legal c-type name or mangled name"
     return common.demangled_name_to_c_str(name).replace("const_", "").replace("::_vftable", "_vtbl"), True
 
@@ -144,7 +144,7 @@ class VirtualFunction:
         name = idaapi.get_name(self.address)
         if idaapi.is_valid_typename(name):
             return name
-        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
+        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DEMNAMES))
         return common.demangled_name_to_c_str(name)
 
     @property

@@ -101,7 +101,7 @@ def choose_virtual_func_address(name, tinfo=None, offset=None):
         return addresses[0]
 
     chooser = forms.MyChoose(
-        [[to_hex(ea), idc.demangle_name(idc.get_name(ea), idc.INF_LONG_DN)] for ea in addresses],
+        [[to_hex(ea), idc.demangle_name(idc.get_name(ea), idc.INF_LONG_DEMNAMES)] for ea in addresses],
         "Select Function",
         [["Address", 10], ["Full name", 50]]
     )
