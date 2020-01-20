@@ -51,7 +51,7 @@ def _init_demangled_names():
     """
     demangled_names.clear()
     for address, name in idautils.Names():
-        short_name = idc.demangle_name(name, idc.INF_SHORT_DEMNAMES)
+        short_name = idc.demangle_name(name, idc.INF_SHORT_DN)
         if short_name:
             short_name = common.demangled_name_to_c_str(short_name)
             demangled_names[short_name].add(address - idaapi.get_imagebase())
