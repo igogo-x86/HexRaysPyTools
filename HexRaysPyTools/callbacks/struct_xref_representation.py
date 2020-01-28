@@ -38,9 +38,9 @@ class FindFieldXrefs(actions.HexRaysPopupAction):
         chooser = forms.MyChoose(
             data,
             "Cross-references to {0}::{1}".format(struct_type.dstr(), field_name),
-            [["Function", 20 | idaapi.CHCOL_PLAIN],
-             ["Type", 2 | idaapi.CHCOL_PLAIN],
-             ["Line", 40 | idaapi.CHCOL_PLAIN]]
+            [["Function", 20 | idaapi.Choose.CHCOL_PLAIN],
+             ["Type", 2 | idaapi.Choose.CHCOL_PLAIN],
+             ["Line", 40 | idaapi.Choose.CHCOL_PLAIN]]
         )
         idx = chooser.Show(True)
         if idx == -1:

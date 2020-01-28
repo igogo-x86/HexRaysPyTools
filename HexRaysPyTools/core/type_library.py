@@ -49,7 +49,7 @@ def choose_til():
     library_chooser = forms.MyChoose(
         list([[x[1], x[2]] for x in list_type_library]),
         "Select Library",
-        [["Library", 10 | idaapi.CHCOL_PLAIN], ["Description", 30 | idaapi.CHCOL_PLAIN]],
+        [["Library", 10 | idaapi.Choose.CHCOL_PLAIN], ["Description", 30 | idaapi.Choose.CHCOL_PLAIN]],
         69
     )
     library_num = library_chooser.Show(True)
