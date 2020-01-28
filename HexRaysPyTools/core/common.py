@@ -96,6 +96,8 @@ def demangled_name_to_c_str(name):
             name = name.replace("operator new", "operator_NEW_")
         elif name[idx: idx + 7] == " delete":
             name = name.replace("operator delete", "operator_DELETE_")
+        elif name[idx:idx + 2] == "\"\" ":
+            name = name.replace("operator\"\" ", "operator_LITERAL_")
         elif name[idx] == ' ':
             pass
         else:
