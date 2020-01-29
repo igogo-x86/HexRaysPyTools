@@ -21,7 +21,7 @@ def _choose_structure_by_size(size):
         type_chooser = forms.MyChoose(
             matched_types,
             "Select Type",
-            [["Ordinal", 5 | idaapi.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
+            [["Ordinal", 5 | idaapi.Choose.CHCOL_HEX], ["Type Name", 25], ["Declaration", 50]],
             165
         )
         selected_type = type_chooser.Show(True)
