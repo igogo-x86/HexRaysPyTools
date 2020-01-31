@@ -593,8 +593,14 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
             self.setFilterRegExp(regexp)
 
     def filterAcceptsRow(self, row, parent):
-        if not parent.isValid() and self.filterRegExp():
-            if self.filter_by_function:
-                return self.sourceModel().tree_data[row].item.has_function(self.filterRegExp())
-            return self.filterRegExp().indexIn(self.sourceModel().tree_data[row].item.class_name) >= 0
+        filter_regexp = self.filterRegExp()
+        if filter_regexp:
+            index = self.sourceModel().index(row, 0, parent)
+            item = index.internalPointer().item
+
+            if self.filter_by_function and isinstance(item, Class):
+                return item.has_function(filter_regexp)
+            else:
+                return filter_regexp.indexIn(item.class_name) >= 0
+
         return True
