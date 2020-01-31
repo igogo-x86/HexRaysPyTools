@@ -220,6 +220,11 @@ class VirtualTable(object):
     @staticmethod
     def create(tinfo, class_):
         ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
+        if ordinal == 0:
+            if idaapi.import_type(idaapi.cvar.idati, -1, tinfo.dstr(), 0) == idaapi.BADNODE:
+                raise ImportError("unable to import type to idb ({})".format(tinfo.dstr()))
+            ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
+
         result = all_virtual_tables.get(ordinal)
         if result:
             result.class_.append(class_)
