@@ -581,7 +581,8 @@ class TreeModel(QtCore.QAbstractItemModel):
                 class_item.item.update_local_type()
 
     def open_function(self, index):
-        if index.column() == 2:
+        item = index.internalPointer().item
+        if isinstance(item, VirtualMethod):
             index.internalPointer().item.open_function()
 
 
