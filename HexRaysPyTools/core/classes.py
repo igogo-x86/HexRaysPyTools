@@ -398,15 +398,38 @@ class Class(object):
         return self.name + " ^_^ " + str(self.vtables)
 
 
-class TreeItem:
-    def __init__(self, item, row, parent):
+class TreeItem(object):
+    def __init__(self, item, parent=None):
         self.item = item
         self.parent = parent
-        self.row = row
         self.children = []
 
     def __repr__(self):
         return str(self.item)
+
+    def appendChild(self, item):
+        self.children.append(item)
+
+    def child(self, row):
+        return self.children[row]
+
+    def childCount(self):
+        return len(self.children)
+
+    def columnCount(self):
+        return len(self.item)
+
+    def data(self, column):
+        try:
+            return self.item[column]
+        except IndexError:
+            return None
+
+    def row(self):
+        if self.parent:
+            return self.parent.children.index(self)
+
+        return 0
 
 
 class TreeModel(QtCore.QAbstractItemModel):
