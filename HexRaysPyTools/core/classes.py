@@ -570,9 +570,10 @@ class TreeModel(QtCore.QAbstractItemModel):
         self.refreshed.emit()
 
     def rollback(self):
-        for class_item in self.tree_data:
+        self.layoutAboutToBeChanged.emit()
+        for class_item in self.rootItem.children:
             class_item.item.update_from_local_types()
-        self.dataChanged.emit(QtCore.QModelIndex(), QtCore.QModelIndex())
+        self.layoutChanged.emit()
 
     def commit(self):
         for class_item in self.rootItem.children:
