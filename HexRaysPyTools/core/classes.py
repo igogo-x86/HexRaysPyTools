@@ -559,9 +559,14 @@ class TreeModel(QtCore.QAbstractItemModel):
                 index.internalPointer().item.set_first_argument_type(class_name)
 
     def refresh(self):
-        self.tree_data = []
-        self.modelReset.emit()
-        self.init()
+        self.beginResetModel()
+        self.rootItem.children = []
+        self.endResetModel()
+
+        self.layoutAboutToBeChanged.emit()
+        self.setupModelData(self.rootItem)
+        self.layoutChanged.emit()
+
         self.refreshed.emit()
 
     def rollback(self):
