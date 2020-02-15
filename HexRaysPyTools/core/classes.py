@@ -220,6 +220,11 @@ class VirtualTable(object):
     @staticmethod
     def create(tinfo, class_):
         ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
+        if ordinal == 0:
+            if idaapi.import_type(idaapi.cvar.idati, -1, tinfo.dstr(), 0) == idaapi.BADNODE:
+                raise ImportError("unable to import type to idb ({})".format(tinfo.dstr()))
+            ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
+
         result = all_virtual_tables.get(ordinal)
         if result:
             result.class_.append(class_)
@@ -393,15 +398,38 @@ class Class(object):
         return self.name + " ^_^ " + str(self.vtables)
 
 
-class TreeItem:
-    def __init__(self, item, row, parent):
+class TreeItem(object):
+    def __init__(self, item, parent=None):
         self.item = item
         self.parent = parent
-        self.row = row
         self.children = []
 
     def __repr__(self):
         return str(self.item)
+
+    def appendChild(self, item):
+        self.children.append(item)
+
+    def child(self, row):
+        return self.children[row]
+
+    def childCount(self):
+        return len(self.children)
+
+    def columnCount(self):
+        return len(self.item)
+
+    def data(self, column):
+        try:
+            return self.item[column]
+        except IndexError:
+            return None
+
+    def row(self):
+        if self.parent:
+            return self.parent.children.index(self)
+
+        return 0
 
 
 class TreeModel(QtCore.QAbstractItemModel):
@@ -409,17 +437,15 @@ class TreeModel(QtCore.QAbstractItemModel):
 
     refreshed = QtCore.pyqtSignal()
 
-    def __init__(self):
-        super(TreeModel, self).__init__()
-        self.tree_data = []
-        self.headers = ["Name", "Declaration", "Address"]
+    def __init__(self, parent=None):
+        super(TreeModel, self).__init__(parent)
 
-        self.init()
-        # import pydevd
-        # pydevd.settrace("localhost", port=12345, stdoutToServer=True, stderrToServer=True)
+        self.rootItem = TreeItem(("Name", "Declaration", "Address"))
+        self.setupModelData(self.rootItem)
 
-    def init(self):
+    def setupModelData(self, root):
         idaapi.show_wait_box("Looking for classes...")
+
         all_virtual_functions.clear()
         all_virtual_tables.clear()
 
@@ -429,45 +455,67 @@ class TreeModel(QtCore.QAbstractItemModel):
             if result:
                 classes.append(result)
 
-        for class_row, class_ in enumerate(classes):
-            class_item = TreeItem(class_, class_row, None)
-            for vtable_row, vtable in class_.vtables.items():
-                vtable_item = TreeItem(vtable, vtable_row, class_item)
-                vtable_item.children = [TreeItem(function, 0, vtable_item) for function in vtable.virtual_functions]
-                class_item.children.append(vtable_item)
-            self.tree_data.append(class_item)
+        for class_ in classes:
+            class_item = TreeItem(class_, root)
+            for vtable in class_.vtables.values():
+                vtable_item = TreeItem(vtable, class_item)
+                vtable_item.children = [TreeItem(function, vtable_item) for function in vtable.virtual_functions]
+                class_item.appendChild(vtable_item)
+            root.appendChild(class_item)
 
         idaapi.hide_wait_box()
 
     def flags(self, index):
         if index.isValid():
             return index.internalPointer().item.flags(index.column())
-
-    def index(self, row, column, parent=QtCore.QModelIndex()):
-        if parent.isValid():
-            node = parent.internalPointer()
-            return self.createIndex(row, column, node.children[row])
         else:
-            return self.createIndex(row, column, self.tree_data[row])
+            return QtCore.Qt.NoItemFlags
+
+    def index(self, row, column, parent):
+        if not self.hasIndex(row, column, parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+
+        childItem = parentItem.child(row)
+        if childItem:
+            return self.createIndex(row, column, childItem)
+        else:
+            return QtCore.QModelIndex()
 
     def parent(self, index):
-        if index.isValid():
-            node = index.internalPointer()
-            if node.parent:
-                return self.createIndex(0, 0, node.parent)
-        return QtCore.QModelIndex()
+        if not index.isValid():
+            return QtCore.QModelIndex()
 
-    def rowCount(self, index=QtCore.QModelIndex()):
-        if index.isValid():
-            node = index.internalPointer()
-            if node:
-                return len(node.children)
-        return len(self.tree_data)
+        childItem = index.internalPointer()
+        parentItem = childItem.parent
 
-    def columnCount(self, index=QtCore.QModelIndex()):
-        return 3
+        if parentItem == self.rootItem:
+            return QtCore.QModelIndex()
+
+        return self.createIndex(parentItem.row(), 0, parentItem)
+
+    def rowCount(self, parent):
+        if parent.column() > 0:
+            return 0
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+
+        return parentItem.childCount()
+
+    def columnCount(self, parent):
+        return self.rootItem.columnCount()
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return None
+
         if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
             node = index.internalPointer()
             return node.item.data(index.column())
@@ -479,24 +527,29 @@ class TreeModel(QtCore.QAbstractItemModel):
             return index.internalPointer().item.color
         elif role == QtCore.Qt.ForegroundRole:
             return QtGui.QBrush(QtGui.QColor("#191919"))
+
         return None
 
-    def setData(self, index, value, role=QtCore.Qt.DisplayRole):
+    def setData(self, index, value, role=QtCore.Qt.EditRole):
         result = False
-        if role == QtCore.Qt.EditRole and value != "":
+        value = str(value)
+        if role == QtCore.Qt.EditRole and value:
             node = index.internalPointer()
-            result = node.item.setData(index.column(), str(value))
+            result = node.item.setData(index.column(), value)
+
         return result
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
         if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
-            return self.headers[section]
+            return self.rootItem.data(section)
+
+        return None
 
     def set_first_argument_type(self, indexes):
         indexes = [x for x in indexes if x.column() == 0]
         class_name = indexes[0].internalPointer().item.class_name
         if not class_name:
-            classes = [[x.item.name] for x in self.tree_data]
+            classes = [[x.item.name] for x in self.rootItem.children]
             class_chooser = HexRaysPyTools.forms.MyChoose(classes, "Select Class", [["Name", 25]])
             idx = class_chooser.Show(True)
             if idx != -1:
@@ -506,23 +559,30 @@ class TreeModel(QtCore.QAbstractItemModel):
                 index.internalPointer().item.set_first_argument_type(class_name)
 
     def refresh(self):
-        self.tree_data = []
-        self.modelReset.emit()
-        self.init()
+        self.beginResetModel()
+        self.rootItem.children = []
+        self.endResetModel()
+
+        self.layoutAboutToBeChanged.emit()
+        self.setupModelData(self.rootItem)
+        self.layoutChanged.emit()
+
         self.refreshed.emit()
 
     def rollback(self):
-        for class_item in self.tree_data:
+        self.layoutAboutToBeChanged.emit()
+        for class_item in self.rootItem.children:
             class_item.item.update_from_local_types()
-        self.dataChanged.emit(QtCore.QModelIndex(), QtCore.QModelIndex())
+        self.layoutChanged.emit()
 
     def commit(self):
-        for class_item in self.tree_data:
+        for class_item in self.rootItem.children:
             if class_item.item.modified:
                 class_item.item.update_local_type()
 
     def open_function(self, index):
-        if index.column() == 2:
+        item = index.internalPointer().item
+        if isinstance(item, VirtualMethod):
             index.internalPointer().item.open_function()
 
 
@@ -540,8 +600,14 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
             self.setFilterRegExp(regexp)
 
     def filterAcceptsRow(self, row, parent):
-        if not parent.isValid() and self.filterRegExp():
-            if self.filter_by_function:
-                return self.sourceModel().tree_data[row].item.has_function(self.filterRegExp())
-            return self.filterRegExp().indexIn(self.sourceModel().tree_data[row].item.class_name) >= 0
+        filter_regexp = self.filterRegExp()
+        if filter_regexp:
+            index = self.sourceModel().index(row, 0, parent)
+            item = index.internalPointer().item
+
+            if self.filter_by_function and isinstance(item, Class):
+                return item.has_function(filter_regexp)
+            else:
+                return filter_regexp.indexIn(item.class_name) >= 0
+
         return True
