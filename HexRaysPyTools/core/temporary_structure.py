@@ -12,13 +12,91 @@ import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
 
 
-SCORE_TABLE = dict((v, k) for k, v in enumerate(
-    ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', '_BYTE **', 'const char **',
-     'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
-     '_WORD *', '_WORD **', '_QWORD', '_QWORD *',
-     'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int **', 'char **', 'int *', 'void **',
-     'int', '_DWORD *', 'char', '_DWORD', '_WORD', 'void *', 'char *']
-))
+# After this absurd attempt to automatically resolve a struct, changes had to 
+# be made https://imgur.com/lMceHDT
+#
+# After changes, the result is much better, but still has QWORDs on unlikely
+# boundaries. https://imgur.com/JBI89V
+
+SCORE_TABLE = dict((v, k) for k, v in enumerate([
+    'unsigned __int8 *',
+    'unsigned __int8',
+    '__int8 *',
+    '__int8',
+    '_BYTE',
+    '_BYTE *',
+    '_BYTE **',
+    'const char **',
+    'signed __int16',
+    'unsigned __int16',
+    '__int16',
+    'signed __int16 *',
+    'unsigned __int16 *',
+    '__int16 *',
+    '_WORD *',
+    '_WORD **',
+    '_QWORD',
+    '_QWORD *',
+    'signed int*',
+    'signed int',
+    'unsigned int *',
+    'unsigned int',
+    'int **',
+    'char **',
+    'int *',
+    'void **',
+    'int',
+    '_DWORD *',
+    'char',
+    '_DWORD',
+    '_WORD',
+    'void *',
+    'char *'
+]))     
+
+def get_type_size(type):
+    sid = idc.get_struc_id(type)
+    if sid != idc.BADADDR:
+        return idc.get_struc_size(sid)
+        
+    try:
+        name, tp, fld = idc.parse_decl(type, 1)
+        if tp:
+            return idc.SizeOf(tp)
+    except:
+        return 0
+
+def score_table(type, offset):
+    alignment = offset % 8
+    size = get_type_size(type)
+
+    # the pythonic solution escape me, so we will do this by the numbers
+    # and optimise later.
+
+    score = 0
+
+    # alignment shows us unlikely possibility like __int64 at offset 5.
+    # often struct elements are cast to large types for zero-init. there-
+    # fore we prioritise smaller and correctly aligned data types, with
+    # (in future) consideration for neighbouring data types and (possibly)
+    # repeated indications of a given data type.
+    #
+    # it would also be useful to see where the data was sourced from.
+    
+    if alignment == 0: # 8
+        if size in (8, 4, 2, 1):
+            score += 8 / size
+    elif alignment == 4: # 8
+        if size in (4, 2, 1):
+            score += 8 / size
+    elif alignment in (2, 6):
+        if size in (2, 1):
+            score += 8 / size
+    elif alignment in (1, 3, 5, 7):
+        if size == 1:
+            score += 8 / size
+
+    return score
 
 
 def parse_vtable_name(address):
@@ -77,7 +155,7 @@ class AbstractMember:
     def score(self):
         """ More score of the member - it better suits as candidate for this offset """
         try:
-            return SCORE_TABLE[self.type_name]
+            return score_table(self.type_name, self.offset)
         except KeyError:
             if self.tinfo and self.tinfo.is_funcptr():
                 return 0x1000 + len(self.tinfo.dstr())
