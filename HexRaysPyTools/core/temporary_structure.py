@@ -2,8 +2,10 @@ import bisect
 import itertools
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+import ida_name
 import idaapi
 import idc
+import sys
 
 from . import common
 from . import const
@@ -11,14 +13,89 @@ from . import helper
 import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
 
+def get_type_size(type):
+    sid = idc.get_struc_id(type)
+    if sid != idc.BADADDR:
+        return idc.get_struc_size(sid)
+        
+    try:
+        name, tp, fld = idc.parse_decl(type, 1)
+        if tp:
+            return idc.SizeOf(tp)
+    except:
+        return 0
 
-SCORE_TABLE = dict((v, k) for k, v in enumerate(
-    ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', '_BYTE **', 'const char **',
-     'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
-     '_WORD *', '_WORD **', '_QWORD', '_QWORD *',
-     'signed int*', 'signed int', 'unsigned int *', 'unsigned int', 'int **', 'char **', 'int *', 'void **',
-     'int', '_DWORD *', 'char', '_DWORD', '_WORD', 'void *', 'char *']
-))
+def get_type_tinfo(t):
+    type_tuple = idaapi.get_named_type(None, t, 1) 
+    tif = idaapi.tinfo_t()
+    try:
+        tif.deserialize(None, type_tuple[1], type_tuple[2])
+        return tif
+    except TypeError:
+        return None
+
+def score_table(type, offset):
+    alignment = offset % 8
+    size = get_type_size(type)
+    # the pythonic solution escape me, so we will do this by the numbers
+    # and optimise later.
+
+    score = 0
+
+    # alignment shows us unlikely possibility like __int64 at offset 5.
+    # often struct elements are cast to large types for zero-init. there-
+    # fore we prioritise smaller and correctly aligned data types, with
+    # (in future) consideration for neighbouring data types and (possibly)
+    # repeated indications of a given data type.
+    #
+    # it might be good to weight how many other vars are disabled depending
+    # on which choice is made -- though a struct would hide a lot of variables
+    # (and we would still want the struct) -- we wouldn't necessarily want a 
+    # QWORD if there were 4 x WORDS that wanted to fill up the space
+    #
+    # we should also prioritise reads over writes (that is to say, structs are
+    # often initialised (and copied) with over-large casts).
+    #
+    # it would also be useful to see where the data was sourced from -- actually
+    # i believe that is a "hidden feature" :)
+    #
+    # umm... also __int64 should have a very low priority since it's the IDA goto
+    # type, same with _DWORD (anything starting with _) vs int, and again vs int32_t.
+    #
+    # shouldn't really trust the sizes in function definitions if they are default types.
+    #
+    # in terms of whether the var is signed or not, that can often be hard to 
+    # tell even when analysing by hand.
+    #
+    # and a vauge note that in my own struct maker, i found it easiest to assume QWORD
+    # first, then just keep going to smaller types as warranted.  it was just a clearer
+    # process that usually worked well.  you'll note that smaller types are preferred here
+    # too.
+    
+    if alignment == 0: # 8
+        if size in (8, 4, 2, 1):
+            score += 8 // size
+    elif alignment == 4: # 8
+        if size in (4, 2, 1):
+            score += 8 // size
+    elif alignment in (2, 6):
+        if size in (2, 1):
+            score += 8 // size
+    elif alignment in (1, 3, 5, 7):
+        if size == 1:
+            score += 8 // size
+
+    tif = get_type_tinfo(type)
+    if tif is None:
+        name = "__something_lame"
+    else:
+        name = tif.dstr()
+    if name.startswith("_"):
+        score >>= 1
+        score -= 1
+        if score < 0:
+            score = 0
+    return score
 
 
 def parse_vtable_name(address):
@@ -77,7 +154,7 @@ class AbstractMember:
     def score(self):
         """ More score of the member - it better suits as candidate for this offset """
         try:
-            return SCORE_TABLE[self.type_name]
+            return score_table(self.type_name, self.offset)
         except KeyError:
             if self.tinfo and self.tinfo.is_funcptr():
                 return 0x1000 + len(self.tinfo.dstr())
@@ -141,11 +218,13 @@ class VirtualFunction:
 
     @property
     def name(self):
-        name = idaapi.get_name(self.address)
-        if idaapi.is_valid_typename(name):
+        name = idc.get_name(self.address)
+        if ida_name.is_valid_typename(name):
             return name
-        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
-        return common.demangled_name_to_c_str(name)
+        demangled_name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
+        if not demangled_name:
+            raise ValueError("Couldn't demangle name: {} at 0x{:x}".format(name, self.address))
+        return common.demangled_name_to_c_str(demangled_name)
 
     @property
     def tinfo(self):
@@ -743,6 +822,38 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     member = Member(offset + udt_item.offset // 8, udt_item.type, None)
                     member.name = udt_item.name
                     self.add_row(member)
+
+    def load_struct(self):
+
+        name = ""
+        while True:
+            name = idaapi.ask_str(name, idaapi.HIST_TYPE, "Enter type:")
+            if name is None:
+                return
+            sid = idc.get_struc_id(name)
+            if sid != idc.BADADDR:
+                break
+
+        self.default_name = name
+
+        sid = idc.get_struc_id(name)
+        if sid == idc.BADADDR:
+            print(("Invalid Struct Name: %s" % name))
+            return
+
+        tif = get_type_tinfo(name)
+        sys.modules["__main__"].tif = tif
+        nmembers = tif.get_udt_nmembers()
+        for index in range(nmembers):
+            u = idaapi.udt_member_t()
+            u.offset = index
+            if tif.find_udt_member(u, idaapi.STRMEM_INDEX) != -1:
+                sys.modules["__main__"].udt = u
+                member = Member(u.offset // 8, u.type, None)
+                member.name = u.name
+                self.add_row(member)
+
+
 
     def resolve_types(self):
         current_item = None

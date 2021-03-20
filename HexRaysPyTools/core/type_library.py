@@ -31,6 +31,8 @@ def _enable_library_ordinals(library_num):
         print("[ERROR] Failed to enable ordinals")
         return
 
+    print("HexRaysPyTools DLL: {}".format(dll))
+
     dll.get_idati.restype = ctypes.POINTER(til_t)
     idati = dll.get_idati()
     dll.enable_numbered_types(idati.contents.base[library_num], True)

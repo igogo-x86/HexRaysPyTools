@@ -352,6 +352,8 @@ def create_padding_udt_member(offset, size):
     if size == 1:
         udt_member.type = const.BYTE_TINFO
     else:
+        if size < 1 or size > 0xffffffff:
+            print("HexRaysPyTools::core::helper::create_padding_udt_member: size is out of uint32 range (offset:{} size:{})".format(offset, size))
         array_data = idaapi.array_type_data_t()
         array_data.base = 0
         array_data.elem_type = const.BYTE_TINFO
