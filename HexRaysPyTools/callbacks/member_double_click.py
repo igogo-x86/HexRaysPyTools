@@ -37,7 +37,7 @@ class MemberDoubleClick(callbacks.HexRaysEventHandler):
             func_name = helper.get_member_name(vtable_tinfo, method_offset)
             func_ea = helper.choose_virtual_func_address(func_name, class_tinfo, vtable_offset)
             if func_ea:
-                idaapi.open_pseudocode(func_ea, 0)
+                idaapi.jumpto(func_ea)
                 return 1
 
 callbacks.hx_callback_manager.register(idaapi.hxe_double_click, MemberDoubleClick())
