@@ -6,12 +6,41 @@ import ida_name
 import idaapi
 import idc
 import sys
+import re
 
 from . import common
 from . import const
 from . import helper
 import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
+
+def log2(v):
+    """
+    http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogObvious
+    """
+    a = [0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9]
+    n = ((v * 0x077CB531) & 0xffffffff) >> 27
+    r = a[n];
+    return r
+
+def get_operand_size_type(tif):
+    if tif.is_complex():
+        return 'field'
+    if tif.is_floating():
+        sizes = ['byte', 'word', 'float', 'double', 'ddouble']
+    elif tif.is_integral():
+        sizes = ['byte', 'word', 'dword', 'qword', 'dqword', 'tword']
+    else:
+        return 'field'
+
+    size = tif.get_size()
+
+    n = log2(size) #  // 8);
+    # n = log2(size // 8);
+    try:
+        return sizes[n]
+    except IndexError:
+        return 'field'
 
 def get_type_size(type):
     sid = idc.get_struc_id(type)
@@ -25,14 +54,14 @@ def get_type_size(type):
     except:
         return 0
 
-def get_type_tinfo(t):
-    type_tuple = idaapi.get_named_type(None, t, 1) 
-    tif = idaapi.tinfo_t()
-    try:
-        tif.deserialize(None, type_tuple[1], type_tuple[2])
-        return tif
-    except TypeError:
-        return None
+def get_tinfo(name):
+    idati = idaapi.get_idati()
+    ti = idaapi.tinfo_t()
+
+    for ordinal in range(1, idaapi.get_ordinal_qty(idati)+1):
+        if ti.get_numbered_type(idati, ordinal) and ti.dstr() == name:
+            return ti
+    return None
 
 def score_table(type, offset):
     alignment = offset % 8
@@ -85,7 +114,7 @@ def score_table(type, offset):
         if size == 1:
             score += 8 // size
 
-    tif = get_type_tinfo(type)
+    tif = get_tinfo(type)
     if tif is None:
         name = "__something_lame"
     else:
@@ -235,7 +264,7 @@ class VirtualFunction:
             return const.DUMMY_FUNC
         except idaapi.DecompilationFailure:
             pass
-        print("[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address))
+        print("[ERROR] Failed to decompile function at 0x{:08X}".format(self.address))
         return const.DUMMY_FUNC
 
     def show_location(self):
@@ -248,7 +277,7 @@ class ImportedVirtualFunction(VirtualFunction):
 
     @property
     def tinfo(self):
-        print("[INFO] Ignoring import function at 0x{0:08X}".format(self.address))
+        print("[INFO] Ignoring import function at 0x{:08X}".format(self.address))
         tinfo = idaapi.tinfo_t()
         if idaapi.guess_tinfo(tinfo, self.address):
             return tinfo
@@ -290,7 +319,7 @@ class VirtualTable(AbstractMember):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
         self.address = address
         self.virtual_functions = []
-        self.name = "__vftable" + ("_{0:X}".format(self.offset) if self.offset else "")
+        self.name = "__vftable" + ("_{:X}".format(self.offset) if self.offset else "")
         self.vtable_name, self.have_nice_name = parse_vtable_name(address)
         self.populate()
 
@@ -310,7 +339,7 @@ class VirtualTable(AbstractMember):
                 break
 
     def create_tinfo(self):
-        # print "(Virtual table) at address: 0x{0:08X} name: {1}".format(self.address, self.name)
+        # print "(Virtual table) at address: 0x{:08X} name: {}".format(self.address, self.name)
         udt_data = idaapi.udt_type_data_t()
         for function in self.virtual_functions:
             udt_data.push_back(function.get_udt_member())
@@ -319,7 +348,7 @@ class VirtualTable(AbstractMember):
             first_entry_idx = duplicates.pop(0)
             print("[Warning] Found duplicate virtual functions", udt_data[first_entry_idx].name)
             for num, dup in enumerate(duplicates):
-                udt_data[dup].name = "duplicate_{0}_{1}".format(first_entry_idx, num + 1)
+                udt_data[dup].name = "duplicate_{}_{}".format(first_entry_idx, num + 1)
                 tinfo = idaapi.tinfo_t()
                 tinfo.create_ptr(const.DUMMY_FUNC)
                 udt_data[dup].type = tinfo
@@ -371,23 +400,23 @@ class VirtualTable(AbstractMember):
 
     def scan_virtual_function(self, index, temp_struct):
         if helper.is_imported_ea(self.virtual_functions[index].address):
-            print("[INFO] Ignoring import function at 0x{0:08X}".format(self.address))
+            print("[INFO] Ignoring import function at 0x{:08X}".format(self.address))
             return
         try:
             function = idaapi.decompile(self.virtual_functions[index].address)
         except idaapi.DecompilationFailure:
-            print("[ERROR] Failed to decompile function at 0x{0:08X}".format(self.address))
+            print("[ERROR] Failed to decompile function at 0x{:08X}".format(self.address))
             return
         if helper.FunctionTouchVisitor(function).process():
             function = idaapi.decompile(self.virtual_functions[index].address)
         if function.arguments and function.arguments[0].is_arg_var and helper.is_legal_type(function.arguments[0].tif):
             from . import variable_scanner
-            print("[Info] Scanning virtual function at 0x{0:08X}".format(function.entry_ea))
+            print("[Info] Scanning virtual function at 0x{:08X}".format(function.entry_ea))
             obj = api.VariableObject(function.get_lvars()[0], 0)
             scanner = variable_scanner.NewDeepSearchVisitor(function, self.offset, obj, temp_struct)
             scanner.process()
         else:
-            print("[Warning] Bad type of first argument in virtual function at 0x{0:08X}".format(function.entry_ea))
+            print("[Warning] Bad type of first argument in virtual function at 0x{:08X}".format(function.entry_ea))
 
     def scan_virtual_functions(self, temp_struct):
         for idx in range(len(self.virtual_functions)):
@@ -431,7 +460,7 @@ class VirtualTable(AbstractMember):
         functions_count = 0
         while True:
             func_address = helper.get_ptr(address)
-            # print "[INFO] Address 0x{0:08X}".format(func_address)
+            # print "[INFO] Address 0x{:08X}".format(func_address)
             if helper.is_code_ea(func_address) or helper.is_imported_ea(func_address):
                 functions_count += 1
                 address += const.EA_SIZE
@@ -460,6 +489,10 @@ class VirtualTable(AbstractMember):
         return QtGui.QFont("Consolas", 10, QtGui.QFont.Bold)
 
     @property
+    def cmt(self):
+        return ''
+
+    @property
     def size(self):
         return const.EA_SIZE
 
@@ -468,11 +501,13 @@ class Member(AbstractMember):
     def __init__(self, offset, tinfo, scanned_variable, origin=0):
         AbstractMember.__init__(self, offset + origin, scanned_variable, origin)
         self.tinfo = tinfo
-        self.name = "field_{0:X}".format(self.offset)
+        self.name = "{}_{:x}".format(get_operand_size_type(self.tinfo), self.offset)
+        self.cmt = ''
 
     def get_udt_member(self, array_size=0, offset=0):
         udt_member = idaapi.udt_member_t()
-        udt_member.name = "field_{0:X}".format(self.offset - offset) if self.name[:6] == "field_" else self.name
+        udt_member.name = "{}_{:x}".format(get_operand_size_type(self.tinfo), 
+                self.offset - offset) if re.match(r'(byte|(d|q|t|dq|)word|float|(d|dd)ouble)_', self.name) else self.name
         udt_member.type = self.tinfo
         if array_size:
             tmp = idaapi.tinfo_t(self.tinfo)
@@ -529,7 +564,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         """
         super(TemporaryStructureModel, self).__init__(*args)
         self.main_offset = 0
-        self.headers = ["Offset", "Type", "Name"]
+        self.headers = ["Offset", "Type", "Name", "Comment"]
         self.items = []
         self.collisions = []
 
@@ -546,7 +581,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         item = self.items[row]
         if role == QtCore.Qt.DisplayRole:
             if col == 0:
-                return "0x{0:08X}".format(item.offset)
+                return "0x{:04X} [{}]".format(item.offset, item.offset)
             elif col == 1:
                 if item.is_array and item.size > 0:
                     array_size = self.calculate_array_size(row)
@@ -555,6 +590,8 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return item.type_name
             elif col == 2:
                 return item.name
+            elif col == 3:
+                return item.cmt
         elif role == QtCore.Qt.ToolTipRole:
             if col == 0:
                 return self.items[row].offset
@@ -563,6 +600,8 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         elif role == QtCore.Qt.EditRole:
             if col == 2:
                 return self.items[row].name
+            if col == 3:
+                return self.items[row].cmt
         elif role == QtCore.Qt.FontRole:
             if col == 1:
                 return item.font
@@ -580,10 +619,16 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
-        if role == QtCore.Qt.EditRole and idaapi.is_ident(str(value)):
-            self.items[row].name = str(value)
-            self.dataChanged.emit(index, index)
-            return True
+        if col == 2:
+            if role == QtCore.Qt.EditRole and idaapi.is_ident(str(value)):
+                self.items[row].name = str(value)
+                self.dataChanged.emit(index, index)
+                return True
+        if col == 3:
+            if role == QtCore.Qt.EditRole:
+                self.items[row].cmt = str(value)
+                self.dataChanged.emit(index, index)
+                return True
         return False
 
     def headerData(self, section, orientation, role):
@@ -591,7 +636,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             return self.headers[section]
 
     def flags(self, index):
-        if index.column() == 2:
+        if index.column() in (2, 3):
             return super(TemporaryStructureModel, self).flags(index) | QtWidgets.QAbstractItemView.DoubleClicked
         return super(TemporaryStructureModel, self).flags(index)
 
@@ -653,8 +698,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     return
             else:
                 ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
+            # TODO: save comments
             if ordinal:
-                print("[Info] New type {0} was added to Local Types".format(structure_name))
+                print("[Info] New type {} was added to Local Types".format(structure_name))
                 tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
                 if tid:
                     tinfo = idaapi.create_typedef(structure_name)
@@ -664,7 +710,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                         scanned_var.apply_type(ptr_tinfo)
                     return tinfo
             else:
-                print("[ERROR] Structure {0} probably already exist".format(structure_name))
+                print("[ERROR] Structure {} probably already exist".format(structure_name))
 
     def have_member(self, member):
         if self.items:
@@ -756,7 +802,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 if is_found:
                     result.append((ordinal, idaapi.tinfo_t(tinfo)))
         chooser = MyChoose(
-            [[str(x), "0x{0:08X}".format(y.get_size()), y.dstr()] for x, y in result],
+            [[str(x), "0x{:08X}".format(y.get_size()), y.dstr()] for x, y in result],
             "Select Structure",
             [["Ordinal", 5], ["Size", 10], ["Structure name", 50]]
         )
@@ -821,6 +867,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 for udt_item in udt_data:
                     member = Member(offset + udt_item.offset // 8, udt_item.type, None)
                     member.name = udt_item.name
+                    member.cmt = udt_item.cmt
                     self.add_row(member)
 
     def load_struct(self):
@@ -841,7 +888,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             print(("Invalid Struct Name: %s" % name))
             return
 
-        tif = get_type_tinfo(name)
+        tif = get_tinfo(name)
         sys.modules["__main__"].tif = tif
         nmembers = tif.get_udt_nmembers()
         for index in range(nmembers):
@@ -851,8 +898,14 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 sys.modules["__main__"].udt = u
                 member = Member(u.offset // 8, u.type, None)
                 member.name = u.name
-                self.add_row(member)
 
+                # member.cmt = u.cmt
+                # u.cmt doesn't work, so we will do something ugly
+                _typename = tif.get_type_name()
+                name_sid = idc.get_struc_id(_typename)
+                member.cmt = idc.get_member_cmt(name_sid, u.offset // 8, 0) or "imported from {}".format(name)
+
+                self.add_row(member)
 
 
     def resolve_types(self):

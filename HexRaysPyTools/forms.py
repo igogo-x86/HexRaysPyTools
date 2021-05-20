@@ -47,7 +47,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_unpack = QtWidgets.QPushButton("&Unpack")
         btn_remove = QtWidgets.QPushButton("&Remove")
         btn_resolve = QtWidgets.QPushButton("Resolve")
-        btn_load = QtWidgets.QPushButton("Load")
+        btn_load = QtWidgets.QPushButton("&Load")
         btn_clear = QtWidgets.QPushButton("Clear")  # Clear button doesn't have shortcut because it can fuck up all work
         btn_recognize = QtWidgets.QPushButton("Recognize Shape")
         btn_recognize.setStyleSheet("QPushButton {width: 100px; height: 20px;}")
@@ -60,6 +60,7 @@ class StructureBuilder(idaapi.PluginForm):
         btn_pack.setShortcut("p")
         btn_unpack.setShortcut("u")
         btn_remove.setShortcut("r")
+        btn_load.setShortcut("l")
 
         struct_view = QtWidgets.QTableView()
         struct_view.setModel(self.structure_model)
