@@ -11,6 +11,10 @@ def demangled_name_to_c_str(name):
     if not BAD_C_NAME_PATTERN.findall(name):
         return name
 
+    # filter `vtable and `typeinfo
+    if name.startswith('`'):
+        return name
+
     # FIXME: This is very ugly way to find and replace illegal characters
     idx = name.find("::operator")
     if idx >= 0:
