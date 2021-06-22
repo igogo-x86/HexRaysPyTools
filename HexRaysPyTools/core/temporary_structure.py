@@ -553,7 +553,7 @@ class VoidMember(Member):
 
 
 class TemporaryStructureModel(QtCore.QAbstractTableModel):
-    default_name = "CHANGE_MY_NAME"
+    default_name = None
 
     def __init__(self, *args):
         """
@@ -657,6 +657,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
             print("[Warning] Collisions detected")
             return
 
+        struct_name = self.get_name()
+        if not struct_name:
+            struct_name = idaapi.ask_str("", idaapi.HIST_TYPE, "Struct name:")
+            if not struct_name:
+                return
+
         final_tinfo = idaapi.tinfo_t()
         udt_data = idaapi.udt_type_data_t()
         origin = self.items[start].offset if start else 0
@@ -677,7 +683,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
         final_tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
         cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
-                                   final_tinfo, self.get_name(), None)
+                                   final_tinfo, struct_name, None)
         cdecl = idaapi.ask_text(0x10000, '#pragma pack(push, 1)\n' + cdecl, "The following new type will be created")
 
         if cdecl:
@@ -894,7 +900,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         for index in range(nmembers):
             u = idaapi.udt_member_t()
             u.offset = index
-            if tif.find_udt_member(u, idaapi.STRMEM_INDEX) != -1:
+            if tif.find_udt_member(u, idaapi.STRMEM_INDEX) != -1 and u.name != "gap_{0:X}".format(u.offset // 8):
                 sys.modules["__main__"].udt = u
                 member = Member(u.offset // 8, u.type, None)
                 member.name = u.name
@@ -939,12 +945,14 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         rows = [x.row() for x in indices]
         if rows:
             self.items = [item for item in self.items if self.items.index(item) not in rows]
+            self.refresh_collisions()
             self.modelReset.emit()
 
     def clear(self):
         self.items = []
         self.main_offset = 0
         self.modelReset.emit()
+        self.default_name = None
 
     def recognize_shape(self, indices):
         min_idx = max_idx = None
