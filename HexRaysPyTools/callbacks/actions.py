@@ -74,6 +74,31 @@ class HexRaysPopupAction(Action):
             return idaapi.AST_ENABLE_FOR_WIDGET
         return idaapi.AST_DISABLE_FOR_WIDGET
 
+class HexRaysXrefAction(Action):
+    """
+    Wrapper around Action. Represents Action which can be added to menu after right-clicking in Decompile window.
+    Has `check` method that should tell whether Action should be added to popup menu when different items
+    are right-clicked.
+    Children of this class can also be fired by hot-key without right-clicking if one provided in `hotkey`
+    static member.
+    """
+
+    def __init__(self):
+        super(HexRaysXrefAction, self).__init__()
+
+    def activate(self, ctx):
+        # type: (idaapi.action_activation_ctx_t) -> None
+        raise NotImplementedError
+
+    def check(self, hx_view):
+        # type: (idaapi.vdui_t) -> bool
+        raise NotImplementedError
+
+    def update(self, ctx):
+        if ctx.widget_type == idaapi.BWN_PSEUDOCODE or ctx.widget_type == idaapi.BWN_STRUCTS  :
+            return idaapi.AST_ENABLE_FOR_WIDGET
+        return idaapi.AST_DISABLE_FOR_WIDGET
+
 
 class HexRaysPopupRequestHandler(HexRaysEventHandler):
     """
