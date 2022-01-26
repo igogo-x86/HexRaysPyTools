@@ -1,7 +1,7 @@
 import re
 
 
-BAD_C_NAME_PATTERN = re.compile('[^a-zA-Z_0-9:]')
+BAD_C_NAME_PATTERN = re.compile(":::+|(?=:(?=[^:]))(?=(?<=[^:]):):|^:[^:]|[^:]:$|^:$|[^a-zA-Z_0-9:]")
 
 
 def demangled_name_to_c_str(name):
