@@ -159,6 +159,63 @@ class RenameOutside(actions.HexRaysPopupAction):
         if arg_name and _should_be_renamed(lvar.name, arg_name):
             return lvar, arg_name.lstrip("_")
 
+class RenameMemberFromFunctionName(actions.HexRaysPopupAction):
+    description = "Take name from function"
+    hotkey = "Ctrl+N"
+
+    def __init__(self):
+        super(RenameMemberFromFunctionName, self).__init__()
+
+    def check(self, hx_view):
+        return self.__extract_rename_info(hx_view.cfunc, hx_view.item) is not None
+
+    def activate(self, ctx):
+        hx_view = idaapi.get_widget_vdui(ctx.widget)
+        info = self.__extract_rename_info(hx_view.cfunc, hx_view.item)
+
+        if info:
+            mname = info.name;
+            sname = re.sub('struct ', '', info.struct_name);
+
+            if not re.search("_vtbl$", sname):
+                mname = re.sub('^(get|set)*', 'm', mname, flags=re.IGNORECASE)
+
+            if not helper.change_member_name(sname, info.offset, mname):
+                mname = mname + '_' + hex(info.offset)[2:]
+                helper.change_member_name(sname, info.offset, mname)
+            
+            hx_view.refresh_view(True)
+
+    @staticmethod
+    def __extract_rename_info(cfunc, ctree_item):
+        # type: (idaapi.cfunc_t, idaapi.ctree_item_t) -> api.StructRefObject
+
+        if ctree_item.citype != idaapi.VDI_EXPR:
+            return
+
+        expr = ctree_item.it.to_specific_type
+        if expr.op == idaapi.cot_memptr:
+            t = expr.x.type.get_pointed_object()
+        elif expr.op == idaapi.cot_memref:
+            t = expr.x.type
+        else:
+            return
+
+        # Get name string
+        result = api.StructRefObject(t.dstr(), expr.m)
+        result.name = idaapi.get_name(cfunc.entry_ea)
+        if idaapi.is_valid_typename(result.name):
+            return result
+
+        result.name = idc.demangle_name(result.name, idc.get_inf_attr(3)) # Get only main name
+        if result.name is None:
+            return
+
+        result.name = re.sub('^.*:', '', result.name)
+        if result.name is None:
+            return
+
+        return result
 
 class _RenameUsingAssertVisitor(idaapi.ctree_parentee_t):
 
@@ -345,5 +402,6 @@ class PropagateName(actions.HexRaysPopupAction):
 actions.action_manager.register(RenameOther())
 actions.action_manager.register(RenameInside())
 actions.action_manager.register(RenameOutside())
+actions.action_manager.register(RenameMemberFromFunctionName())
 actions.action_manager.register(RenameUsingAssert())
 actions.action_manager.register(PropagateName())
