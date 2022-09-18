@@ -337,7 +337,12 @@ def load_long_str_from_idb(array_name):
     if id == -1:
         return None
     max_idx = idc.get_last_index(idc.AR_STR, id)
-    result = [idc.get_array_element(idc.AR_STR, id, idx) for idx in range(max_idx + 1)]
+    result = []
+    for idx in range(max_idx + 1):
+        e = idc.get_array_element(idc.AR_STR, id, idx)
+        if type(e) == int:
+            e = e.to_bytes((e.bit_length() + 7) // 8, 'little')
+        result.append(e)
     return b"".join(result).decode("utf-8")
 
 def create_padding_udt_member(offset, size):
