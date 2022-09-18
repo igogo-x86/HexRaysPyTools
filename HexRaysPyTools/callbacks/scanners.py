@@ -44,7 +44,7 @@ class ShallowScanVariable(Scanner):
 
 class DeepScanVariable(Scanner):
     description = "Deep Scan Variable"
-    hotkey = "shift+F"
+    hotkey = "Shift+Alt+F"
 
     def __init__(self):
         super(DeepScanVariable, self).__init__()
