@@ -1,6 +1,7 @@
 import bisect
 import itertools
 from PyQt5 import QtCore, QtGui, QtWidgets
+from functools import reduce
 
 import ida_name
 import idaapi
@@ -11,6 +12,7 @@ import re
 from . import common
 from . import const
 from . import helper
+from . import templated_types
 import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
 
@@ -567,6 +569,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         self.headers = ["Offset", "Type", "Name", "Comment"]
         self.items = []
         self.collisions = []
+        self.tmpl_types = templated_types.TemplatedTypes()
 
     # OVERLOADED METHODS #
 
@@ -652,6 +655,55 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 candidate_name = field.vtable_name.replace("_vtbl", "")
         return candidate_name if candidate_name else self.default_name
 
+    def set_decls(self, base_struct_name, cdecls):
+        # similar to the function below set_decl but allows us to apply more than one struct in a single call
+        ret_val = idaapi.parse_decls(None, cdecls, None, idaapi.convert_pt_flags_to_hti(idaapi.PT_TYP))
+        if ret_val is not None:
+            print("[Info] New type {} was added to Local Types".format(base_struct_name))
+            tid = idaapi.import_type(idaapi.cvar.idati, -1, base_struct_name)
+            if tid:
+                tinfo = idaapi.create_typedef(base_struct_name)
+                ptr_tinfo = idaapi.tinfo_t()
+                ptr_tinfo.create_ptr(tinfo)
+                for scanned_var in self.get_unique_scanned_variables():
+                    scanned_var.apply_type(ptr_tinfo)
+                return tinfo
+        else:
+            print("[ERROR] Could not parse structure declarations")
+
+    def set_decl(self, cdecl, origin=0):
+            structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
+            previous_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
+
+            if previous_ordinal:
+                reply = QtWidgets.QMessageBox.question(
+                    None,
+                    "HexRaysPyTools",
+                    "Structure already exist. Do you want to overwrite it?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                )
+                if reply == QtWidgets.QMessageBox.Yes:
+                    idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
+                    ordinal = idaapi.idc_set_local_type(previous_ordinal, cdecl, idaapi.PT_TYP)
+                else:
+                    return
+            else:
+                ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
+            # TODO: save comments
+            if ordinal:
+                print("[Info] New type {} was added to Local Types".format(structure_name))
+                tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
+                if tid:
+                    tinfo = idaapi.create_typedef(structure_name)
+                    ptr_tinfo = idaapi.tinfo_t()
+                    ptr_tinfo.create_ptr(tinfo)
+                    for scanned_var in self.get_unique_scanned_variables(origin):
+                        scanned_var.apply_type(ptr_tinfo)
+                    return tinfo
+            else:
+                print("[ERROR] Structure {} probably already exist".format(structure_name))
+
+
     def pack(self, start=0, stop=None):
         if self.collisions[start:stop].count(True):
             print("[Warning] Collisions detected")
@@ -685,38 +737,11 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
         cdecl = idaapi.print_tinfo(None, 4, 5, idaapi.PRTYPE_MULTI | idaapi.PRTYPE_TYPE | idaapi.PRTYPE_SEMI,
                                    final_tinfo, struct_name, None)
         cdecl = idaapi.ask_text(0x10000, '#pragma pack(push, 1)\n' + cdecl, "The following new type will be created")
-
         if cdecl:
-            structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
-            previous_ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, structure_name)
+            return self.set_decl(cdecl, origin)
+        else:
+            print("[ERROR] No declaration for structure set")
 
-            if previous_ordinal:
-                reply = QtWidgets.QMessageBox.question(
-                    None,
-                    "HexRaysPyTools",
-                    "Structure already exist. Do you want to overwrite it?",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-                )
-                if reply == QtWidgets.QMessageBox.Yes:
-                    idaapi.del_numbered_type(idaapi.cvar.idati, previous_ordinal)
-                    ordinal = idaapi.idc_set_local_type(previous_ordinal, cdecl, idaapi.PT_TYP)
-                else:
-                    return
-            else:
-                ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
-            # TODO: save comments
-            if ordinal:
-                print("[Info] New type {} was added to Local Types".format(structure_name))
-                tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
-                if tid:
-                    tinfo = idaapi.create_typedef(structure_name)
-                    ptr_tinfo = idaapi.tinfo_t()
-                    ptr_tinfo.create_ptr(tinfo)
-                    for scanned_var in self.get_unique_scanned_variables(origin):
-                        scanned_var.apply_type(ptr_tinfo)
-                    return tinfo
-            else:
-                print("[ERROR] Structure {} probably already exist".format(structure_name))
 
     def have_member(self, member):
         if self.items:
@@ -978,6 +1003,17 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                     scanned_var.apply_type(ptr_tinfo)
                 self.items = [x for x in self.items if x.offset < base or x.offset >= base + tinfo.get_size()]
                 self.add_row(Member(base, tinfo, None))
+
+    def set_stl_type(self, key, args):
+        ret_val = self.tmpl_types.get_decl_str(key, args)
+        # ret_val is None if failed
+        if ret_val is not None:
+            name, cdecl = ret_val
+            # apply the decls and clear scanned vars if successful
+            if self.set_decls(name, cdecl):
+                self.clear()
+        else:
+            print("[ERROR] could not generate STL type")
 
     def activated(self, index):
         # Double click on offset, opens window with variables

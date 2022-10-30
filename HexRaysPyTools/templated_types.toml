@@ -1,0 +1,163 @@
+# =====================================================================================================================
+# Layout of each class
+# =====================================================================================================================
+# ["std::vector<T>"]           - pretty type name, this is used as dictionary key and in the types list
+# base_name = "std_vector_{1}" - name used for IDA's structs as we cannot use `::`, format identifiers for
+#                                type name, these are always odd numbers
+#                                (NOTE: this *must* match the base structure name within `struct` string)
+# types = ["T"]                - define the types here as a list of strings, each type will have 2 format tokens
+# struct = """                 - this is where you define the struct, format specifers work as the following:
+# struct std_vector_{1}          (same format applies to the base name)
+# {{                             (NOTE: brackets need to be doubled up `{{` & `}}` due to `str.format`
+#    {0} *_Myfirst;                  - 1st type - {0} (actual type)
+#    {0} *_Mylast;                              - {1} (pretty print type, int* -> pInt)
+#    {0} *_Myend;                    - 2nd type - {2} (actual type)
+# }};                                           - {3} (pretty print type, std::string* -> pStdString)
+# """                                - etc
+
+["std::string"]
+base_name = "std_string"
+types = []
+struct = """
+#pragma pack(push, 1)
+union std_string_union
+{{
+  char _Buf[16];
+  char *_Ptr;
+}};
+
+struct std_string
+{{
+  union std_string_union u;
+  size_t _Mysize;
+  size_t _Myres;
+}};
+#pragma pack(pop)
+"""
+
+["std::wstring"]
+base_name = "std_wstring"
+types = []
+struct = """
+#pragma pack(push, 1)
+union std_wstring_union
+{{
+  wchar_t _Buf[8];
+  wchar_t *_Ptr;
+}};
+
+struct std_wstring
+{{
+  union std_wstring_union u;
+  size_t _Mysize;
+  size_t _Myres;
+}};
+#pragma pack(pop)
+"""
+
+["std::vector<T>"]
+base_name = "std_vector_{1}"
+types = ["T"]
+struct = """
+struct std_vector_{1}
+{{
+    {0} *_Myfirst;
+    {0} *_Mylast;
+    {0} *_Myend;
+}};
+"""
+
+["std::list<T>"]
+base_name = "std_list_{1}"
+types = ["T"]
+struct = """
+struct std_list_node_{1};
+struct std_list_node_{1}
+{{
+    std_list_node_{1} *_Next;
+    std_list_node_{1} *_Prev;
+    {0} _Myval;
+}};
+
+struct std_list_{1}
+{{
+    std_list_node_{1} *_Myhead;
+    size_t _Mysize;
+}};
+"""
+
+["std::deque<T>"]
+base_name = "std_deque_{1}"
+types = ["T"]
+struct = """
+struct std_deque_{1}
+{{
+    void *_Myproxy;
+    {0} **_Map;
+    size_t _Mapsize;
+    _QWORD _Myoff;
+    _QWORD _Mysize;
+}};
+"""
+
+["std::set<T>"]
+base_name = "std_set_{1}"
+types = ["T"]
+struct = """
+struct _Tree_node_{1};
+struct _Tree_node_{1}
+{{
+    _Tree_node_{1} *_Left;
+    _Tree_node_{1} *_Parent;
+    _Tree_node_{1} *_Right;
+    bool _Color;
+    bool _IsNil;
+    {0} _Key;
+}};
+
+struct __cppobj std_set_{1}
+{{
+    _Tree_node_{1} *_Myhead;
+    size_t _Mysize;
+}};
+
+struct __cppobj std_set_{1}_iterator_pairib
+{{
+    _Tree_node_{1} *_Myhead;
+    bool _Second;
+}};
+"""
+
+["std::map<K,V>"]
+base_name = "std_map_{1}_{3}"
+types = ["K", "V"]
+struct = """
+struct {1}_{3}_keyvalue_t
+{{
+    {0} key;
+    {2} value;
+}};
+
+struct _Tree_node_{1}_{3};
+struct _Tree_node_{1}_{3}
+{{
+    _Tree_node_{1}_{3} *_Left;
+    _Tree_node_{1}_{3} *_Parent;
+    _Tree_node_{1}_{3} *_Right;
+    bool _Color;
+    bool _IsNil;
+    {1}_{3}_keyvalue_t KeyValue;
+}};
+
+struct __cppobj std_map_{1}_{3}
+{{
+    _Tree_node_{1}_{3} *_Myhead;
+    unsigned __int64 _Mysize;
+}};
+
+struct __cppobj std_map_{1}_{3}_iterator_pairib
+{{
+    _Tree_node_{1}_{3} *_Myhead;
+    bool _Second;
+}};
+"""
