@@ -41,6 +41,20 @@ class TemplatedTypes:
             print("[ERROR] type is not in type dictionary")
             return None
 
+    def get_struct(self, key):
+        if key in self._types_dict:
+            return self._types_dict[key]["struct"]
+        else:
+            print("[ERROR] struct is not in type dictionary")
+            return None
+
+    def get_base_name(self, key):
+        if key in self._types_dict:
+            return self._types_dict[key]["base_name"]
+        else:
+            print("[ERROR] struct is not in type dictionary")
+            return None
+
     def reload_types(self):
         with open(TYPES_FILE_PATH, "r") as f:
             types_dict = toml.loads(f.read())

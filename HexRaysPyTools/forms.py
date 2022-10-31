@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets, QtGui
 
 import idaapi
 import re
@@ -83,7 +83,14 @@ class StructureBuilder(idaapi.PluginForm):
         self.stl_list.setFixedWidth(300)
         self.stl_list.setCurrentRow(0)
 
-        self.stl_title = QtWidgets.QLabel("Selected Type: {}".format(self.stl_list.currentItem().text()))
+        self.stl_title_fields = QtWidgets.QLabel("Selected Type: ")
+        self.stl_title_struct = QtWidgets.QLabel("Creating Type: ")
+        self.stl_struct_view = QtWidgets.QTextEdit()
+        self.stl_struct_view.setReadOnly(True)
+        font = QtGui.QFont("Courier", 11)
+        self.stl_struct_view.setFont(font)
+        # self.stl_struct_view.setAlignment(QtCore.Qt.AlignTop)
+        # self.stl_struct_view.setStyleSheet("border: 1px solid black;")
 
         btn_reload_stl_list = QtWidgets.QPushButton("Reload Templated Types TOML")
         btn_reload_stl_list.setFixedWidth(300)
@@ -91,14 +98,19 @@ class StructureBuilder(idaapi.PluginForm):
         self.stl_widget = QtWidgets.QWidget()
         self.stl_form_layout = QtWidgets.QFormLayout()
 
-        self.switch_stl_stack()
+        self.update_stl_form()
 
         self.stl_layout = QtWidgets.QGridLayout()
         self.stl_layout.addWidget(QtWidgets.QLabel("Type List"), 0, 0)
-        self.stl_layout.addWidget(self.stl_title, 0, 1)
+        self.stl_layout.addWidget(self.stl_title_fields, 0, 1)
+        self.stl_layout.addWidget(self.stl_title_struct, 0, 2)
+        self.stl_layout.addWidget(self.stl_struct_view, 1, 2)
         self.stl_layout.addWidget(self.stl_list, 1, 0)
         self.stl_layout.addWidget(self.stl_widget, 1, 1)
         self.stl_layout.addWidget(btn_reload_stl_list, 2, 0)
+
+        self.stl_layout.setColumnStretch(1, 1)
+        self.stl_layout.setColumnStretch(2, 1)
 
         self.stl_view = QtWidgets.QWidget()
         self.stl_view.setLayout(self.stl_layout)
@@ -148,15 +160,15 @@ class StructureBuilder(idaapi.PluginForm):
         struct_view.activated[QtCore.QModelIndex].connect(self.structure_model.activated)
         self.structure_model.dataChanged.connect(struct_view.clearSelection)
 
-        self.stl_list.currentRowChanged.connect(self.switch_stl_stack)
+        self.stl_list.currentRowChanged.connect(self.update_stl_form)
         btn_reload_stl_list.clicked.connect(self.reload_stl_list)
 
-    def switch_stl_stack(self):
-        # wrapped in a try/except, if index/key is wrong don't draw the view
+    def update_stl_form(self):
+        # wrapped in a try/except, as exception is thrown when TOML is refreshed
         try:
             # get key and update title
             key = self.stl_list.currentItem().text()
-            self.stl_title.setText("Selected Type: {}".format(key))
+            self.stl_title_fields.setText("Selected Type: {}".format(key))
             types = self.structure_model.tmpl_types.get_types(key)
 
             # remove previous widgets from layout... QT needs to do this
@@ -165,13 +177,19 @@ class StructureBuilder(idaapi.PluginForm):
 
             # for each template type we add a type & name field
             for t in types:
-                self.stl_form_layout.addRow(QtWidgets.QLabel("{0} Type".format(t)), QtWidgets.QLineEdit())
-                self.stl_form_layout.addRow(QtWidgets.QLabel("{0} Name".format(t)), QtWidgets.QLineEdit())
+                e1 = QtWidgets.QLineEdit()
+                e2 = QtWidgets.QLineEdit()
+                self.stl_form_layout.addRow(QtWidgets.QLabel("{0} Type".format(t)), e1)
+                self.stl_form_layout.addRow(QtWidgets.QLabel("{0} Name".format(t)), e2)
+                e1.textChanged.connect(lambda: self.reload_stl_struct(key))
+                e2.textChanged.connect(lambda: self.reload_stl_struct(key))
 
             # add the button and apply layout to widget
             btn_set_type = QtWidgets.QPushButton("Set Type")
             self.stl_form_layout.addRow(btn_set_type)
             self.stl_widget.setLayout(self.stl_form_layout)
+
+            self.reload_stl_struct(key)
 
             # connect a callback to the button
             btn_set_type.clicked.connect(lambda: self.call_set_stl_type(key))
@@ -183,13 +201,29 @@ class StructureBuilder(idaapi.PluginForm):
         self.structure_model.tmpl_types.reload_types()
         for item in self.structure_model.tmpl_types.keys:
             self.stl_list.addItem(item)
-        self.stl_list.setCurrentRow(0)
 
-    def call_set_stl_type(self, key):
+    def reload_stl_struct(self, key):
+        try:
+            struct = self.structure_model.tmpl_types.get_struct(key)
+            base_name = "Creating Type: " + self.structure_model.tmpl_types.get_base_name(key)
+            args = self.get_stl_args(key)
+            self.stl_struct_view.setPlainText(struct.format(*args))
+            self.stl_title_struct.setText(base_name.format(*args))
+        except:
+            pass
+
+    def get_stl_args(self, key):
         args = ()
         # collect text in the text boxes push into tuple
         for w in self.stl_widget.findChildren(QtWidgets.QLineEdit):
-            args = args + (w.text(),)
+            arg = w.text()
+            if arg == "":
+                arg = "$void$"
+            args = args + (arg,)
+        return args
+
+    def call_set_stl_type(self, key):
+        args = self.get_stl_args(key)
 
         for i in range(len(args)):
             # type line edit
