@@ -17,20 +17,17 @@ Plugin for IDA Pro
     * [API](#api)
 * [Presentations](#presentations)
 
-About
-=====
+# About
 
 The plugin assists in the creation of classes/structures and detection of virtual tables. It also facilitates transforming decompiler output faster and allows to do some stuff which is otherwise impossible.
 
 **Note**: The plugin supports IDA Pro 7.x with Python 2/3.
 
-Installation
-============
+# Installation
 
 Just copy `HexRaysPyTools.py` file and `HexRaysPyTools` directory to Ida plugins directory.
 
-Configuration
-============
+# Configuration
 
 Can be found at `IDADIR\cfg\HexRaysPyTools.cfg`
 
@@ -40,12 +37,12 @@ Can be found at `IDADIR\cfg\HexRaysPyTools.cfg`
 * `scan_any_type`. Set `True` if you want to apply scanning to any variable type. By default, it is possible to scan only basic types like `DWORD`, `QWORD`, `void *` e t.c. and pointers to non-defined structure declarations.
 * `templated_types_file`. Set to default TOML file path for templated types view. (Default - Empty, will auto load `%IDA_DIR%/Plugins/HexRaysPyTools/types/templated_types.toml`)
 
-Features
-========
+# Features
+
 **[Recently added][feature_history]**
 
-Structure reconstruction
-------------------------
+---
+## Structure reconstruction
 
 The reconstruction process usually comprises the following steps:
 
@@ -63,8 +60,8 @@ The place where all the collected information about the scanned variables can be
 * Right Click on a variable -> Deep Scan Variable. First, recursively touches functions to make Ida recognize proper arguments (it happens only once for each function during a session). Then, it recursively applies the scanner to variables and functions, which get the structure pointer as their argument.
 * Right Click on a function -> Deep Scan Returned Value. If you have the singleton pattern or the constructor is called in many places, it is possible to scan all the places, where a pointer to an object was recieved or an object was created.
 * API [TODO]
----
-#### Structure View
+
+### Structure View
 
 ![img][builder]
 
@@ -108,22 +105,12 @@ __Templated Types View__ - switches the templated types view
 
 __Structure View__ - switches to the structure builder view
 
----
-
-#### Templated Types View
+### Templated Types View
 
 ![img.png](Img/tmpl_types_view.png)
 
 The templated types view allows you to easily define and propagate templated types such as the data types you find within
 STL. 
-
-**Before:**
-
-![img.png](Img/tmpl_types_before.png)
-
-**After**
-
-![img.png](Img/tmpl_types_after.png)
 
 __Type List__ - list of the loaded types, click on the type you want to set to populate the middle form.
 
@@ -137,8 +124,16 @@ __Reload Templated Types TOML__ - if you have edited the current TOML file you w
 
 __Open Templated Types TOML__ - open your own custom templated types TOML following the templated types structure
 
----
-#### TOML Format
+**Before:**
+
+![img.png](Img/tmpl_types_before.png)
+
+**After**
+
+![img.png](Img/tmpl_types_after.png)
+
+### TOML Format
+
 ```toml
 ["std::vector<T>"]           
 base_name = "std_vector_{1}"
@@ -204,6 +199,7 @@ Usage:
     4. You can select several fields and try to recognize their shapes. If found and selected, they will be replaced with a new structure.
     5. After final structure selection, types of all scanned variables will be changed automatically.
 
+---
 ## Disassembler code manipulations
 
 ### Containing structures
@@ -308,8 +304,8 @@ Class, virtual tables, and functions names are editable. Also a function's decla
 
 You can also filter classes using Regexp either by class_name or by existence of specific functions. Simply input an expression in line edit for filtering by class_name or prepend it with "!" to filter by function name.
 
-Structure Graph
----------------
+---
+## Structure Graph
 
 Shows relationship between structures:
 
@@ -325,13 +321,13 @@ Usage:
 4. Double clicking on a node recalculates the graph for it.
 5. Every node has a hint message that shows C-like typedef.
 
-API
 ---
+## API
 
 **Under construction**
 
-Presentations
-=============
+---
+## Presentations
 
 * [ZeroNights 2016](https://2016.zeronights.ru/wp-content/uploads/2016/12/zeronights_2016_Kirillov.pptx)
 * [Insomni'hack 2018](https://www.youtube.com/watch?v=pnPuwBtW2_4)
