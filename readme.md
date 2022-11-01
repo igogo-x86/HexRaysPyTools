@@ -1,5 +1,7 @@
 ### Pulled in useful PR's & forks to keep upto date as main repo has gone stale
 
+#### Added new [Templated Type view](#templated-types-view) to Structure Builder
+
 ---
 
 Plugin for IDA Pro
@@ -11,7 +13,14 @@ Plugin for IDA Pro
 * [Configuration](#configuration)
 * [Features](#features)
     * [Structure reconstruction](#structure-reconstruction)
-    * [Decompiler output manipulation](#disassembler-code-manipulations)
+      * [Structure View](#structure-view)
+      * [Templated Types View](#templated-types-view)
+    * [Disassembler code manipulations](#disassembler-code-manipulations)
+      * [Containing structures](#containing-structures)
+      * [Function signature manipulation](#function-signature-manipulation)
+      * [Recasting & Renaming](#recasting-shiftr-shiftl-renaming-shiftn-ctrlshiftn)
+      * [Name Propagation](#name-propagation-p)
+      * [Untangling 'if' statements](#untangling-if-statements)
     * [Classes](#classes)
     * [Structure Graph](#structure-graph)
     * [API](#api)
@@ -105,6 +114,42 @@ __Templated Types View__ - switches the templated types view
 
 __Structure View__ - switches to the structure builder view
 
+### Structure Cross-references (Ctrl + X)
+
+With HexRaysPyTools, every time the F5 button is pressed and code is decompiled, the information about addressing to fields is stored inside cache. It can be retrieved with the "Field Xrefs" menu. So, it is better to apply reconstructed types to as many locations as possible to have more information about the way structures are used.
+
+Note: IDA 7.4 has now an official implementation of this feature, available through Shift-X hotkey.
+
+### Guessing Allocation
+
+**Warning!! Very raw feature.** The idea is to help find where a variable came from so as to run Deep Scan Process at the very top level and not to skip large amounts of code.
+
+### Structures with given size
+
+Usage:
+
+1. In Pseudocode viewer, right click on a number -> "Structures with this size". (hotkey "W")
+2. Select a library to be looked for structures.
+3. Select a structure. The Number will become `sizeof(Structure Name)`, and type will be imported to Local Types.
+
+### Recognition of structures by shapes
+
+Helps find a suitable structure by the information gleaned from pseudocode after variable scanning.
+
+Usage:
+
+* _Method 1_
+    1. Right click on a variable with -> Select "Recognize Shape".
+    2. Select Type Library.
+    3. Select structure.
+    4. Type of the variable will be changed automatically.
+* _Method 2_
+    1. Clear Structure Builder if it's currently used.
+    2. Right click on the variables that are supposed to be the same -> "Scan Variable".
+    3. Edit types (will be implemented later), disable or remove uninteresting fields, and click the "Recognize Shape" button.
+    4. You can select several fields and try to recognize their shapes. If found and selected, they will be replaced with a new structure.
+    5. After final structure selection, types of all scanned variables will be changed automatically.
+
 ### Templated Types View
 
 ![img.png](Img/tmpl_types_view.png)
@@ -162,42 +207,6 @@ __Struct__ - this is where you define the struct, format specifiers work as the 
   - `{2}` (actual type)
   - `{3}` (pretty print type, `std::string*` -> `pStdString`)
 * (Note: brackets need to be doubled up `{{` & `}}` due to `str.format`
-
-### Structure Cross-references (Ctrl + X)
-
-With HexRaysPyTools, every time the F5 button is pressed and code is decompiled, the information about addressing to fields is stored inside cache. It can be retrieved with the "Field Xrefs" menu. So, it is better to apply reconstructed types to as many locations as possible to have more information about the way structures are used.
-
-Note: IDA 7.4 has now an official implementation of this feature, available through Shift-X hotkey.
-
-### Guessing Allocation
-
-**Warning!! Very raw feature.** The idea is to help find where a variable came from so as to run Deep Scan Process at the very top level and not to skip large amounts of code.
-
-### Structures with given size
-
-Usage:
-
-1. In Pseudocode viewer, right click on a number -> "Structures with this size". (hotkey "W")
-2. Select a library to be looked for structures.
-3. Select a structure. The Number will become `sizeof(Structure Name)`, and type will be imported to Local Types.
-
-### Recognition of structures by shapes
-
-Helps find a suitable structure by the information gleaned from pseudocode after variable scanning.
-
-Usage:
-
-* _Method 1_
-    1. Right click on a variable with -> Select "Recognize Shape".
-    2. Select Type Library.
-    3. Select structure.
-    4. Type of the variable will be changed automatically.
-* _Method 2_
-    1. Clear Structure Builder if it's currently used.
-    2. Right click on the variables that are supposed to be the same -> "Scan Variable".
-    3. Edit types (will be implemented later), disable or remove uninteresting fields, and click the "Recognize Shape" button.
-    4. You can select several fields and try to recognize their shapes. If found and selected, they will be replaced with a new structure.
-    5. After final structure selection, types of all scanned variables will be changed automatically.
 
 ---
 ## Disassembler code manipulations
