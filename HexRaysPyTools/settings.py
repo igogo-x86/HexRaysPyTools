@@ -20,6 +20,8 @@ STORE_XREFS = True
 # But if set this option to True than variable of every type could be possible to scan
 SCAN_ANY_TYPE = False
 
+TEMPLATED_TYPES_FILE = ""
+
 
 def add_default_settings(config):
     updated = False
@@ -46,7 +48,7 @@ def add_default_settings(config):
 
 
 def load_settings():
-    global DEBUG_MESSAGE_LEVEL, PROPAGATE_THROUGH_ALL_NAMES, STORE_XREFS, SCAN_ANY_TYPE
+    global DEBUG_MESSAGE_LEVEL, PROPAGATE_THROUGH_ALL_NAMES, STORE_XREFS, SCAN_ANY_TYPE, TEMPLATED_TYPES_FILE
 
     config = configparser.ConfigParser()
     if os.path.isfile(CONFIG_FILE_PATH):
@@ -58,3 +60,4 @@ def load_settings():
     PROPAGATE_THROUGH_ALL_NAMES = config.getboolean("DEFAULT", 'PROPAGATE_THROUGH_ALL_NAMES')
     STORE_XREFS = config.getboolean("DEFAULT", 'STORE_XREFS')
     SCAN_ANY_TYPE = config.getboolean("DEFAULT", 'SCAN_ANY_TYPE')
+    TEMPLATED_TYPES_FILE = config.get("DEFAULT", 'TEMPLATED_TYPES_FILE')

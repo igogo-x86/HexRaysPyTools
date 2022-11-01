@@ -1,6 +1,9 @@
+import os
+
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 import idaapi
+import idc
 import re
 
 
@@ -95,6 +98,9 @@ class StructureBuilder(idaapi.PluginForm):
         btn_reload_stl_list = QtWidgets.QPushButton("Reload Templated Types TOML")
         btn_reload_stl_list.setFixedWidth(300)
 
+        btn_open_stl_toml = QtWidgets.QPushButton("Open Templated Types TOML")
+        btn_reload_stl_list.setFixedWidth(300)
+
         self.stl_widget = QtWidgets.QWidget()
         self.stl_form_layout = QtWidgets.QFormLayout()
 
@@ -108,6 +114,7 @@ class StructureBuilder(idaapi.PluginForm):
         self.stl_layout.addWidget(self.stl_list, 1, 0)
         self.stl_layout.addWidget(self.stl_widget, 1, 1)
         self.stl_layout.addWidget(btn_reload_stl_list, 2, 0)
+        self.stl_layout.addWidget(btn_open_stl_toml, 3, 0)
 
         self.stl_layout.setColumnStretch(1, 1)
         self.stl_layout.setColumnStretch(2, 1)
@@ -162,6 +169,7 @@ class StructureBuilder(idaapi.PluginForm):
 
         self.stl_list.currentRowChanged.connect(self.update_stl_form)
         btn_reload_stl_list.clicked.connect(self.reload_stl_list)
+        btn_open_stl_toml.clicked.connect(self.open_dialog_stl_file)
 
     def update_stl_form(self):
         # wrapped in a try/except, as exception is thrown when TOML is refreshed
@@ -236,6 +244,19 @@ class StructureBuilder(idaapi.PluginForm):
                     raise Exception(f"Name \"{args[i]}\" is not a valid name")
 
         self.structure_model.set_stl_type(key, args)
+
+    def open_dialog_stl_file(self):
+        file_name = QtWidgets.QFileDialog.getOpenFileName(None, 'Open TOML file',
+            os.path.join(
+                idc.idadir(),
+                'plugins',
+                'HexRaysPyTools',
+                'types'),
+            "Toml file (*.toml)"
+        )
+        print(f"[INFO] Opening {file_name[0]}")
+        self.structure_model.tmpl_types.set_file_path(file_name[0])
+        self.reload_stl_list()
 
     def OnClose(self, form):
         pass

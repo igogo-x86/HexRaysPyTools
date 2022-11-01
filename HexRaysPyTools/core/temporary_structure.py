@@ -657,19 +657,21 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
 
     def set_decls(self, base_struct_name, cdecls):
         # similar to the function below set_decl but allows us to apply more than one struct in a single call
-        ret_val = idaapi.parse_decls(None, cdecls, None, idaapi.convert_pt_flags_to_hti(idaapi.PT_TYP))
-        if ret_val is not None:
-            print("[Info] New type {} was added to Local Types".format(base_struct_name))
+        ret_val = idc.parse_decls(cdecls)
+        if ret_val == 0:
             tid = idaapi.import_type(idaapi.cvar.idati, -1, base_struct_name)
             if tid:
+                print(f"[Info] New type \"{base_struct_name}\" was added to Local Types")
                 tinfo = idaapi.create_typedef(base_struct_name)
                 ptr_tinfo = idaapi.tinfo_t()
                 ptr_tinfo.create_ptr(tinfo)
                 for scanned_var in self.get_unique_scanned_variables():
                     scanned_var.apply_type(ptr_tinfo)
                 return tinfo
+            else:
+                print(f"[ERROR] could not import type \"{base_struct_name}\" into idb")
         else:
-            print("[ERROR] Could not parse structure declarations")
+            print(f"[ERROR] Could not parse structure declarations, found {ret_val} errors")
 
     def set_decl(self, cdecl, origin=0):
             structure_name = idaapi.idc_parse_decl(idaapi.cvar.idati, cdecl, idaapi.PT_TYP)[0]
@@ -691,9 +693,9 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
             # TODO: save comments
             if ordinal:
-                print("[Info] New type {} was added to Local Types".format(structure_name))
                 tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
                 if tid:
+                    print(f"[Info] New type \"{structure_name}\" was added to Local Types")
                     tinfo = idaapi.create_typedef(structure_name)
                     ptr_tinfo = idaapi.tinfo_t()
                     ptr_tinfo.create_ptr(tinfo)

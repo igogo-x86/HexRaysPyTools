@@ -4,15 +4,14 @@
 import idc
 import os
 import toml
-
-TYPES_FILE_PATH = os.path.join(idc.idadir(), 'plugins', 'HexRaysPyTools', 'templated_types.toml')
-
+import HexRaysPyTools.settings as settings
 
 class TemplatedTypes:
     def __init__(self):
+        self.toml_path = ""
         self._types_dict = {}
         self.keys = []
-        self.reload_types()
+        self.set_file_path(settings.TEMPLATED_TYPES_FILE)
 
     def get_decl_str(self, key: str, args):
         # ensure type is in our dictionary
@@ -55,8 +54,15 @@ class TemplatedTypes:
             print("[ERROR] struct is not in type dictionary")
             return None
 
+    def set_file_path(self, path):
+        if path == "":
+            self.toml_path = os.path.join(idc.idadir(), 'plugins', 'HexRaysPyTools', 'types', 'templated_types.toml')
+        else:
+            self.toml_path = path
+        self.reload_types()
+
     def reload_types(self):
-        with open(TYPES_FILE_PATH, "r") as f:
+        with open(self.toml_path, "r") as f:
             types_dict = toml.loads(f.read())
 
         self._types_dict = types_dict
