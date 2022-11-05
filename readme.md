@@ -34,9 +34,16 @@ The plugin assists in the creation of classes/structures and detection of virtua
 
 # Installation
 
-Just copy `HexRaysPyTools.py` file and `HexRaysPyTools` directory to Ida plugins directory.
+- Copy `HexRaysPyTools.py` file and `HexRaysPyTools` directory to Ida plugins directory. 
 
-# Configuration
+- Install the plugin requirements found in the `requirements.txt` file. Be sure to install these for the Python environment used by your IDA installation.
+
+  - `pip install -r requirements.txt` 
+
+- Copy the example configuration file `HexRaysPyTools.cfg` to your IDA install `cfg` directory `%IDA_DIR%\cfg\HexRaysPyTools.cfg`. Be sure to update the `templated_types_file` path in the configuration file so it points to the correct IDA install directory.
+
+
+## Configuration
 
 Can be found at `IDADIR\cfg\HexRaysPyTools.cfg`
 
