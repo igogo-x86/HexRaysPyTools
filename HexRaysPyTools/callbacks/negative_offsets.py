@@ -175,7 +175,7 @@ class ReplaceVisitor(idaapi.ctree_parentee_t):
         new_cexpr_call.a.push_back(arg_field)
         new_cexpr_call.thisown = False
 
-        parent = reversed(self.parents).next().cexpr
+        parent = next(reversed(self.parents)).cexpr
 
         diff = negative_lvar.offset + offset
         if diff:
