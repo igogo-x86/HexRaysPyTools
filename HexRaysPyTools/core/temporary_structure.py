@@ -613,12 +613,12 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 return QtGui.QColor(QtCore.Qt.gray)
             if item.offset == self.main_offset:
                 if col == 0:
-                    return QtGui.QBrush(QtGui.QColor("#ff8080"))
+                    return QtGui.QBrush(QtGui.QColor("#006699"))  # blue
             if self.have_collision(row):
-                return QtGui.QBrush(QtGui.QColor("#ffff99"))
+                return QtGui.QBrush(QtGui.QColor("#cc4b4b"))  # red
         elif role == QtCore.Qt.ForegroundRole:
             if self.have_collision(row):
-                return QtGui.QBrush(QtGui.QColor("#191919"))
+                return QtGui.QBrush(QtGui.QColor("#f0db2b"))  # yellow
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()

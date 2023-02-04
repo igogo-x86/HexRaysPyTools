@@ -354,7 +354,7 @@ Usage:
 [structure_graph]: Img/structure_builder.JPG
 [bad_structures]: Img/bad.JPG
 [good_structures]: Img/good.JPG
-[builder]: Img/builder.JPG
+[builder]: Img/builder.png
 [virtual_functions]: Img/virtual_functions.JPG
 [scanned_variables]: Img/fields_xref.JPG
 [classes]: Img/classes.JPG
