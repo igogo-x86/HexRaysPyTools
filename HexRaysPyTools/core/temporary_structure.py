@@ -25,6 +25,16 @@ def log2(v):
     r = a[n];
     return r
 
+def get_ptr_width():
+    info = idaapi.get_inf_structure()
+    if info.is_64bit():
+        width = 8
+    elif info.is_32bit():
+        width = 4
+    else:
+        width = 2
+    return width
+
 def get_operand_size_type(tif):
     if tif.is_complex():
         return 'field'
@@ -134,11 +144,11 @@ def parse_vtable_name(address):
     if idaapi.is_valid_typename(name):
         if name[0:3] == 'off':
             # off_XXXXXXXX case
-            return "Vtable" + name[3:], False
+            return "vtbl" + name[3:], False
         elif "table" in name:
             return name, True
         print("[Warning] Weird virtual table name -", name)
-        return "Vtable_" + name, False
+        return "vtbl_" + name, False
     name = idc.demangle_name(idaapi.get_name(address), idc.get_inf_attr(idc.INF_SHORT_DN))
     assert name, "Virtual table must have either legal c-type name or mangled name"
     return common.demangled_name_to_c_str(name).replace("const_", "").replace("::_vftable", "_vtbl"), True
@@ -225,10 +235,11 @@ class AbstractMember:
 
 
 class VirtualFunction:
-    def __init__(self, address, offset):
+    def __init__(self, address, offset, table_name = ""):
         self.address = address
         self.offset = offset
         self.visited = False
+        self.table_name = table_name
 
     def get_ptr_tinfo(self):
         # print self.tinfo.dstr()
@@ -251,6 +262,9 @@ class VirtualFunction:
     def name(self):
         name = idc.get_name(self.address)
         if ida_name.is_valid_typename(name):
+            if "sub_" in name:
+                idx = int(self.offset / get_ptr_width())
+                name = f'{self.table_name}_func_{idx}'
             return name
         demangled_name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
         if not demangled_name:
@@ -330,7 +344,9 @@ class VirtualTable(AbstractMember):
         while True:
             ptr = helper.get_ptr(address)
             if helper.is_code_ea(ptr):
-                self.virtual_functions.append(VirtualFunction(ptr, address - self.address))
+                vfunc = VirtualFunction(ptr, address - self.address, self.vtable_name)
+                idaapi.set_name(ptr, vfunc.name)  # rename function to vfunc name
+                self.virtual_functions.append(vfunc)
             elif helper.is_imported_ea(ptr):
                 self.virtual_functions.append(ImportedVirtualFunction(ptr, address - self.address))
             else:
