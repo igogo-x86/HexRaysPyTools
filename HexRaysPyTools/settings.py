@@ -1,6 +1,6 @@
 import os
 import logging
-import idc
+import ida_diskio
 
 try:
     import configparser
@@ -8,7 +8,8 @@ except ImportError:
     # for python 2
     import ConfigParser as configparser
 
-CONFIG_FILE_PATH = os.path.join(idc.idadir(), 'cfg', 'HexRaysPyTools.cfg')
+CONFIG_FILE_PATH = os.path.join(ida_diskio.get_user_idadir(), 'cfg', 'HexRaysPyTools.cfg')
+CONFIG_DIRECTORY = os.path.join(ida_diskio.get_user_idadir(), 'cfg')
 
 DEBUG_MESSAGE_LEVEL = logging.INFO
 # Whether propagate names (Propagate name feature) through all names or only defaults like v11, a3, this, field_4
@@ -20,7 +21,8 @@ STORE_XREFS = True
 # But if set this option to True than variable of every type could be possible to scan
 SCAN_ANY_TYPE = False
 
-TEMPLATED_TYPES_FILE = ""
+TEMPLATED_TYPES_FILE = os.path.join(
+                ida_diskio.get_user_idadir(), 'plugins', 'HexRaysPyTools', 'types', 'templated_types.toml')
 
 
 def add_default_settings(config):
@@ -37,9 +39,14 @@ def add_default_settings(config):
     if not config.has_option("DEFAULT", "SCAN_ANY_TYPE"):
         config.set(None, 'SCAN_ANY_TYPE', str(SCAN_ANY_TYPE))
         updated = True
+    if not config.has_option("DEFAULT", "TEMPLATED_TYPES_FILE"):
+        config.set(None, 'TEMPLATED_TYPES_FILE', str(TEMPLATED_TYPES_FILE))
+        updated = True
 
     if updated:
         try:
+            if not os.path.exists(CONFIG_DIRECTORY):
+                os.makedirs(CONFIG_DIRECTORY)
             with open(CONFIG_FILE_PATH, "w") as f:
                 config.write(f)
         except IOError:
@@ -48,7 +55,12 @@ def add_default_settings(config):
 
 
 def load_settings():
-    global DEBUG_MESSAGE_LEVEL, PROPAGATE_THROUGH_ALL_NAMES, STORE_XREFS, SCAN_ANY_TYPE, TEMPLATED_TYPES_FILE
+    global                           \
+        DEBUG_MESSAGE_LEVEL,         \
+        PROPAGATE_THROUGH_ALL_NAMES, \
+        STORE_XREFS,                 \
+        SCAN_ANY_TYPE,               \
+        TEMPLATED_TYPES_FILE
 
     config = configparser.ConfigParser()
     if os.path.isfile(CONFIG_FILE_PATH):

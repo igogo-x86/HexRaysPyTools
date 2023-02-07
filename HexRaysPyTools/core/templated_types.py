@@ -1,7 +1,6 @@
 # Based on Rolf Rolles TemplatedTypes script
 # https://www.msreverseengineering.com/blog/2021/9/21/automation-in-reverse-engineering-c-template-code
 
-import idc
 import os
 import toml
 import HexRaysPyTools.settings as settings
@@ -55,10 +54,7 @@ class TemplatedTypes:
             return None
 
     def set_file_path(self, path):
-        if path == "":
-            self.toml_path = os.path.join(idc.idadir(), 'plugins', 'HexRaysPyTools', 'types', 'templated_types.toml')
-        else:
-            self.toml_path = path
+        self.toml_path = path
         self.reload_types()
 
     def reload_types(self):
