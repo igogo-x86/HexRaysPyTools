@@ -3,6 +3,7 @@ import os
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 import idaapi
+import ida_kernwin
 import idc
 import re
 
@@ -236,12 +237,14 @@ class StructureBuilder(idaapi.PluginForm):
         for i in range(len(args)):
             # type line edit
             if i % 2 == 0:
-                if not re.match(r"^[0-9a-zA-Z_:]+\*?$", args[i]):
-                    raise Exception(f"Type \"{args[i]}\" is not a valid type")
+                if not re.match(r"^[a-zA-Z_]([\w_](::){0,2})+(?<!:)\**$", args[i]):
+                    ida_kernwin.warning(f'Type name {args[i]} is an invalid type name')
+                    return
             # name line edit
             else:
                 if not re.match(r'^\w+$', args[i]):
-                    raise Exception(f"Name \"{args[i]}\" is not a valid name")
+                    ida_kernwin.warning(f'Type name {args[i]} is an invalid name')
+                    return
 
         self.structure_model.set_stl_type(key, args)
 
