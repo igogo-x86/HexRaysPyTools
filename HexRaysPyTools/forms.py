@@ -236,7 +236,7 @@ class StructureBuilder(idaapi.PluginForm):
         for i in range(len(args)):
             # type line edit
             if i % 2 == 0:
-                if not re.match(r"^[0-9a-zA-Z_]+\*?$", args[i]):
+                if not re.match(r"^[0-9a-zA-Z_:]+\*?$", args[i]):
                     raise Exception(f"Type \"{args[i]}\" is not a valid type")
             # name line edit
             else:
