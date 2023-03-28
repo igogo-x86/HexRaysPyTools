@@ -142,10 +142,13 @@ class VirtualFunction:
     @property
     def name(self):
         name = idaapi.get_name(self.address)
-        if idaapi.is_valid_typename(name):
-            return name
-        name = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
-        return common.demangled_name_to_c_str(name)
+        denamgled_name = idc.demangle_name(
+            name, idc.get_inf_attr(idc.INF_SHORT_DN))
+        if denamgled_name is None:
+            if idaapi.is_valid_typename(name):
+                return name
+
+        return common.demangled_name_to_c_str(denamgled_name + name[-4::])
 
     @property
     def tinfo(self):
