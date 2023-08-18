@@ -161,3 +161,47 @@ struct __cppobj std_map_{1}_{3}_iterator_pairib
     bool _Second;
 }};
 """
+
+["alloc::raw_vec::RawVec<T>"]
+base_name = "alloc_raw_vec_{1}"
+types = ["T"]
+struct = """
+struct alloc_raw_vec_{1}
+{{
+    {0} *pointer;
+    __int64 cap;
+}};
+"""
+
+["alloc::vec::Vec<T>"]
+base_name = "alloc_vec_{1}"
+types = ["T"]
+struct = """
+struct alloc_vec_{1}
+{{
+    alloc_raw_vec_{1} buf;
+    unsigned __int64 len;
+}};
+"""
+
+["alloc::string::String<T>"]
+base_name = "alloc_string"
+types = []
+struct = """
+struct alloc_raw_vec_u8
+{{
+    u8 *pointer;
+    __int64 cap;
+}};
+
+struct alloc_vec_u8
+{{
+    alloc_raw_vec_u8 buf;
+    unsigned __int64 len;
+}};
+
+struct alloc_string
+{{
+    alloc_vec_u8 vec;
+}};
+"""
