@@ -127,7 +127,7 @@ class DeepScanFunctions(actions.Action):
                 NewDeepSearchVisitor(cfunc, 0, obj, cache.temporary_structure).process()
 
     def update(self, ctx):
-        if ctx.form_type == idaapi.BWN_FUNCS:
+        if ctx.widget_type == idaapi.BWN_FUNCS:
             idaapi.attach_action_to_popup(ctx.widget, None, self.name)
             return idaapi.AST_ENABLE_FOR_WIDGET
         return idaapi.AST_DISABLE_FOR_WIDGET
