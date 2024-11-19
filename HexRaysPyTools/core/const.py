@@ -1,4 +1,5 @@
 import idaapi
+import ida_ida
 
 EA64 = None
 EA_SIZE = None
@@ -33,7 +34,12 @@ def init():
         PX_WORD_TINFO, DUMMY_FUNC, CONST_PCHAR_TINFO, CHAR_TINFO, PCHAR_TINFO, CONST_VOID_TINFO, \
         WORD_TINFO, PWORD_TINFO, EA64, EA_SIZE
 
-    EA64 = idaapi.get_inf_structure().is_64bit()
+    try:
+        EA64 = idaapi.get_inf_structure().is_64bit()
+    except:
+        # IDA 9
+        EA64 = not ida_ida.inf_is_32bit_exactly()
+
     EA_SIZE = 8 if EA64 else 4
 
     VOID_TINFO = idaapi.tinfo_t(idaapi.BT_VOID)
