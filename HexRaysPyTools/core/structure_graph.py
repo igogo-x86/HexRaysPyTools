@@ -100,7 +100,7 @@ class StructureGraph:
         if local_typestring:
             p_type, fields = local_typestring
             local_tinfo = idaapi.tinfo_t()
-            local_tinfo.deserialize(idaapi.cvar.idati, p_type, fields)
+            local_tinfo.deserialize(idaapi.get_idati(), p_type, fields)
             return local_tinfo
         return None
 

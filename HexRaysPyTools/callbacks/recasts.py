@@ -179,8 +179,8 @@ class RecastItemLeft(actions.HexRaysPopupAction):
 
         elif isinstance(ri, RecastStructure):
             tinfo = idaapi.tinfo_t()
-            tinfo.get_named_type(idaapi.cvar.idati, ri.structure_name)
-            ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, ri.structure_name)
+            tinfo.get_named_type(idaapi.get_idati(), ri.structure_name)
+            ordinal = idaapi.get_type_ordinal(idaapi.get_idati(), ri.structure_name)
             if ordinal == 0:
                 return 0
 
@@ -196,7 +196,7 @@ class RecastItemLeft(actions.HexRaysPopupAction):
                 tinfo.get_udt_details(udt_data)
                 udt_data[idx].type = ri.recast_tinfo
                 tinfo.create_udt(udt_data, idaapi.BTF_STRUCT)
-                tinfo.set_numbered_type(idaapi.cvar.idati, ordinal, idaapi.NTF_REPLACE, ri.structure_name)
+                tinfo.set_numbered_type(idaapi.get_idati(), ordinal, idaapi.NTF_REPLACE, ri.structure_name)
         else:
             raise NotImplementedError
 

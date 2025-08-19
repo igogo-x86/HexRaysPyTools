@@ -18,7 +18,7 @@ About
 
 The plugin assists in the creation of classes/structures and detection of virtual tables. It also facilitates transforming decompiler output faster and allows to do some stuff which is otherwise impossible.
 
-**Note**: The plugin supports IDA Pro 7.x with Python 2/3.
+**Note**: The plugin supports IDA Pro 9.x with Python 3.
 
 Installation
 ============

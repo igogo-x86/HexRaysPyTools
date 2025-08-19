@@ -40,10 +40,10 @@ def choose_til():
     # type: () -> (idaapi.til_t, int, bool)
     """ Creates a list of loaded libraries, asks user to take one of them and returns it with
     information about max ordinal and whether it's local or imported library """
-    idati = idaapi.cvar.idati
+    idati = idaapi.get_idati()
     list_type_library = [(idati, idati.name, idati.desc)]
-    for idx in range(idaapi.cvar.idati.nbases):
-        type_library = idaapi.cvar.idati.base(idx)          # type: idaapi.til_t
+    for idx in range(idaapi.get_idati().nbases):
+        type_library = idaapi.get_idati().base(idx)          # type: idaapi.til_t
         list_type_library.append((type_library, type_library.name, type_library.desc))
 
     library_chooser = forms.MyChoose(
@@ -64,8 +64,8 @@ def choose_til():
 
 
 def import_type(library, name):
-    if library.name != idaapi.cvar.idati.name:
-        last_ordinal = idaapi.get_ordinal_qty(idaapi.cvar.idati)
-        type_id = idaapi.import_type(library, -1, name)  # tid_t
+    if library.name != idaapi.get_idati().name:
+        last_ordinal = idaapi.get_ordinal_qty(idaapi.get_idati())
+        type_id = library.import_type(name)
         if type_id != idaapi.BADORD:
             return last_ordinal
