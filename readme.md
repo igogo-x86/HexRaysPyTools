@@ -57,7 +57,7 @@ Now, a few more details.
 The place where all the collected information about the scanned variables can be viewed and modified. Ways of collecting information:
 * Right Click on a variable -> Scan Variable. Recognizes fields usage within the current function.
 * Right Click on a variable -> Deep Scan Variable. First, recursively touches functions to make Ida recognize proper arguments (it happens only once for each function during a session). Then, it recursively applies the scanner to variables and functions, which get the structure pointer as their argument.
-* Right Click on a function -> Deep Scan Returned Value. If you have the singleton pattern or the constructor is called in many places, it is possible to scan all the places, where a pointer to an object was recieved or an object was created.
+* Right Click on a function -> Deep Scan Returned Value. If you have the singleton pattern or the constructor is called in many places, it is possible to scan all the places, where a pointer to an object was received or an object was created.
 * API [TODO]
 
 ![img][builder]
