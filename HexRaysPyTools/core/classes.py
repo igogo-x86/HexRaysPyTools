@@ -6,6 +6,26 @@ import HexRaysPyTools.forms
 from . import helper
 
 
+def _compat_import_type(til, name):
+    """idaapi.import_type(til, ordinal, name[, flags]) was removed in recent IDA
+    versions (9.4+); see type_library.py's copy of the same shim for details."""
+    try:
+        import ida_typeinf
+        result = ida_typeinf.import_type(til, -1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    try:
+        import idc
+        result = idc.import_type(-1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    return idaapi.BADNODE
+
+
 all_virtual_functions = {}      # name    -> VirtualMethod
 all_virtual_tables = {}         # ordinal -> VirtualTable
 
@@ -221,7 +241,7 @@ class VirtualTable(object):
     def create(tinfo, class_):
         ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
         if ordinal == 0:
-            if idaapi.import_type(idaapi.cvar.idati, -1, tinfo.dstr(), 0) == idaapi.BADNODE:
+            if _compat_import_type(idaapi.cvar.idati, tinfo.dstr()) == idaapi.BADNODE:
                 raise ImportError("unable to import type to idb ({})".format(tinfo.dstr()))
             ordinal = idaapi.get_type_ordinal(idaapi.cvar.idati, tinfo.dstr())
 

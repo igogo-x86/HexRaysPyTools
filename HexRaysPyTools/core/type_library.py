@@ -7,6 +7,28 @@ from . import const
 import HexRaysPyTools.forms as forms
 
 
+def _compat_import_type(til, name):
+    """idaapi.import_type(til, ordinal, name) was removed in recent IDA versions
+    (9.4+). This tries the modern equivalents (ida_typeinf.import_type, then
+    idc.import_type) before giving up, so the plugin keeps working on IDA builds
+    where the old idaapi-level wrapper no longer exists."""
+    try:
+        import ida_typeinf
+        result = ida_typeinf.import_type(til, -1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    try:
+        import idc
+        result = idc.import_type(-1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    return idaapi.BADORD
+
+
 class til_t(ctypes.Structure):
     pass
 
@@ -66,6 +88,6 @@ def choose_til():
 def import_type(library, name):
     if library.name != idaapi.cvar.idati.name:
         last_ordinal = idaapi.get_ordinal_qty(idaapi.cvar.idati)
-        type_id = idaapi.import_type(library, -1, name)  # tid_t
+        type_id = _compat_import_type(library, name)  # tid_t
         if type_id != idaapi.BADORD:
             return last_ordinal

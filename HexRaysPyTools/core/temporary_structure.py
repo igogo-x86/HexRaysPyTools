@@ -12,6 +12,25 @@ import HexRaysPyTools.api as api
 from HexRaysPyTools.forms import MyChoose
 
 
+def _compat_import_type(til, name):
+    """idaapi.import_type(til, ordinal, name) was removed in recent IDA versions
+    (9.4+); see type_library.py's copy of the same shim for details."""
+    try:
+        import ida_typeinf
+        result = ida_typeinf.import_type(til, -1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    try:
+        result = idc.import_type(-1, name)
+        if result and result != idaapi.BADORD:
+            return result
+    except Exception:
+        pass
+    return idaapi.BADORD
+
+
 SCORE_TABLE = dict((v, k) for k, v in enumerate(
     ['unsigned __int8 *', 'unsigned __int8', '__int8 *', '__int8', '_BYTE', '_BYTE *', '_BYTE **', 'const char **',
      'signed __int16', 'unsigned __int16', '__int16', 'signed __int16 *', 'unsigned __int16 *', '__int16 *',
@@ -273,7 +292,7 @@ class VirtualTable(AbstractMember):
 
         if ordinal:
             print("[Info] Virtual table " + self.vtable_name + " added to Local Types")
-            return idaapi.import_type(idaapi.cvar.idati, -1, self.vtable_name)
+            return _compat_import_type(idaapi.cvar.idati, self.vtable_name)
         else:
             print("[Error] Failed to create virtual table " + self.vtable_name)
             print("*" * 100)
@@ -576,7 +595,7 @@ class TemporaryStructureModel(QtCore.QAbstractTableModel):
                 ordinal = idaapi.idc_set_local_type(-1, cdecl, idaapi.PT_TYP)
             if ordinal:
                 print("[Info] New type {0} was added to Local Types".format(structure_name))
-                tid = idaapi.import_type(idaapi.cvar.idati, -1, structure_name)
+                tid = _compat_import_type(idaapi.cvar.idati, structure_name)
                 if tid:
                     tinfo = idaapi.create_typedef(structure_name)
                     ptr_tinfo = idaapi.tinfo_t()
